@@ -33,8 +33,8 @@
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
 #include "common/instance.hpp"
+#include "common/locator-getters.hpp"
 #include "common/logging.hpp"
-#include "common/owner-locator.hpp"
 #include "net/udp6.hpp"
 #include "thread/thread_netif.hpp"
 
@@ -45,10 +45,15 @@
  *   This file implements the SNTP client.
  */
 
-using ot::Encoding::BigEndian::HostSwap16;
-
 namespace ot {
 namespace Sntp {
+
+Client::Client(Ip6::Netif &aNetif)
+    : mSocket(aNetif.Get<Ip6::Udp>())
+    , mRetransmissionTimer(aNetif.GetInstance(), &Client::HandleRetransmissionTimer, this)
+    , mUnixEra(0)
+{
+}
 
 otError Client::Start(void)
 {
@@ -386,8 +391,6 @@ exit:
     {
         FinalizeSntpTransaction(*message, queryMetadata, 0, error);
     }
-
-    return;
 }
 
 } // namespace Sntp

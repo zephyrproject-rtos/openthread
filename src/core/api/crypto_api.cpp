@@ -37,6 +37,7 @@
 
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
+#include "common/locator-getters.hpp"
 #include "crypto/aes_ccm.hpp"
 #include "crypto/ecdsa.hpp"
 #include "crypto/hmac_sha256.hpp"
@@ -76,7 +77,7 @@ void otCryptoAesCcm(const uint8_t *aKey,
 
     assert((aKey != NULL) && (aNonce != NULL) && (aPlainText != NULL) && (aCipherText != NULL) && (aTag != NULL));
 
-    SuccessOrExit(aesCcm.SetKey(aKey, aKeyLength));
+    aesCcm.SetKey(aKey, aKeyLength);
     SuccessOrExit(aesCcm.Init(aHeaderLength, aLength, aTagLength, aNonce, aNonceLength));
 
     if (aHeaderLength != 0)

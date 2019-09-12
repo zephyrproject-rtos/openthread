@@ -25,12 +25,12 @@ New commands allow for more accurate low level radio testing.
  };
  ```
 
-`mMessageDescriptor` is constant string `"DiagMessage"`.<br />
-`mChannel` contains channel number on which packet was transmitted.<br />
-`mID` contains board ID set with [diag id](#diag-id) command.<br />
-`mCnt` is a counter incremented every time board transmits diagnostic radio packet.
+`mMessageDescriptor` is a constant string `"DiagMessage"`.<br />
+`mChannel` contains the channel number on which the packet was transmitted.<br />
+`mID` contains the board ID set with the [diag id](#diag-id) command.<br />
+`mCnt` is a counter incremented every time the board transmits diagnostic radio packet.
 
-If [listen](#diag-listen) mode is enabled and OpenThread was built with `DEFAULT_LOGGING` flag, JSON string is printed every time diagnostic radio packet is received.
+If the [listen mode](#diag-listen) is enabled and OpenThread was built with the`DEFAULT_LOGGING` flag, JSON string is printed every time a diagnostic radio packet is received.
 
 ```JSON
  {"Frame":{
@@ -44,17 +44,17 @@ If [listen](#diag-listen) mode is enabled and OpenThread was built with `DEFAULT
 ```
 
 ### diag ccathreshold
-Get current CCA threshold.
+Get the current CCA threshold.
 
 ### diag ccathreshold \<threshold\>
-Set CCA threshold.
+Set the CCA threshold.
 
-Value range 0 to 255.
+Value range: 0 to 255.
 
 Default: `45`.
 
 ### diag gpio
-Set of commands for managing gpio pins.
+Manage GPIO pins.
 
 ### diag gpio \<pinnum\>
 Return the current value of the gpio.
@@ -72,14 +72,14 @@ gpio 47 = 0
 ```
 
 ### diag gpio out \<pinnum\>
-Sets the given gpio to output mode.
+Set the given GPIO to the output mode.
 ```bash
 > diag gpio out 47
 gpio 47: out
 ```
 
 ### diag gpio in \<pinnum\>
-Sets the given gpio to input, no pull mode.
+Sets the given GPIO to the input mode with no pull variant.
 ```bash
 > diag gpio in 47
 gpio 47: in no pull
@@ -105,45 +105,45 @@ Get board ID.
 ### diag id \<id\>
 Set board ID.
 
-Value range 0 to 32767.
+Value range: 0 to 32767.
 
 Default: `-1`.
 
 ### diag listen
-Get listen state.
+Get the listen state.
 
 ### diag listen \<listen\>
-Set listen state.
+Set the listen state.
 
-`0` disable listen state.<br />
-`1` enable listen state.
+`0` disables the listen state.<br />
+`1` enables the listen state.
 
-Default: listen disabled.
+By default, the listen state is disabled.
 
 ### diag temp
-Get temperature from internal temperature sensor, in degrees Celsius.
+Get the temperature from the internal temperature sensor (in degrees Celsius).
 
 ### diag transmit
-Get messages count and interval between them that will be transmitted after `diag transmit start`.
+Get the message count and the interval between the messages that will be transmitted after `diag transmit start`.
 
 ### diag transmit interval \<interval\>
-Set interval in ms between transmitted messages.
+Set the interval in ms between the transmitted messages.
 
-Value range 1 to 4294967295.
+Value range: 1 to 4294967295.
 
 Default: `1`.
 
 ### diag transmit count \<count\>
-Set number of messages to be transmitted.
+Set the number of messages to be transmitted.
 
-Value range 1 to 2147483647<br />
+Value range: 1 to 2147483647<br />
 or<br />
-`-1` continuous transmission.
+For continuous transmission: `-1`
 
 Default: `1`
 
 ### diag transmit stop
-Stop ongoing transmission regardless of remaining number of messages to be sent.
+Stop the ongoing transmission regardless of the remaining number of messages to be sent.
 
 ### diag transmit start
 Start transmiting messages with specified interval.

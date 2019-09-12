@@ -47,6 +47,8 @@
 #include <openthread/icmp6.h>
 #include <openthread/joiner.h>
 #include <openthread/link.h>
+#include <openthread/ncp.h>
+#include <openthread/thread.h>
 #if OPENTHREAD_CONFIG_ENABLE_TIME_SYNC
 #include <openthread/network_time.h>
 #endif
@@ -126,7 +128,7 @@ const struct Command Interpreter::sCommands[] = {
 #if OPENTHREAD_FTD
     {"contextreusedelay", &Interpreter::ProcessContextIdReuseDelay},
 #endif
-    {"counter", &Interpreter::ProcessCounters},
+    {"counters", &Interpreter::ProcessCounters},
     {"dataset", &Interpreter::ProcessDataset},
 #if OPENTHREAD_FTD
     {"delaytimermin", &Interpreter::ProcessDelayTimerMin},
@@ -262,7 +264,7 @@ template <class T> class otPtr
     T *ptr;
 
 public:
-    otPtr(T *_ptr)
+    explicit otPtr(T *_ptr)
         : ptr(_ptr)
     {
     }
@@ -279,6 +281,7 @@ public:
 };
 
 typedef otPtr<const otMacCounters>  otMacCountersPtr;
+typedef otPtr<const otMleCounters>  otMleCountersPtr;
 typedef otPtr<const otNetifAddress> otNetifAddressPtr;
 typedef otPtr<const uint8_t>        otBufferPtr;
 typedef otPtr<const char>           otStringPtr;
@@ -402,18 +405,64 @@ void Interpreter::OutputBytes(const uint8_t *aBytes, uint8_t aLength) const
     }
 }
 
-otError Interpreter::ParseLong(char *argv, long &value)
+otError Interpreter::ParseLong(char *aString, long &aLong)
 {
     char *endptr;
-    value = strtol(argv, &endptr, 0);
+    aLong = strtol(aString, &endptr, 0);
     return (*endptr == '\0') ? OT_ERROR_NONE : OT_ERROR_PARSE;
 }
 
-otError Interpreter::ParseUnsignedLong(char *argv, unsigned long &value)
+otError Interpreter::ParseUnsignedLong(char *aString, unsigned long &aUnsignedLong)
 {
     char *endptr;
-    value = strtoul(argv, &endptr, 0);
+    aUnsignedLong = strtoul(aString, &endptr, 0);
     return (*endptr == '\0') ? OT_ERROR_NONE : OT_ERROR_PARSE;
+}
+
+otError Interpreter::ParsePingInterval(const char *aString, uint32_t &aInterval)
+{
+    otError        error    = OT_ERROR_NONE;
+    const uint32_t msFactor = 1000;
+    uint32_t       factor   = msFactor;
+
+    aInterval = 0;
+
+    while (*aString)
+    {
+        if ('0' <= *aString && *aString <= '9')
+        {
+            // In the case of seconds, change the base of already calculated value.
+            if (factor == msFactor)
+            {
+                aInterval *= 10;
+            }
+
+            aInterval += static_cast<uint32_t>(*aString - '0') * factor;
+
+            // In the case of milliseconds, change the multiplier factor.
+            if (factor != msFactor)
+            {
+                factor /= 10;
+            }
+        }
+        else if (*aString == '.')
+        {
+            // Accept only one dot character.
+            VerifyOrExit(factor == msFactor, error = OT_ERROR_PARSE);
+
+            // Start analyzing hundreds of milliseconds.
+            factor /= 10;
+        }
+        else
+        {
+            ExitNow(error = OT_ERROR_PARSE);
+        }
+
+        aString++;
+    }
+
+exit:
+    return error;
 }
 
 void Interpreter::ProcessHelp(int argc, char *argv[])
@@ -505,15 +554,25 @@ void Interpreter::ProcessChannel(int argc, char *argv[])
             mServer->OutputFormat("enabled: %d\r\n", otChannelMonitorIsEnabled(mInstance));
             if (otChannelMonitorIsEnabled(mInstance))
             {
+                uint32_t channelMask = otLinkGetSupportedChannelMask(mInstance);
+                uint8_t  channelNum  = sizeof(channelMask) * CHAR_BIT;
+
                 mServer->OutputFormat("interval: %lu\r\n", otChannelMonitorGetSampleInterval(mInstance));
                 mServer->OutputFormat("threshold: %d\r\n", otChannelMonitorGetRssiThreshold(mInstance));
                 mServer->OutputFormat("window: %lu\r\n", otChannelMonitorGetSampleWindow(mInstance));
                 mServer->OutputFormat("count: %lu\r\n", otChannelMonitorGetSampleCount(mInstance));
 
                 mServer->OutputFormat("occupancies:\r\n");
-                for (uint8_t channel = OT_RADIO_CHANNEL_MIN; channel <= OT_RADIO_CHANNEL_MAX; channel++)
+                for (uint8_t channel = 0; channel < channelNum; channel++)
                 {
-                    uint32_t occupancy = otChannelMonitorGetChannelOccupancy(mInstance, channel);
+                    uint32_t occupancy = 0;
+
+                    if (!((1UL << channel) & channelMask))
+                    {
+                        continue;
+                    }
+
+                    occupancy = otChannelMonitorGetChannelOccupancy(mInstance, channel);
 
                     mServer->OutputFormat("ch %d (0x%04x) ", channel, occupancy);
                     occupancy = (occupancy * 10000) / 0xffff;
@@ -808,49 +867,78 @@ exit:
 
 void Interpreter::ProcessCounters(int argc, char *argv[])
 {
+    otError error = OT_ERROR_NONE;
+
     if (argc == 0)
     {
         mServer->OutputFormat("mac\r\n");
-        mServer->OutputFormat("Done\r\n");
+        mServer->OutputFormat("mle\r\n");
     }
-    else
+    else if (argc == 1)
     {
         if (strcmp(argv[0], "mac") == 0)
         {
-            otMacCountersPtr counters(otLinkGetCounters(mInstance));
-            mServer->OutputFormat("TxTotal: %d\r\n", counters->mTxTotal);
-            mServer->OutputFormat("    TxUnicast: %d\r\n", counters->mTxUnicast);
-            mServer->OutputFormat("    TxBroadcast: %d\r\n", counters->mTxBroadcast);
-            mServer->OutputFormat("    TxAckRequested: %d\r\n", counters->mTxAckRequested);
-            mServer->OutputFormat("    TxAcked: %d\r\n", counters->mTxAcked);
-            mServer->OutputFormat("    TxNoAckRequested: %d\r\n", counters->mTxNoAckRequested);
-            mServer->OutputFormat("    TxData: %d\r\n", counters->mTxData);
-            mServer->OutputFormat("    TxDataPoll: %d\r\n", counters->mTxDataPoll);
-            mServer->OutputFormat("    TxBeacon: %d\r\n", counters->mTxBeacon);
-            mServer->OutputFormat("    TxBeaconRequest: %d\r\n", counters->mTxBeaconRequest);
-            mServer->OutputFormat("    TxOther: %d\r\n", counters->mTxOther);
-            mServer->OutputFormat("    TxRetry: %d\r\n", counters->mTxRetry);
-            mServer->OutputFormat("    TxErrCca: %d\r\n", counters->mTxErrCca);
-            mServer->OutputFormat("    TxErrBusyChannel: %d\r\n", counters->mTxErrBusyChannel);
-            mServer->OutputFormat("RxTotal: %d\r\n", counters->mRxTotal);
-            mServer->OutputFormat("    RxUnicast: %d\r\n", counters->mRxUnicast);
-            mServer->OutputFormat("    RxBroadcast: %d\r\n", counters->mRxBroadcast);
-            mServer->OutputFormat("    RxData: %d\r\n", counters->mRxData);
-            mServer->OutputFormat("    RxDataPoll: %d\r\n", counters->mRxDataPoll);
-            mServer->OutputFormat("    RxBeacon: %d\r\n", counters->mRxBeacon);
-            mServer->OutputFormat("    RxBeaconRequest: %d\r\n", counters->mRxBeaconRequest);
-            mServer->OutputFormat("    RxOther: %d\r\n", counters->mRxOther);
-            mServer->OutputFormat("    RxAddressFiltered: %d\r\n", counters->mRxAddressFiltered);
-            mServer->OutputFormat("    RxDestAddrFiltered: %d\r\n", counters->mRxDestAddrFiltered);
-            mServer->OutputFormat("    RxDuplicated: %d\r\n", counters->mRxDuplicated);
-            mServer->OutputFormat("    RxErrNoFrame: %d\r\n", counters->mRxErrNoFrame);
-            mServer->OutputFormat("    RxErrNoUnknownNeighbor: %d\r\n", counters->mRxErrUnknownNeighbor);
-            mServer->OutputFormat("    RxErrInvalidSrcAddr: %d\r\n", counters->mRxErrInvalidSrcAddr);
-            mServer->OutputFormat("    RxErrSec: %d\r\n", counters->mRxErrSec);
-            mServer->OutputFormat("    RxErrFcs: %d\r\n", counters->mRxErrFcs);
-            mServer->OutputFormat("    RxErrOther: %d\r\n", counters->mRxErrOther);
+            otMacCountersPtr macCounters(otLinkGetCounters(mInstance));
+
+            mServer->OutputFormat("TxTotal: %d\r\n", macCounters->mTxTotal);
+            mServer->OutputFormat("    TxUnicast: %d\r\n", macCounters->mTxUnicast);
+            mServer->OutputFormat("    TxBroadcast: %d\r\n", macCounters->mTxBroadcast);
+            mServer->OutputFormat("    TxAckRequested: %d\r\n", macCounters->mTxAckRequested);
+            mServer->OutputFormat("    TxAcked: %d\r\n", macCounters->mTxAcked);
+            mServer->OutputFormat("    TxNoAckRequested: %d\r\n", macCounters->mTxNoAckRequested);
+            mServer->OutputFormat("    TxData: %d\r\n", macCounters->mTxData);
+            mServer->OutputFormat("    TxDataPoll: %d\r\n", macCounters->mTxDataPoll);
+            mServer->OutputFormat("    TxBeacon: %d\r\n", macCounters->mTxBeacon);
+            mServer->OutputFormat("    TxBeaconRequest: %d\r\n", macCounters->mTxBeaconRequest);
+            mServer->OutputFormat("    TxOther: %d\r\n", macCounters->mTxOther);
+            mServer->OutputFormat("    TxRetry: %d\r\n", macCounters->mTxRetry);
+            mServer->OutputFormat("    TxErrCca: %d\r\n", macCounters->mTxErrCca);
+            mServer->OutputFormat("    TxErrBusyChannel: %d\r\n", macCounters->mTxErrBusyChannel);
+            mServer->OutputFormat("RxTotal: %d\r\n", macCounters->mRxTotal);
+            mServer->OutputFormat("    RxUnicast: %d\r\n", macCounters->mRxUnicast);
+            mServer->OutputFormat("    RxBroadcast: %d\r\n", macCounters->mRxBroadcast);
+            mServer->OutputFormat("    RxData: %d\r\n", macCounters->mRxData);
+            mServer->OutputFormat("    RxDataPoll: %d\r\n", macCounters->mRxDataPoll);
+            mServer->OutputFormat("    RxBeacon: %d\r\n", macCounters->mRxBeacon);
+            mServer->OutputFormat("    RxBeaconRequest: %d\r\n", macCounters->mRxBeaconRequest);
+            mServer->OutputFormat("    RxOther: %d\r\n", macCounters->mRxOther);
+            mServer->OutputFormat("    RxAddressFiltered: %d\r\n", macCounters->mRxAddressFiltered);
+            mServer->OutputFormat("    RxDestAddrFiltered: %d\r\n", macCounters->mRxDestAddrFiltered);
+            mServer->OutputFormat("    RxDuplicated: %d\r\n", macCounters->mRxDuplicated);
+            mServer->OutputFormat("    RxErrNoFrame: %d\r\n", macCounters->mRxErrNoFrame);
+            mServer->OutputFormat("    RxErrNoUnknownNeighbor: %d\r\n", macCounters->mRxErrUnknownNeighbor);
+            mServer->OutputFormat("    RxErrInvalidSrcAddr: %d\r\n", macCounters->mRxErrInvalidSrcAddr);
+            mServer->OutputFormat("    RxErrSec: %d\r\n", macCounters->mRxErrSec);
+            mServer->OutputFormat("    RxErrFcs: %d\r\n", macCounters->mRxErrFcs);
+            mServer->OutputFormat("    RxErrOther: %d\r\n", macCounters->mRxErrOther);
+        }
+        else if (strcmp(argv[0], "mle") == 0)
+        {
+            otMleCountersPtr mleCounters(otThreadGetMleCounters(mInstance));
+
+            mServer->OutputFormat("Role Disabled: %d\r\n", mleCounters->mDisabledRole);
+            mServer->OutputFormat("Role Detached: %d\r\n", mleCounters->mDetachedRole);
+            mServer->OutputFormat("Role Child: %d\r\n", mleCounters->mChildRole);
+            mServer->OutputFormat("Role Router: %d\r\n", mleCounters->mRouterRole);
+            mServer->OutputFormat("Role Leader: %d\r\n", mleCounters->mLeaderRole);
+            mServer->OutputFormat("Attach Attempts: %d\r\n", mleCounters->mAttachAttempts);
+            mServer->OutputFormat("Partition Id Changes: %d\r\n", mleCounters->mPartitionIdChanges);
+            mServer->OutputFormat("Better Partition Attach Attempts: %d\r\n",
+                                  mleCounters->mBetterPartitionAttachAttempts);
+            mServer->OutputFormat("Parent Changes: %d\r\n", mleCounters->mParentChanges);
+        }
+        else
+        {
+            ExitNow(error = OT_ERROR_INVALID_ARGS);
         }
     }
+    else
+    {
+        ExitNow(error = OT_ERROR_INVALID_ARGS);
+    }
+
+exit:
+    AppendResult(error);
 }
 
 #if OPENTHREAD_FTD
@@ -1427,21 +1515,21 @@ void Interpreter::ProcessPSKc(int argc, char *argv[])
 
     if (argc == 0)
     {
-        const uint8_t *currentPSKc = otThreadGetPSKc(mInstance);
+        const otPSKc *pskc = otThreadGetPSKc(mInstance);
 
         for (int i = 0; i < OT_PSKC_MAX_SIZE; i++)
         {
-            mServer->OutputFormat("%02x", currentPSKc[i]);
+            mServer->OutputFormat("%02x", pskc->m8[i]);
         }
 
         mServer->OutputFormat("\r\n");
     }
     else
     {
-        uint8_t newPSKc[OT_PSKC_MAX_SIZE];
+        otPSKc pskc;
 
-        VerifyOrExit(Hex2Bin(argv[0], newPSKc, sizeof(newPSKc)) == OT_PSKC_MAX_SIZE, error = OT_ERROR_PARSE);
-        SuccessOrExit(error = otThreadSetPSKc(mInstance, newPSKc));
+        VerifyOrExit(Hex2Bin(argv[0], pskc.m8, sizeof(pskc)) == OT_PSKC_MAX_SIZE, error = OT_ERROR_PARSE);
+        SuccessOrExit(error = otThreadSetPSKc(mInstance, &pskc));
     }
 
 exit:
@@ -1721,7 +1809,7 @@ void Interpreter::ProcessNetworkName(int argc, char *argv[])
     if (argc == 0)
     {
         otStringPtr networkName(otThreadGetNetworkName(mInstance));
-        mServer->OutputFormat("%.*s\r\n", OT_NETWORK_NAME_MAX_SIZE, (const char *)networkName);
+        mServer->OutputFormat("%.*s\r\n", OT_NETWORK_NAME_MAX_SIZE, static_cast<const char *>(networkName));
     }
     else
     {
@@ -1895,9 +1983,10 @@ exit:
 
 void Interpreter::ProcessPing(int argc, char *argv[])
 {
-    otError error = OT_ERROR_NONE;
-    uint8_t index = 1;
-    long    value;
+    otError  error = OT_ERROR_NONE;
+    uint8_t  index = 1;
+    long     value;
+    uint32_t interval;
 
     VerifyOrExit(argc > 0, error = OT_ERROR_INVALID_ARGS);
 
@@ -1926,21 +2015,22 @@ void Interpreter::ProcessPing(int argc, char *argv[])
 
     while (index < argc)
     {
-        SuccessOrExit(error = ParseLong(argv[index], value));
-
         switch (index)
         {
         case 1:
+            SuccessOrExit(error = ParseLong(argv[index], value));
             mLength = static_cast<uint16_t>(value);
             break;
 
         case 2:
+            SuccessOrExit(error = ParseLong(argv[index], value));
             mCount = static_cast<uint16_t>(value);
             break;
 
         case 3:
-            VerifyOrExit(value <= Timer::kMaxDt / 1000, error = OT_ERROR_INVALID_ARGS);
-            mInterval = static_cast<uint32_t>(value) * 1000;
+            SuccessOrExit(error = ParsePingInterval(argv[index], interval));
+            VerifyOrExit(0 < interval && interval <= Timer::kMaxDt, error = OT_ERROR_INVALID_ARGS);
+            mInterval = interval;
             break;
 
         default:
@@ -3055,7 +3145,7 @@ void Interpreter::ProcessVersion(int argc, char *argv[])
     OT_UNUSED_VARIABLE(argv);
 
     otStringPtr version(otGetVersionString());
-    mServer->OutputFormat("%s\r\n", (const char *)version);
+    mServer->OutputFormat("%s\r\n", static_cast<const char *>(version));
     AppendResult(OT_ERROR_NONE);
 }
 
@@ -3325,7 +3415,7 @@ void Interpreter::HandleEnergyReport(uint32_t aChannelMask, const uint8_t *aEner
 
     for (uint8_t i = 0; i < aEnergyListLength; i++)
     {
-        mServer->OutputFormat("%d ", aEnergyList[i]);
+        mServer->OutputFormat("%d ", static_cast<int8_t>(aEnergyList[i]));
     }
 
     mServer->OutputFormat("\r\n");
@@ -3957,3 +4047,20 @@ exit:
 
 } // namespace Cli
 } // namespace ot
+
+#if OPENTHREAD_ENABLE_LEGACY
+extern "C" void otNcpRegisterLegacyHandlers(const otNcpLegacyHandlers *aHandlers)
+{
+    OT_UNUSED_VARIABLE(aHandlers);
+}
+
+extern "C" void otNcpHandleDidReceiveNewLegacyUlaPrefix(const uint8_t *aUlaPrefix)
+{
+    OT_UNUSED_VARIABLE(aUlaPrefix);
+}
+
+extern "C" void otNcpHandleLegacyNodeDidJoin(const otExtAddress *aExtAddr)
+{
+    OT_UNUSED_VARIABLE(aExtAddr);
+}
+#endif // OPENTHREAD_ENABLE_LEGACY

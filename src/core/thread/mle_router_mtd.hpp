@@ -50,6 +50,7 @@ namespace Mle {
 class MleRouter : public Mle
 {
     friend class Mle;
+    friend class ot::Instance;
 
 public:
     explicit MleRouter(Instance &aInstance)
@@ -82,9 +83,6 @@ public:
 
     otError RemoveNeighbor(const Mac::Address &) { return BecomeDetached(); }
     otError RemoveNeighbor(Neighbor &) { return BecomeDetached(); }
-
-    ChildTable & GetChildTable(void) { return mChildTable; }
-    RouterTable &GetRouterTable(void) { return mRouterTable; }
 
     bool IsMinimalChild(uint16_t) { return false; }
 
@@ -130,7 +128,7 @@ public:
     bool IsSleepyChildSubscribed(const Ip6::Address &, Child &) { return false; }
 
 private:
-    otError HandleDetachStart(void) { return OT_ERROR_NONE; }
+    void    HandleDetachStart(void) {}
     otError HandleChildStart(AttachMode) { return OT_ERROR_NONE; }
     otError HandleLinkRequest(const Message &, const Ip6::MessageInfo &) { return OT_ERROR_DROP; }
     otError HandleLinkAccept(const Message &, const Ip6::MessageInfo &, uint32_t) { return OT_ERROR_DROP; }
@@ -142,7 +140,7 @@ private:
     otError HandleChildUpdateRequest(const Message &, const Ip6::MessageInfo &, uint32_t) { return OT_ERROR_DROP; }
     otError HandleChildUpdateResponse(const Message &, const Ip6::MessageInfo &, uint32_t) { return OT_ERROR_DROP; }
     otError HandleDataRequest(const Message &, const Ip6::MessageInfo &) { return OT_ERROR_DROP; }
-    otError HandleNetworkDataUpdateRouter(void) { return OT_ERROR_NONE; }
+    void    HandleNetworkDataUpdateRouter(void) {}
     otError HandleDiscoveryRequest(const Message &, const Ip6::MessageInfo &) { return OT_ERROR_DROP; }
     void    HandlePartitionChange(void) {}
     void    StopAdvertiseTimer(void) {}

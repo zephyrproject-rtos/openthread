@@ -144,6 +144,15 @@ public:
     otError Bind(const SockAddr &aSockAddr);
 
     /**
+     * This method indicates whether or not the socket is bound.
+     *
+     * @retval TRUE if the socket is bound (i.e. source port is non-zero).
+     * @retval FALSE if the socket is not bound (source port is zero).
+     *
+     */
+    bool IsBound(void) const { return mSockName.mPort != 0; }
+
+    /**
      * This method connects the UDP socket.
      *
      * @param[in]  aSockAddr  A reference to the socket address.
@@ -200,8 +209,6 @@ private:
     {
         mHandler(mContext, &aMessage, &aMessageInfo);
     }
-
-    Udp &GetUdp(void);
 };
 
 /**
@@ -248,20 +255,16 @@ public:
      *
      * @param[in]  aSocket  A reference to the UDP socket.
      *
-     * @retval OT_ERROR_NONE  Successfully added the UDP socket.
-     *
      */
-    otError AddSocket(UdpSocket &aSocket);
+    void AddSocket(UdpSocket &aSocket);
 
     /**
      * This method removes a UDP socket.
      *
      * @param[in]  aSocket  A reference to the UDP socket.
      *
-     * @retval OT_ERROR_NONE  Successfully removed the UDP socket.
-     *
      */
-    otError RemoveSocket(UdpSocket &aSocket);
+    void RemoveSocket(UdpSocket &aSocket);
 
     /**
      * This method returns a new ephemeral port.
@@ -319,14 +322,11 @@ public:
     /**
      * This method updates the UDP checksum.
      *
-     * @param[in]  aMessage               A reference to the UDP message.
-     * @param[in]  aPseudoHeaderChecksum  The pseudo-header checksum value.
-     *
-     * @retval OT_ERROR_NONE          Successfully updated the UDP checksum.
-     * @retval OT_ERROR_INVALID_ARGS  The message was invalid.
+     * @param[in]  aMessage   A reference to the UDP message.
+     * @param[in]  aChecksum  The pseudo-header checksum value.
      *
      */
-    otError UpdateChecksum(Message &aMessage, uint16_t aPseudoHeaderChecksum);
+    void UpdateChecksum(Message &aMessage, uint16_t aChecksum);
 
 #if OPENTHREAD_ENABLE_PLATFORM_UDP
     otUdpSocket *GetUdpSockets(void) { return mSockets; }
@@ -470,4 +470,4 @@ public:
 } // namespace Ip6
 } // namespace ot
 
-#endif // NET_UDP6_HPP_
+#endif // UDP6_HPP_

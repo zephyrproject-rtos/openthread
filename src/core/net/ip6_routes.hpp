@@ -96,11 +96,8 @@ public:
      *
      * @param[in]  aRoute  A reference to the IPv6 route.
      *
-     * @retval OT_ERROR_NONE       Successfully removed the route.
-     * @retval OT_ERROR_NOT_FOUND  The route was not added.
-     *
      */
-    otError Remove(Route &aRoute);
+    void Remove(Route &aRoute);
 
     /**
      * This method performs source-destination route lookup.
@@ -125,4 +122,4 @@ private:
 } // namespace Ip6
 } // namespace ot
 
-#endif // NET_IP6_ROUTES_HPP_
+#endif // IP6_ROUTES_HPP_

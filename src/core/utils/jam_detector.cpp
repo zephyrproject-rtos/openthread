@@ -35,8 +35,8 @@
 
 #include "common/code_utils.hpp"
 #include "common/instance.hpp"
+#include "common/locator-getters.hpp"
 #include "common/logging.hpp"
-#include "common/owner-locator.hpp"
 #include "common/random.hpp"
 #include "thread/thread_netif.hpp"
 
@@ -49,7 +49,7 @@ JamDetector::JamDetector(Instance &aInstance)
     : InstanceLocator(aInstance)
     , mHandler(NULL)
     , mContext(NULL)
-    , mNotifierCallback(HandleStateChanged, this)
+    , mNotifierCallback(aInstance, HandleStateChanged, this)
     , mTimer(aInstance, &JamDetector::HandleTimer, this)
     , mHistoryBitmap(0)
     , mCurSecondStartTime(0)
@@ -61,7 +61,6 @@ JamDetector::JamDetector(Instance &aInstance)
     , mJamState(false)
     , mRssiThreshold(kDefaultRssiThreshold)
 {
-    aInstance.GetNotifier().RegisterCallback(mNotifierCallback);
 }
 
 otError JamDetector::Start(Handler aHandler, void *aContext)
@@ -104,7 +103,7 @@ void JamDetector::CheckState(void)
 {
     VerifyOrExit(mEnabled);
 
-    switch (GetInstance().Get<Mle::MleRouter>().GetRole())
+    switch (Get<Mle::MleRouter>().GetRole())
     {
     case OT_DEVICE_ROLE_DISABLED:
         VerifyOrExit(mTimer.IsRunning());
@@ -127,12 +126,10 @@ exit:
     return;
 }
 
-otError JamDetector::SetRssiThreshold(int8_t aThreshold)
+void JamDetector::SetRssiThreshold(int8_t aThreshold)
 {
     mRssiThreshold = aThreshold;
     otLogInfoUtil("JamDetector - RSSI threshold set to %d", mRssiThreshold);
-
-    return OT_ERROR_NONE;
 }
 
 otError JamDetector::SetWindow(uint8_t aWindow)

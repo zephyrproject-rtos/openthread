@@ -46,6 +46,7 @@
 
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
+#include "phy/phy.hpp"
 
 namespace ot {
 namespace Ncp {
@@ -203,7 +204,7 @@ NcpBase::NcpBase(Instance *aInstance)
     , mDecoder()
     , mHostPowerStateInProgress(false)
     , mLastStatus(SPINEL_STATUS_OK)
-    , mScanChannelMask(OT_RADIO_SUPPORTED_CHANNELS)
+    , mScanChannelMask(Phy::kSupportedChannels)
     , mScanPeriod(200)
     , mDiscoveryScanJoinerFlag(false)
     , mDiscoveryScanEnableFiltering(false)
@@ -227,6 +228,9 @@ NcpBase::NcpBase(Instance *aInstance)
     , mPcapEnabled(false)
     , mDisableStreamWrite(false)
     , mShouldEmitChildTableUpdate(false)
+#if OPENTHREAD_ENABLE_SERVICE
+    , mAllowLocalServerDataChange(false)
+#endif
 #if OPENTHREAD_FTD
     , mPreferredRouteId(0)
 #endif
@@ -287,7 +291,7 @@ NcpBase::NcpBase(Instance *aInstance)
     mUpdateChangedPropsTask.Post();
 
 #if OPENTHREAD_ENABLE_VENDOR_EXTENSION
-    aInstance->GetExtension().SignalNcpInit(*this);
+    aInstance->Get<Extension::ExtensionBase>().SignalNcpInit(*this);
 #endif
 }
 
@@ -649,7 +653,7 @@ uint8_t NcpBase::GetWrappedResponseQueueIndex(uint8_t aPosition)
     return aPosition;
 }
 
-otError NcpBase::EnqueueResponse(uint8_t aHeader, ResponseType aType, unsigned int aKeyOrStatus)
+otError NcpBase::EnqueueResponse(uint8_t aHeader, ResponseType aType, unsigned int aPropKeyOrStatus)
 {
     otError        error = OT_ERROR_NONE;
     spinel_tid_t   tid   = SPINEL_HEADER_GET_TID(aHeader);
@@ -663,7 +667,7 @@ otError NcpBase::EnqueueResponse(uint8_t aHeader, ResponseType aType, unsigned i
 
         if (aType == kResponseTypeLastStatus)
         {
-            mChangedPropsSet.AddLastStatus(static_cast<spinel_status_t>(aKeyOrStatus));
+            mChangedPropsSet.AddLastStatus(static_cast<spinel_status_t>(aPropKeyOrStatus));
         }
 
         ExitNow();
@@ -708,7 +712,7 @@ otError NcpBase::EnqueueResponse(uint8_t aHeader, ResponseType aType, unsigned i
     entry->mTid             = tid;
     entry->mIsInUse         = true;
     entry->mType            = aType;
-    entry->mPropKeyOrStatus = aKeyOrStatus;
+    entry->mPropKeyOrStatus = aPropKeyOrStatus;
 
     mResponseQueueTail++;
 
@@ -823,7 +827,6 @@ void NcpBase::UpdateChangedProps(void)
 
 exit:
     mDidInitialUpdates = true;
-    return;
 }
 
 // ----------------------------------------------------------------------------
@@ -1575,7 +1578,7 @@ template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_MAC_SCAN_STATE>(void)
             VerifyOrExit(HasOnly1BitSet(mScanChannelMask), error = OT_ERROR_INVALID_ARGS);
 
             scanChannel     = IndexOfMSB(mScanChannelMask);
-            mCurScanChannel = (int8_t)scanChannel;
+            mCurScanChannel = static_cast<int8_t>(scanChannel);
 
             error = otLinkRawEnergyScan(mInstance, scanChannel, mScanPeriod, LinkRawEnergyScanDone);
         }
@@ -1721,6 +1724,14 @@ template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_CAPS>(void)
     SuccessOrExit(error = mEncoder.WriteUintPacked(SPINEL_CAP_MCU_POWER_STATE));
 #endif
 
+#if OPENTHREAD_CONFIG_RADIO_2P4GHZ_OQPSK_SUPPORT
+    SuccessOrExit(error = mEncoder.WriteUintPacked(SPINEL_CAP_802_15_4_2450MHZ_OQPSK));
+#endif
+
+#if OPENTHREAD_CONFIG_RADIO_915MHZ_OQPSK_SUPPORT
+    SuccessOrExit(error = mEncoder.WriteUintPacked(SPINEL_CAP_802_15_4_915MHZ_OQPSK));
+#endif
+
 #if OPENTHREAD_FTD
     SuccessOrExit(error = mEncoder.WriteUintPacked(SPINEL_CAP_CONFIG_FTD));
 #elif OPENTHREAD_MTD
@@ -1733,7 +1744,7 @@ template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_CAPS>(void)
     SuccessOrExit(error = mEncoder.WriteUintPacked(SPINEL_CAP_MAC_RAW));
 #endif
 
-#if OPENTHREAD_ENABLE_POSIX_APP
+#if OPENTHREAD_PLATFORM_POSIX_APP
     SuccessOrExit(error = mEncoder.WriteUintPacked(SPINEL_CAP_POSIX_APP));
 #endif
 
@@ -1778,12 +1789,13 @@ template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_CAPS>(void)
     SuccessOrExit(error = mEncoder.WriteUintPacked(SPINEL_CAP_OOB_STEERING_DATA));
 #endif
 
+#if OPENTHREAD_CONFIG_ENABLE_SLAAC
+    SuccessOrExit(error = mEncoder.WriteUintPacked(SPINEL_CAP_SLAAC));
+#endif
+
 #if OPENTHREAD_CONFIG_NCP_ENABLE_PEEK_POKE
     SuccessOrExit(error = mEncoder.WriteUintPacked(SPINEL_CAP_PEEK_POKE));
 #endif
-
-    // TODO: Somehow get the following capability from the radio.
-    SuccessOrExit(error = mEncoder.WriteUintPacked(SPINEL_CAP_802_15_4_2450MHZ_OQPSK));
 
 #if OPENTHREAD_CONFIG_MAX_CHILDREN > 0
     SuccessOrExit(error = mEncoder.WriteUintPacked(SPINEL_CAP_ROLE_ROUTER));
@@ -1809,6 +1821,10 @@ template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_CAPS>(void)
 
 #if OPENTHREAD_ENABLE_UDP_FORWARD
     SuccessOrExit(error = mEncoder.WriteUintPacked(SPINEL_CAP_THREAD_UDP_FORWARD));
+#endif
+
+#if OPENTHREAD_ENABLE_SERVICE
+    SuccessOrExit(error = mEncoder.WriteUintPacked(SPINEL_CAP_THREAD_SERVICE));
 #endif
 
 #endif // OPENTHREAD_MTD || OPENTHREAD_FTD
@@ -2083,7 +2099,9 @@ exit:
 
 template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_DEBUG_TEST_ASSERT>(void)
 {
+#ifndef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
     assert(false);
+#endif
 
     // We only get to this point if `assert(false)`
     // does not cause an NCP reset on the platform.
@@ -2095,8 +2113,10 @@ template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_DEBUG_TEST_ASSERT>(vo
 
 template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_DEBUG_TEST_WATCHDOG>(void)
 {
+#ifndef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
     while (true)
         ;
+#endif
 
     OT_UNREACHABLE_CODE(return OT_ERROR_NONE;)
 }
@@ -2151,6 +2171,20 @@ template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_DEBUG_NCP_LOG_LEVEL>(
 
 exit:
     return error;
+}
+
+template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_PHY_CHAN_SUPPORTED>(void)
+{
+#if OPENTHREAD_RADIO
+    return EncodeChannelMask(otPlatRadioGetSupportedChannelMask(mInstance));
+#else
+    return EncodeChannelMask(otLinkGetSupportedChannelMask(mInstance));
+#endif // OPENTHREAD_RADIO
+}
+
+template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_PHY_CHAN_PREFERRED>(void)
+{
+    return EncodeChannelMask(otPlatRadioGetPreferredChannelMask(mInstance));
 }
 
 } // namespace Ncp

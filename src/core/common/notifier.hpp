@@ -60,14 +60,23 @@ namespace ot {
 /**
  * This class implements the OpenThread Notifier.
  *
- * It can be used to register callbacks to be notified of state or configuration changes within OpenThread.
+ * It can be used to register callbacks that notify of state or configuration changes within OpenThread.
+ *
+ * Two callback models are provided:
+ *
+ * - A `Notifier::Callback` object that upon initialization (from its constructor) auto-registers itself with
+ *   the `Notifier`. This model is mainly used by OpenThread core modules.
+ *
+ * - A `otStateChangedCallback` callback handler which needs to be explicitly registered with the `Notifier`. This is
+ *   commonly used by external users (provided as an OpenThread public API). Max number of such callbacks that can be
+ *   registered at the same time is specified by `OPENTHREAD_CONFIG_MAX_STATECHANGE_HANDLERS` configuration parameter.
  *
  */
 class Notifier : public InstanceLocator
 {
 public:
     /**
-     * This class defines a callback instance that can be registered with the `Notifier`.
+     * This class defines a `Notifier` callback instance.
      *
      */
     class Callback : public OwnerLocator
@@ -85,15 +94,18 @@ public:
         typedef void (*Handler)(Callback &aCallback, otChangedFlags aFlags);
 
         /**
-         * This constructor initializes a `Callback` instance
+         * This constructor initializes a `Callback` instance and registers it with `Notifier`.
          *
+         * @param[in] aInstance   A reference to OpenThread instance.
          * @param[in] aHandler    A function pointer to the callback handler.
          * @param[in] aOwner      A pointer to the owner of the `Callback` instance.
          *
          */
-        Callback(Handler aHandler, void *aOwner);
+        Callback(Instance &aInstance, Handler aHandler, void *aOwner);
 
     private:
+        void Invoke(otChangedFlags aFlags) { mHandler(*this, aFlags); }
+
         Handler   mHandler;
         Callback *mNext;
     };
@@ -105,25 +117,6 @@ public:
      *
      */
     explicit Notifier(Instance &aInstance);
-
-    /**
-     * This method registers a callback.
-     *
-     * @param[in]  aCallback     A reference to the callback instance.
-     *
-     * @retval OT_ERROR_NONE     Successfully registered the callback.
-     * @retval OT_ERROR_ALREADY  The callback was already registered.
-     *
-     */
-    otError RegisterCallback(Callback &aCallback);
-
-    /**
-     * This method removes a previously registered callback.
-     *
-     * @param[in]  aCallback     A reference to the callback instance.
-     *
-     */
-    void RemoveCallback(Callback &aCallback);
 
     /**
      * This method registers an `otStateChangedCallback` handler.
@@ -198,6 +191,7 @@ private:
         void *                 mContext;
     };
 
+    void        RegisterCallback(Callback &aCallback);
     static void HandleStateChanged(Tasklet &aTasklet);
     void        HandleStateChanged(void);
 

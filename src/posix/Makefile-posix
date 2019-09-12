@@ -44,6 +44,7 @@ COMMISSIONER                         ?= 1
 CHANNEL_MANAGER                      ?= 1
 CHANNEL_MONITOR                      ?= 1
 CHILD_SUPERVISION                    ?= 1
+DAEMON                               ?= 0
 DHCP6_CLIENT                         ?= 1
 DHCP6_SERVER                         ?= 1
 DIAGNOSTIC                           ?= 1
@@ -55,12 +56,13 @@ LEGACY                               ?= 1
 LINK_RAW                             ?= 0
 MAC_FILTER                           ?= 1
 MTD_NETDIAG                          ?= 1
+READLINE                             ?= edit
 SERVICE                              ?= 1
 SNTP_CLIENT                          ?= 1
 UDP_FORWARD                          ?= 1
 
 COMMONCFLAGS                         := \
-    -DOPENTHREAD_CONFIG_UART_CLI_RAW=1  \
+    -g                                  \
     $(NULL)
 
 # If the user has asserted COVERAGE, alter the configuration options
@@ -76,15 +78,22 @@ configure_OPTIONS                   = \
 
 # Platform specific switches
 
+ifeq (${DAEMON},1)
+configure_OPTIONS              += --enable-posix-app-daemon
+endif
+
 ifneq ($(DEBUG),1)
 COMMONCFLAGS                   += \
     -O2                           \
-    -g                            \
     $(NULL)
 endif
 
 ifeq ($(PLATFORM_NETIF),1)
 configure_OPTIONS              += --enable-platform-netif
+endif
+
+ifneq ($(READLINE),)
+configure_OPTIONS              += --with-readline=$(READLINE)
 endif
 
 ifeq ($(VIRTUAL_TIME),1)

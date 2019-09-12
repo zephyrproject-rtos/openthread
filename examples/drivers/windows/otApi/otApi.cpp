@@ -1619,7 +1619,7 @@ otThreadSetMasterKey(
 }
 
 OTAPI 
-const uint8_t *
+const otPSKc *
 OTCALL
 otThreadGetPSKc(
     _In_ otInstance *aInstance 
@@ -1627,7 +1627,7 @@ otThreadGetPSKc(
 {
     if (aInstance == nullptr) return nullptr;
 
-    uint8_t *Result = (uint8_t*)malloc(sizeof(otPSKc));
+    otPSKc *Result = (otPSKc*)malloc(sizeof(otPSKc));
     if (Result == nullptr) return nullptr;
     if (QueryIOCTL(aInstance, IOCTL_OTLWF_OT_PSKC, Result) != ERROR_SUCCESS)
     {
@@ -1642,16 +1642,12 @@ otError
 OTCALL
 otThreadSetPSKc(
     _In_ otInstance *aInstance, 
-    const uint8_t *aPSKc 
+    const otPSKc *aPSKc 
     )
 {
     if (aInstance == nullptr) return OT_ERROR_INVALID_ARGS;
     
-    BYTE Buffer[sizeof(GUID) + sizeof(otPSKc)];
-    memcpy_s(Buffer, sizeof(Buffer), &aInstance->InterfaceGuid, sizeof(GUID));
-    memcpy_s(Buffer + sizeof(GUID), sizeof(Buffer) - sizeof(GUID), aPSKc, sizeof(otPSKc));
-    
-    return DwordToThreadError(SendIOCTL(aInstance->ApiHandle, IOCTL_OTLWF_OT_PSKC, Buffer, sizeof(Buffer), nullptr, 0));
+    return DwordToThreadError(SetIOCTL(aInstance, IOCTL_OTLWF_OT_PSKC, aPSKc));
 }
 
 OTAPI
@@ -3976,4 +3972,25 @@ otThreadSetParentPriority(
 {
     if (aInstance == nullptr) return OT_ERROR_INVALID_ARGS;
     return DwordToThreadError(SetIOCTL(aInstance, IOCTL_OTLWF_OT_PARENT_PRIORITY, aParentPriority));
+}
+
+OTAPI
+const otMleCounters*
+OTCALL
+otThreadGetMleCounters(
+    _In_ otInstance *aInstance
+    )
+{
+    if (aInstance == nullptr) return nullptr;
+
+    otMleCounters* aCounters = (otMleCounters*)malloc(sizeof(otMleCounters));
+    if (aCounters)
+    {
+        if (ERROR_SUCCESS != QueryIOCTL(aInstance, IOCTL_OTLWF_OT_MLE_COUNTERS, aCounters))
+        {
+            free(aCounters);
+            aCounters = nullptr;
+        }
+    }
+    return aCounters;
 }

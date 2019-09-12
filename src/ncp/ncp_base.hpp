@@ -52,6 +52,7 @@
 #include "ncp/ncp_buffer.hpp"
 #include "ncp/spinel_decoder.hpp"
 #include "ncp/spinel_encoder.hpp"
+#include "utils/static_assert.hpp"
 
 #include "spinel.h"
 
@@ -67,7 +68,7 @@ public:
      * @param[in]  aInstance  The OpenThread instance structure.
      *
      */
-    NcpBase(Instance *aInstance);
+    explicit NcpBase(Instance *aInstance);
 
     /**
      * This static method returns the pointer to the single NCP instance.
@@ -397,6 +398,9 @@ protected:
     otError HandlePropertySet_SPINEL_PROP_HOST_POWER_STATE(uint8_t aHeader);
 
 #if OPENTHREAD_ENABLE_DIAG
+    OT_STATIC_ASSERT(OPENTHREAD_CONFIG_DIAG_OUTPUT_BUFFER_SIZE <= OPENTHREAD_CONFIG_NCP_TX_BUFFER_SIZE,
+                     "diag output buffer should be smaller than NCP UART tx buffer");
+
     otError HandlePropertySet_SPINEL_PROP_NEST_STREAM_MFG(uint8_t aHeader);
 #endif
 
@@ -405,6 +409,7 @@ protected:
 #endif // OPENTHREAD_FTD
 
 #if OPENTHREAD_RADIO || OPENTHREAD_ENABLE_RAW_LINK_API
+    otError DecodeStreamRawTxRequest(otRadioFrame &aFrame);
     otError HandlePropertySet_SPINEL_PROP_STREAM_RAW(uint8_t aHeader);
 #endif
 
@@ -539,6 +544,9 @@ protected:
     bool mPcapEnabled;
     bool mDisableStreamWrite;
     bool mShouldEmitChildTableUpdate;
+#if OPENTHREAD_ENABLE_SERVICE
+    bool mAllowLocalServerDataChange;
+#endif
 
 #if OPENTHREAD_FTD
 #if OPENTHREAD_CONFIG_ENABLE_STEERING_DATA_SET_OOB

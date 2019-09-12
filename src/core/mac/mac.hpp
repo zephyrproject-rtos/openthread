@@ -95,6 +95,8 @@ enum
  */
 class Mac : public InstanceLocator, public SubMac::Callbacks
 {
+    friend class ot::Instance;
+
 public:
     /**
      * This constructor initializes the MAC object.
@@ -105,21 +107,13 @@ public:
     explicit Mac(Instance &aInstance);
 
     /**
-     * This method gets the associated `SubMac` object.
-     *
-     * @returns A reference to the `SubMac` object.
-     *
-     */
-    SubMac &GetSubMac(void) { return mSubMac; }
-
-    /**
      * This function pointer is called on receiving an IEEE 802.15.4 Beacon during an Active Scan.
      *
-     * @param[in]  aContext       A pointer to arbitrary context information.
+     * @param[in]  aInstance      A reference to the OpenThread instance.
      * @param[in]  aBeaconFrame   A pointer to the Beacon frame or NULL to indicate end of Active Scan operation.
      *
      */
-    typedef void (*ActiveScanHandler)(void *aContext, Frame *aBeaconFrame);
+    typedef void (*ActiveScanHandler)(Instance &aInstance, Frame *aBeaconFrame);
 
     /**
      * This method starts an IEEE 802.15.4 Active Scan.
@@ -128,13 +122,12 @@ public:
      * @param[in]  aScanDuration  The time in milliseconds to spend scanning each channel. Zero duration maps to
      *                            default value `kScanDurationDefault` = 300 ms.
      * @param[in]  aHandler       A pointer to a function that is called on receiving an IEEE 802.15.4 Beacon.
-     * @param[in]  aContext       A pointer to arbitrary context information.
      *
      * @retval OT_ERROR_NONE  Successfully scheduled the Active Scan request.
      * @retval OT_ERROR_BUSY  Could not schedule the scan (a scan is ongoing or scheduled).
      *
      */
-    otError ActiveScan(uint32_t aScanChannels, uint16_t aScanDuration, ActiveScanHandler aHandler, void *aContext);
+    otError ActiveScan(uint32_t aScanChannels, uint16_t aScanDuration, ActiveScanHandler aHandler);
 
     /**
      * This method converts a beacon frame to an active scan result of type `otActiveScanResult`.
@@ -153,12 +146,12 @@ public:
      * This function pointer is called during an Energy Scan when the result for a channel is ready or the scan
      * completes.
      *
-     * @param[in]  aContext  A pointer to arbitrary context information.
+     * @param[in]  aInstance A reference to the OpenThread instance.
      * @param[in]  aResult   A valid pointer to the energy scan result information or NULL when the energy scan
      *                       completes.
      *
      */
-    typedef void (*EnergyScanHandler)(void *aContext, otEnergyScanResult *aResult);
+    typedef void (*EnergyScanHandler)(Instance &aInstance, otEnergyScanResult *aResult);
 
     /**
      * This method starts an IEEE 802.15.4 Energy Scan.
@@ -167,13 +160,12 @@ public:
      * @param[in]  aScanDuration     The time in milliseconds to spend scanning each channel. If the duration is set to
      *                               zero, a single RSSI sample will be taken per channel.
      * @param[in]  aHandler          A pointer to a function called to pass on scan result or indicate scan completion.
-     * @param[in]  aContext          A pointer to arbitrary context information.
      *
      * @retval OT_ERROR_NONE  Accepted the Energy Scan request.
      * @retval OT_ERROR_BUSY  Could not start the energy scan.
      *
      */
-    otError EnergyScan(uint32_t aScanChannels, uint16_t aScanDuration, EnergyScanHandler aHandler, void *aContext);
+    otError EnergyScan(uint32_t aScanChannels, uint16_t aScanDuration, EnergyScanHandler aHandler);
 
     /**
      * This method indicates the energy scan for the current channel is complete.
@@ -269,10 +261,8 @@ public:
      *
      * @param[in]  aShortAddress  The IEEE 802.15.4 Short Address.
      *
-     * @retval OT_ERROR_NONE  Successfully set the IEEE 802.15.4 Short Address.
-     *
      */
-    otError SetShortAddress(ShortAddress aShortAddress);
+    void SetShortAddress(ShortAddress aShortAddress);
 
     /**
      * This method returns the IEEE 802.15.4 PAN Channel.
@@ -395,10 +385,8 @@ public:
      *
      * @param[in]  aPanId  The IEEE 802.15.4 PAN ID.
      *
-     * @retval OT_ERROR_NONE  Successfully set the IEEE 802.15.4 PAN ID.
-     *
      */
-    otError SetPanId(PanId aPanId);
+    void SetPanId(PanId aPanId);
 
     /**
      * This method returns the IEEE 802.15.4 Extended PAN ID.
@@ -413,20 +401,8 @@ public:
      *
      * @param[in]  aExtendedPanId  The IEEE 802.15.4 Extended PAN ID.
      *
-     * @retval OT_ERROR_NONE  Successfully set the IEEE 802.15.4 Extended PAN ID.
-     *
      */
-    otError SetExtendedPanId(const otExtendedPanId &aExtendedPanId);
-
-#if OPENTHREAD_ENABLE_MAC_FILTER
-    /**
-     * This method returns the MAC filter.
-     *
-     * @returns A reference to the MAC filter.
-     *
-     */
-    Filter &GetFilter(void) { return mFilter; }
-#endif // OPENTHREAD_ENABLE_MAC_FILTER
+    void SetExtendedPanId(const otExtendedPanId &aExtendedPanId);
 
     /**
      * This method is called to handle a received frame.
@@ -572,10 +548,8 @@ public:
      *
      * @param[in]  aEnable The requested State for the MAC layer. true - Start, false - Stop.
      *
-     * @retval OT_ERROR_NONE   The operation succeeded or the new State equals the current State.
-     *
      */
-    otError SetEnabled(bool aEnable);
+    void SetEnabled(bool aEnable);
 
     /**
      * This method indicates whether or not the link layer is enabled.
@@ -649,7 +623,7 @@ private:
     void        HandleTimer(void);
     static void HandleOperationTask(Tasklet &aTasklet);
 
-    void    Scan(Operation aScanOperation, uint32_t aScanChannels, uint16_t aScanDuration, void *aContext);
+    void    Scan(Operation aScanOperation, uint32_t aScanChannels, uint16_t aScanDuration);
     otError UpdateScanChannel(void);
     void    PerformActiveScan(void);
     void    PerformEnergyScan(void);
@@ -695,7 +669,6 @@ private:
     uint8_t         mScanChannel;
     uint16_t        mScanDuration;
     ChannelMask     mScanChannelMask;
-    void *          mScanContext;
     union
     {
         ActiveScanHandler mActiveScanHandler;

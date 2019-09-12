@@ -36,17 +36,19 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "utils/wrap_string.h"
 
 #include <openthread/cli.h>
 #include <openthread/platform/logging.h>
 #include <openthread/platform/uart.h>
+
 #include "cli/cli.hpp"
 #include "common/code_utils.hpp"
 #include "common/encoding.hpp"
 #include "common/logging.hpp"
 #include "common/new.hpp"
 #include "common/tasklet.hpp"
+#include "utils/static_assert.hpp"
+#include "utils/wrap_string.h"
 
 #if OPENTHREAD_CONFIG_ENABLE_DEBUG_UART
 #include <openthread/platform/debug_uart.h>
@@ -84,6 +86,16 @@
 
 #endif // OT_CLI_UART_LOCK_HDR_FILE
 
+#if OPENTHREAD_ENABLE_DIAG
+OT_STATIC_ASSERT(OPENTHREAD_CONFIG_DIAG_OUTPUT_BUFFER_SIZE <= OPENTHREAD_CONFIG_CLI_UART_TX_BUFFER_SIZE,
+                 "diag output buffer should be smaller than CLI UART tx buffer");
+OT_STATIC_ASSERT(OPENTHREAD_CONFIG_DIAG_CMD_LINE_BUFFER_SIZE <= OPENTHREAD_CONFIG_CLI_UART_RX_BUFFER_SIZE,
+                 "diag command line should be smaller than CLI UART rx buffer");
+#endif
+
+OT_STATIC_ASSERT(OPENTHREAD_CONFIG_CLI_MAX_LINE_LENGTH <= OPENTHREAD_CONFIG_CLI_UART_RX_BUFFER_SIZE,
+                 "command line should be should be smaller than CLI rx buffer");
+
 namespace ot {
 namespace Cli {
 
@@ -114,24 +126,11 @@ extern "C" void otPlatUartReceived(const uint8_t *aBuf, uint16_t aBufLength)
 
 void Uart::ReceiveTask(const uint8_t *aBuf, uint16_t aBufLength)
 {
-    static const char sCommandPrompt[] = {'>', ' '};
-
-#if OPENTHREAD_CONFIG_UART_CLI_RAW
-    if (aBufLength > 0)
-    {
-        memcpy(mRxBuffer + mRxLength, aBuf, aBufLength);
-        mRxLength += aBufLength;
-    }
-
-    if (aBuf[aBufLength - 1] == '\r' || aBuf[aBufLength - 1] == '\n')
-    {
-        mRxBuffer[mRxLength] = '\0';
-        ProcessCommand();
-        Output(sCommandPrompt, sizeof(sCommandPrompt));
-    }
-#else // OPENTHREAD_CONFIG_UART_CLI_RAW
+#if !OPENTHREAD_CONFIG_UART_CLI_RAW
     static const char sEraseString[] = {'\b', ' ', '\b'};
     static const char CRNL[]         = {'\r', '\n'};
+#endif
+    static const char sCommandPrompt[] = {'>', ' '};
     const uint8_t *   end;
 
     end = aBuf + aBufLength;
@@ -142,8 +141,9 @@ void Uart::ReceiveTask(const uint8_t *aBuf, uint16_t aBufLength)
         {
         case '\r':
         case '\n':
+#if !OPENTHREAD_CONFIG_UART_CLI_RAW
             Output(CRNL, sizeof(CRNL));
-
+#endif
             if (mRxLength > 0)
             {
                 mRxBuffer[mRxLength] = '\0';
@@ -154,6 +154,7 @@ void Uart::ReceiveTask(const uint8_t *aBuf, uint16_t aBufLength)
 
             break;
 
+#if !OPENTHREAD_CONFIG_UART_CLI_RAW
 #if OPENTHREAD_POSIX
 
         case 0x04: // ASCII for Ctrl-D
@@ -170,30 +171,27 @@ void Uart::ReceiveTask(const uint8_t *aBuf, uint16_t aBufLength)
             }
 
             break;
+#endif // !OPENTHREAD_CONFIG_UART_CLI_RAW
 
         default:
             if (mRxLength < kRxBufferSize - 1)
             {
+#if !OPENTHREAD_CONFIG_UART_CLI_RAW
                 Output(reinterpret_cast<const char *>(aBuf), 1);
+#endif
                 mRxBuffer[mRxLength++] = static_cast<char>(*aBuf);
             }
 
             break;
         }
     }
-#endif // OPENTHREAD_CONFIG_UART_CLI_RAW
 }
 
 otError Uart::ProcessCommand(void)
 {
     otError error = OT_ERROR_NONE;
 
-    if (mRxBuffer[mRxLength - 1] == '\n')
-    {
-        mRxBuffer[--mRxLength] = '\0';
-    }
-
-    if (mRxBuffer[mRxLength - 1] == '\r')
+    while (mRxBuffer[mRxLength - 1] == '\n' || mRxBuffer[mRxLength - 1] == '\r')
     {
         mRxBuffer[--mRxLength] = '\0';
     }

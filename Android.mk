@@ -75,9 +75,11 @@ LOCAL_CFLAGS                                                                := \
     -DOPENTHREAD_CONFIG_POSIX_APP_ENABLE_PTY_DEVICE=1                          \
     -DOPENTHREAD_FTD=1                                                         \
     -DOPENTHREAD_POSIX=1                                                       \
-    -DOPENTHREAD_POSIX_APP=1                                                   \
     -DOPENTHREAD_PROJECT_CORE_CONFIG_FILE=\"openthread-core-posix-config.h\"   \
     -DSPINEL_PLATFORM_HEADER=\"spinel_platform.h\"                             \
+    $(NULL)
+
+LOCAL_CPPFLAGS                                                              := \
     -Wno-non-virtual-dtor                                                      \
     $(NULL)
 
@@ -113,7 +115,6 @@ LOCAL_SRC_FILES                                          := \
     src/core/common/crc16.cpp                               \
     src/core/common/instance.cpp                            \
     src/core/common/logging.cpp                             \
-    src/core/common/locator.cpp                             \
     src/core/common/message.cpp                             \
     src/core/common/notifier.cpp                            \
     src/core/common/settings.cpp                            \
@@ -162,6 +163,7 @@ LOCAL_SRC_FILES                                          := \
     src/core/net/ip6_routes.cpp                             \
     src/core/net/netif.cpp                                  \
     src/core/net/udp6.cpp                                   \
+    src/core/phy/radio_weak.cpp                             \
     src/core/thread/address_resolver.cpp                    \
     src/core/thread/announce_begin_server.cpp               \
     src/core/thread/announce_sender.cpp                     \
@@ -199,7 +201,6 @@ LOCAL_SRC_FILES                                          := \
     src/diag/diag_process.cpp                               \
     src/diag/openthread-diag.cpp                            \
     src/ncp/hdlc.cpp                                        \
-    src/ncp/ncp_spi.cpp                                     \
     src/ncp/spinel.c                                        \
     src/ncp/spinel_decoder.cpp                              \
     src/ncp/spinel_encoder.cpp                              \
@@ -210,7 +211,6 @@ LOCAL_SRC_FILES                                          := \
     src/posix/platform/radio_spinel.cpp                     \
     src/posix/platform/random.c                             \
     src/posix/platform/settings.cpp                         \
-    src/posix/platform/spi-stubs.c                          \
     src/posix/platform/system.c                             \
     src/posix/platform/uart.c                               \
     third_party/mbedtls/repo/library/md.c                   \
@@ -268,9 +268,12 @@ LOCAL_CFLAGS                                                                := \
     -DOPENTHREAD_CONFIG_UART_CLI_RAW=1                                         \
     -DOPENTHREAD_FTD=1                                                         \
     -DOPENTHREAD_POSIX=1                                                       \
-    -DOPENTHREAD_POSIX_APP=2                                                   \
+    -DOPENTHREAD_POSIX_APP_TYPE=2                                              \
     -DOPENTHREAD_PROJECT_CORE_CONFIG_FILE=\"openthread-core-posix-config.h\"   \
     -DSPINEL_PLATFORM_HEADER=\"spinel_platform.h\"                             \
+    $(NULL)
+
+LOCAL_CPPFLAGS                                                              := \
     -Wno-non-virtual-dtor                                                      \
     $(NULL)
 
@@ -316,9 +319,12 @@ LOCAL_CFLAGS                                                                := \
     -DOPENTHREAD_CONFIG_POSIX_APP_ENABLE_PTY_DEVICE=1                          \
     -DOPENTHREAD_FTD=1                                                         \
     -DOPENTHREAD_POSIX=1                                                       \
-    -DOPENTHREAD_POSIX_APP=1                                                   \
+    -DOPENTHREAD_POSIX_APP_TYPE=1                                              \
     -DOPENTHREAD_PROJECT_CORE_CONFIG_FILE=\"openthread-core-posix-config.h\"   \
     -DSPINEL_PLATFORM_HEADER=\"spinel_platform.h\"                             \
+    $(NULL)
+
+LOCAL_CPPFLAGS                                                              := \
     -Wno-non-virtual-dtor                                                      \
     $(NULL)
 

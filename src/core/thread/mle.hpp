@@ -509,10 +509,8 @@ public:
      *
      * @param[in]  aClearNetworkDatasets  True to clear network datasets, False not.
      *
-     * @retval OT_ERROR_NONE  Successfully stopped the protocol operation.
-     *
      */
-    otError Stop(bool aClearNetworkDatasets);
+    void Stop(bool aClearNetworkDatasets);
 
     /**
      * This method restores network information from non-volatile memory.
@@ -547,7 +545,7 @@ public:
      * @param[in]  aScanChannels          A bit vector indicating which channels to scan.
      * @param[in]  aPanId                 The PAN ID filter (set to Broadcast PAN to disable filter).
      * @param[in]  aJoiner                Value of the Joiner Flag in the Discovery Request TLV.
-     * @param[in]  aEnableEui64Filtering  Enable filtering out MLE discovery responses that don't match our factory
+     * @param[in]  aEnableFiltering       Enable filtering out MLE discovery responses that don't match our factory
      *                                    assigned EUI64.
      * @param[in]  aHandler               A pointer to a function that is called on receiving an MLE Discovery Response.
      * @param[in]  aContext               A pointer to arbitrary context information.
@@ -559,7 +557,7 @@ public:
     otError Discover(const Mac::ChannelMask &aScanChannels,
                      uint16_t                aPanId,
                      bool                    aJoiner,
-                     bool                    aEnableEui64Filtering,
+                     bool                    aEnableFiltering,
                      DiscoverHandler         aCallback,
                      void *                  aContext);
 
@@ -569,7 +567,7 @@ public:
      * @returns true if an MLE Thread Discovery is in progress, false otherwise.
      *
      */
-    bool IsDiscoverInProgress(void) const { return mIsDiscoverInProgress; }
+    bool IsDiscoverInProgress(void) const { return mDiscoverInProgress; }
 
     /**
      * This method is called by the MeshForwarder to indicate that discovery is complete.
@@ -638,11 +636,13 @@ public:
     /**
      * This method sets the Device Mode as reported in the Mode TLV.
      *
+     * @param[in]  aDeviceMode  The device mode to set.
+     *
      * @retval OT_ERROR_NONE          Successfully set the Mode TLV.
      * @retval OT_ERROR_INVALID_ARGS  The mode combination specified in @p aMode is invalid.
      *
      */
-    otError SetDeviceMode(uint8_t aMode);
+    otError SetDeviceMode(uint8_t aDeviceMode);
 
     /**
      * This method indicates whether or not the device is rx-on-when-idle.
@@ -702,10 +702,10 @@ public:
     /**
      * This method sets the Mesh Local Prefix.
      *
-     * @param[in]  aPrefix  A reference to the Mesh Local Prefix.
+     * @param[in]  aMeshLocalPrefix  A reference to the Mesh Local Prefix.
      *
      */
-    void SetMeshLocalPrefix(const otMeshLocalPrefix &aPrefix);
+    void SetMeshLocalPrefix(const otMeshLocalPrefix &aMeshLocalPrefix);
 
     /**
      * This method applies the Mesh Local Prefix.
@@ -730,10 +730,8 @@ public:
      *
      * Call this method when the IEEE 802.15.4 Extended Address has changed.
      *
-     * @retval OT_ERROR_NONE  Successfully updated the link local address.
-     *
      */
-    otError UpdateLinkLocalAddress(void);
+    void UpdateLinkLocalAddress(void);
 
     /**
      * This method returns a reference to the link-local all Thread nodes multicast address.
@@ -814,7 +812,7 @@ public:
      * @param[in]  aTimeout  The Timeout value in seconds.
      *
      */
-    otError SetTimeout(uint32_t aTimeout);
+    void SetTimeout(uint32_t aTimeout);
 
     /**
      * This method returns the RLOC16 assigned to the Thread interface.
@@ -1082,7 +1080,6 @@ protected:
     enum AttachState
     {
         kAttachStateIdle,                ///< Not currently searching for a parent.
-        kAttachStateSynchronize,         ///< Looking to synchronize with a parent (after reset).
         kAttachStateProcessAnnounce,     ///< Waiting to process a received Announce (to switch channel/pan-id).
         kAttachStateStart,               ///< Starting to look for a parent.
         kAttachStateParentRequestRouter, ///< Searching for a Router to attach to.
@@ -1513,26 +1510,20 @@ protected:
      *
      * @param[in]  aRloc16  The RLOC16 to set.
      *
-     * @retval OT_ERROR_NONE  Successfully set the RLOC16.
-     *
      */
-    otError SetRloc16(uint16_t aRloc16);
+    void SetRloc16(uint16_t aRloc16);
 
     /**
      * This method sets the Device State to Detached.
      *
-     * @retval OT_ERROR_NONE  Successfully set the Device State to Detached.
-     *
      */
-    otError SetStateDetached(void);
+    void SetStateDetached(void);
 
     /**
      * This method sets the Device State to Child.
      *
-     * @retval OT_ERROR_NONE  Successfully set the Device State to Child.
-     *
      */
-    otError SetStateChild(uint16_t aRloc16);
+    void SetStateChild(uint16_t aRloc16);
 
     /**
      * This method sets the Leader's Partition ID, Weighting, and Router ID values.
@@ -1560,21 +1551,21 @@ protected:
     /**
      * This method prints an MLE log message with an IPv6 address.
      *
-     * @param[in]  aLogMessage  The log message string.
-     * @param[in]  aAddress     The IPv6 address of the peer.
+     * @param[in]  aLogString  The log message string.
+     * @param[in]  aAddress    The IPv6 address of the peer.
      *
      */
-    void LogMleMessage(const char *aLogMessage, const Ip6::Address &aAddress) const;
+    void LogMleMessage(const char *aLogString, const Ip6::Address &aAddress) const;
 
     /**
      * This method prints an MLE log message with an IPv6 address and RLOC16.
      *
-     * @param[in]  aLogMessage  The log message string.
-     * @param[in]  aAddress     The IPv6 address of the peer.
-     * @param[in]  aRloc        The RLOC16.
+     * @param[in]  aLogString  The log message string.
+     * @param[in]  aAddress    The IPv6 address of the peer.
+     * @param[in]  aRloc       The RLOC16.
      *
      */
-    void LogMleMessage(const char *aLogMessage, const Ip6::Address &aAddress, uint16_t aRloc) const;
+    void LogMleMessage(const char *aLogString, const Ip6::Address &aAddress, uint16_t aRloc) const;
 
     /**
      * This method triggers MLE Announce on previous channel after the Thread device successfully
@@ -1776,8 +1767,10 @@ private:
 
     DiscoverHandler mDiscoverHandler;
     void *          mDiscoverContext;
-    bool            mIsDiscoverInProgress;
-    bool            mEnableEui64Filtering;
+    uint16_t        mDiscoverCcittIndex;
+    uint16_t        mDiscoverAnsiIndex;
+    bool            mDiscoverInProgress;
+    bool            mDiscoverEnableFiltering;
 
 #if OPENTHREAD_CONFIG_INFORM_PREVIOUS_PARENT_ON_REATTACH
     uint16_t mPreviousParentRloc;
@@ -1799,7 +1792,7 @@ private:
     Ip6::NetifUnicastAddress mLeaderAloc;
 
 #if OPENTHREAD_ENABLE_SERVICE
-    Ip6::NetifUnicastAddress mServiceAlocs[OPENTHREAD_CONFIG_MAX_SERVER_ALOCS];
+    Ip6::NetifUnicastAddress mServiceAlocs[OPENTHREAD_CONFIG_MAX_SERVICE_ALOCS];
 #endif
 
     otMleCounters mCounters;

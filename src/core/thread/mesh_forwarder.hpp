@@ -168,6 +168,7 @@ private:
 class MeshForwarder : public InstanceLocator
 {
     friend class Mac::Mac;
+    friend class Instance;
 
 public:
     /**
@@ -295,14 +296,6 @@ public:
     const MessageQueue &GetReassemblyQueue(void) const { return mReassemblyList; }
 
     /**
-     * This method returns a reference to the data poll manager.
-     *
-     * @returns  A reference to the data poll manager.
-     *
-     */
-    DataPollManager &GetDataPollManager(void) { return mDataPollManager; }
-
-    /**
      * This method returns a reference to the IP level counters.
      *
      * @returns A reference to the IP level counters.
@@ -318,14 +311,6 @@ public:
      *
      */
     const MessageQueue &GetResolvingQueue(void) const { return mResolvingQueue; }
-
-    /**
-     * This method returns a reference to the source match controller.
-     *
-     * @returns  A reference to the source match controller.
-     *
-     */
-    SourceMatchController &GetSourceMatchController(void) { return mSourceMatchController; }
 #endif
 
 private:
@@ -391,8 +376,8 @@ private:
                           const Mac::Address &aMacSource,
                           const Mac::Address &aMacDest,
                           Ip6::Header &       aIp6Header);
-    otError  GetMacDestinationAddress(const Ip6::Address &aIp6Addr, Mac::Address &aMacAddr);
-    otError  GetMacSourceAddress(const Ip6::Address &aIp6Addr, Mac::Address &aMacAddr);
+    void     GetMacDestinationAddress(const Ip6::Address &aIp6Addr, Mac::Address &aMacAddr);
+    void     GetMacSourceAddress(const Ip6::Address &aIp6Addr, Mac::Address &aMacAddr);
     Message *GetDirectTransmission(void);
     otError  GetIndirectTransmission(void);
     Message *GetIndirectTransmission(Child &aChild);
@@ -400,16 +385,16 @@ private:
     void     PrepareIndirectTransmission(Message &aMessage, const Child &aChild);
     otError  PrepareDataPoll(void);
     void     HandleMesh(uint8_t *               aFrame,
-                        uint8_t                 aPayloadLength,
+                        uint8_t                 aFrameLength,
                         const Mac::Address &    aMacSource,
                         const otThreadLinkInfo &aLinkInfo);
     void     HandleFragment(uint8_t *               aFrame,
-                            uint8_t                 aPayloadLength,
+                            uint8_t                 aFrameLength,
                             const Mac::Address &    aMacSource,
                             const Mac::Address &    aMacDest,
                             const otThreadLinkInfo &aLinkInfo);
     void     HandleLowpanHC(uint8_t *               aFrame,
-                            uint8_t                 aPayloadLength,
+                            uint8_t                 aFrameLength,
                             const Mac::Address &    aMacSource,
                             const Mac::Address &    aMacDest,
                             const otThreadLinkInfo &aLinkInfo);
@@ -419,10 +404,10 @@ private:
                                      uint8_t                 aFrameLength,
                                      Lowpan::FragmentHeader &aFragmentHeader);
 
-    otError SendPoll(Message &aMessage, Mac::Frame &aFrame);
-    otError SendMesh(Message &aMessage, Mac::Frame &aFrame);
+    void    SendPoll(Message &aMessage, Mac::Frame &aFrame);
+    void    SendMesh(Message &aMessage, Mac::Frame &aFrame);
     otError SendFragment(Message &aMessage, Mac::Frame &aFrame);
-    otError SendEmptyFrame(Mac::Frame &aFrame, bool aAckRequest);
+    void    SendEmptyFrame(Mac::Frame &aFrame, bool aAckRequest);
     otError UpdateIp6Route(Message &aMessage);
     otError UpdateIp6RouteFtd(Ip6::Header &ip6Header);
     otError UpdateMeshRoute(Message &aMessage);
@@ -441,7 +426,7 @@ private:
     void    HandleReceivedFrame(Mac::Frame &aFrame);
     otError HandleFrameRequest(Mac::Frame &aFrame);
     void    HandleSentFrame(Mac::Frame &aFrame, otError aError);
-    void    HandleSentFrameToChild(const Mac::Frame &aFrame, otError aError, const Mac::Address &macDest);
+    void    HandleSentFrameToChild(const Mac::Frame &aFrame, otError aError, const Mac::Address &aMacDest);
 
     static void HandleDiscoverTimer(Timer &aTimer);
     void        HandleDiscoverTimer(void);

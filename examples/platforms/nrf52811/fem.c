@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2017, The OpenThread Authors.
+ *  Copyright (c) 2019, The OpenThread Authors.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -28,40 +28,37 @@
 
 /**
  * @file
- *   This file implements the locator class for OpenThread objects.
+ *   This file implements the OpenThread FEM helper functions.
+ *
  */
 
-#define WPP_NAME "locator.tmh"
+#include <openthread-core-config.h>
+#include <openthread/config.h>
 
-#include "locator.hpp"
+#include <stdint.h>
+#include <string.h>
 
-#include "common/instance.hpp"
-#include "net/ip6.hpp"
+#include "platform-fem.h"
 
-namespace ot {
+#define ENABLE_FEM 1
+#include <nrf_802154.h>
 
-#if !OPENTHREAD_ENABLE_MULTIPLE_INSTANCES
-Instance &InstanceLocator::GetInstance(void) const
+void PlatformFemSetConfigParams(const PlatformFemConfigParams *aConfig)
 {
-    return Instance::Get();
-}
-#endif
+    nrf_802154_fem_control_cfg_t cfg;
 
-#if OPENTHREAD_MTD || OPENTHREAD_FTD
-Ip6::Ip6 &InstanceLocator::GetIp6(void) const
-{
-    return GetInstance().GetIp6();
-}
+    memset(&cfg, 0, sizeof(cfg));
 
-ThreadNetif &InstanceLocator::GetNetif(void) const
-{
-    return GetInstance().GetThreadNetif();
-}
+    cfg.pa_cfg.enable       = aConfig->mPaCfg.mEnable;
+    cfg.pa_cfg.active_high  = aConfig->mPaCfg.mActiveHigh;
+    cfg.pa_cfg.gpio_pin     = aConfig->mPaCfg.mGpioPin;
+    cfg.lna_cfg.enable      = aConfig->mLnaCfg.mEnable;
+    cfg.lna_cfg.active_high = aConfig->mLnaCfg.mActiveHigh;
+    cfg.lna_cfg.gpio_pin    = aConfig->mLnaCfg.mGpioPin;
+    cfg.ppi_ch_id_clr       = aConfig->mPpiChIdClr;
+    cfg.ppi_ch_id_set       = aConfig->mPpiChIdSet;
+    cfg.pa_gpiote_ch_id     = aConfig->mGpiotePaChId;
+    cfg.lna_gpiote_ch_id    = aConfig->mGpioteLnaChId;
 
-Notifier &InstanceLocator::GetNotifier(void) const
-{
-    return GetInstance().GetNotifier();
+    nrf_802154_fem_control_cfg_set(&cfg);
 }
-#endif // OPENTHREAD_MTD || OPENTHREAD_FTD
-
-} // namespace ot

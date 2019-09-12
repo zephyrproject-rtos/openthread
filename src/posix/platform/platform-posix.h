@@ -40,15 +40,13 @@
 
 #include <openthread/instance.h>
 
+#include "platform-config.h"
+
 /**
- * @def OPENTHREAD_CONFIG_POSIX_APP_ENABLE_PTY_DEVICE
- *
- * Define as 1 to enable PTY device support in POSIX app.
+ * This is the socket name used by daemon mode.
  *
  */
-#ifndef OPENTHREAD_CONFIG_POSIX_APP_ENABLE_PTY_DEVICE
-#define OPENTHREAD_CONFIG_POSIX_APP_ENABLE_PTY_DEVICE 1
-#endif
+#define OPENTHREAD_POSIX_APP_SOCKET_NAME OPENTHREAD_POSIX_APP_SOCKET_BASENAME ".sock"
 
 #ifdef __cplusplus
 extern "C" {
@@ -140,13 +138,10 @@ void platformAlarmProcess(otInstance *aInstance);
  */
 int32_t platformAlarmGetNext(void);
 
-/**
- * This function returns the current alarm time.
- *
- * @returns The current alarm time.
- *
- */
-uint64_t platformAlarmGetNow(void);
+#define MS_PER_S 1000
+#define US_PER_MS 1000
+#define US_PER_S 1000000
+#define NS_PER_US 1000
 
 /**
  * This function advances the alarm time by @p aDelta.
@@ -266,12 +261,6 @@ void platformNetifUpdateFdSet(fd_set *aReadFdSet, fd_set *aWriteFdSet, fd_set *a
 void platformNetifProcess(const fd_set *aReadFdSet, const fd_set *aWriteFdSet, const fd_set *aErrorFdSet);
 
 /**
- * This function restores the Uart.
- *
- */
-void platformUartRestore(void);
-
-/**
  * This function initialize simulation.
  *
  */
@@ -282,14 +271,6 @@ void otSimInit(void);
  *
  */
 void otSimDeinit(void);
-
-/**
- * This function gets simulation time.
- *
- * @param[in] aTime   A pointer to a timeval receiving the current time.
- *
- */
-void otSimGetTime(struct timeval *aTime);
 
 /**
  * This function performs simulation processing.
@@ -362,11 +343,13 @@ void otSimRadioSpinelUpdate(struct timeval *atimeout);
  */
 void otSimRadioSpinelProcess(otInstance *aInstance, const struct Event *aEvent);
 
-#if OPENTHREAD_POSIX_VIRTUAL_TIME
-#define otSysGetTime(aTime) otSimGetTime(aTime)
-#else
-#define otSysGetTime(aTime) gettimeofday(aTime, NULL)
-#endif
+/**
+ * This function gets system time in microseconds without applying speed up factor.
+ *
+ * @returns System time in microseconds.
+ *
+ */
+uint64_t otSysGetTime(void);
 
 /**
  * This function initializes platform UDP driver.

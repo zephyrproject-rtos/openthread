@@ -62,7 +62,8 @@ public:
     /**
      * This method starts the Border Agent service.
      *
-     * @retval OT_ERROR_NONE  Successfully started the Border Agent service.
+     * @retval OT_ERROR_NONE    Successfully started the Border Agent service.
+     * @retval OT_ERROR_ALREADY Already started.
      *
      */
     otError Start(void);
@@ -78,7 +79,7 @@ public:
     /**
      * This method gets the state of the Border Agent service.
      *
-     * @returns The state of the the Border Agent service.
+     * @returns The state of the Border Agent service.
      *
      */
     otBorderAgentState GetState(void) const { return mState; }
@@ -127,9 +128,8 @@ private:
 
     enum
     {
-        kBorderAgentUdpPort = 49191,     ///< UDP port of border agent service.
-        kKeepAliveTimeout   = 50 * 1000, ///< Timeout to reject a commissioner.
-        kRestartDelay       = 1 * 1000,  ///< Delay to restart border agent service.
+        kKeepAliveTimeout = 50 * 1000, ///< Timeout to reject a commissioner.
+        kRestartDelay     = 1 * 1000,  ///< Delay to restart border agent service.
     };
 
     Ip6::MessageInfo mMessageInfo;

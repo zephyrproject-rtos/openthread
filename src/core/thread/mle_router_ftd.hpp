@@ -74,6 +74,7 @@ namespace Mle {
 class MleRouter : public Mle
 {
     friend class Mle;
+    friend class ot::Instance;
 
 public:
     /**
@@ -331,18 +332,8 @@ public:
      *
      * @param[in]  aNeighbor  A reference to the neighbor object.
      *
-     * @retval OT_ERROR_NONE      Successfully removed the neighbor.
-     *
      */
-    otError RemoveNeighbor(Neighbor &aNeighbor);
-
-    /**
-     * This method gets the `ChildTable` object.
-     *
-     * @returns  A reference to the `ChildTable`.
-     *
-     */
-    ChildTable &GetChildTable(void) { return mChildTable; }
+    void RemoveNeighbor(Neighbor &aNeighbor);
 
     /**
      * This method restores children information from non-volatile memory.
@@ -654,12 +645,6 @@ public:
     void ResetAdvertiseInterval(void);
 
     /**
-     * This method returns a reference to the router table object.
-     *
-     */
-    RouterTable &GetRouterTable(void) { return mRouterTable; }
-
-    /**
      * This static method converts link quality to route cost.
      *
      * @param[in]  aLinkQuality  The link quality.
@@ -695,14 +680,14 @@ private:
     otError AppendPendingDataset(Message &aMessage);
     otError GetChildInfo(Child &aChild, otChildInfo &aChildInfo);
     otError RefreshStoredChildren(void);
-    otError HandleDetachStart(void);
+    void    HandleDetachStart(void);
     otError HandleChildStart(AttachMode aMode);
     otError HandleLinkRequest(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
     otError HandleLinkAccept(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo, uint32_t aKeySequence);
     otError HandleLinkAccept(const Message &         aMessage,
                              const Ip6::MessageInfo &aMessageInfo,
                              uint32_t                aKeySequence,
-                             bool                    request);
+                             bool                    aRequest);
     otError HandleLinkAcceptAndRequest(const Message &         aMessage,
                                        const Ip6::MessageInfo &aMessageInfo,
                                        uint32_t                aKeySequence);
@@ -716,10 +701,10 @@ private:
                                       const Ip6::MessageInfo &aMessageInfo,
                                       uint32_t                aKeySequence);
     otError HandleDataRequest(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
-    otError HandleNetworkDataUpdateRouter(void);
+    void    HandleNetworkDataUpdateRouter(void);
     otError HandleDiscoveryRequest(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
 #if OPENTHREAD_CONFIG_ENABLE_TIME_SYNC
-    otError HandleTimeSync(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
+    void HandleTimeSync(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
 #endif
 
     otError ProcessRouteTlv(const RouteTlv &aRoute);
@@ -734,32 +719,32 @@ private:
                            Neighbor *              aNeighbor,
                            const TlvRequestTlv &   aTlvRequest,
                            const ChallengeTlv &    aChallenge);
-    otError SendParentResponse(Child *aChild, const ChallengeTlv &aChallenge, bool aRoutersOnlyRequest);
+    void    SendParentResponse(Child *aChild, const ChallengeTlv &aChallenge, bool aRoutersOnlyRequest);
     otError SendChildIdResponse(Child &aChild);
     otError SendChildUpdateRequest(Child &aChild);
-    otError SendChildUpdateResponse(Child *                 aChild,
+    void    SendChildUpdateResponse(Child *                 aChild,
                                     const Ip6::MessageInfo &aMessageInfo,
                                     const uint8_t *         aTlvs,
                                     uint8_t                 aTlvsLength,
-                                    const ChallengeTlv *    challenge);
+                                    const ChallengeTlv *    aChallenge);
     otError SendDataResponse(const Ip6::Address &aDestination,
                              const uint8_t *     aTlvs,
                              uint8_t             aTlvsLength,
                              uint16_t            aDelay);
     otError SendDiscoveryResponse(const Ip6::Address &aDestination, uint16_t aPanId);
 
-    otError SetStateRouter(uint16_t aRloc16);
-    otError SetStateLeader(uint16_t aRloc16);
+    void    SetStateRouter(uint16_t aRloc16);
+    void    SetStateLeader(uint16_t aRloc16);
     void    StopLeader(void);
     void    SynchronizeChildNetworkData(void);
     otError UpdateChildAddresses(const Message &aMessage, uint16_t aOffset, Child &aChild);
-    void    UpdateRoutes(const RouteTlv &aTlv, uint8_t aRouterId);
+    void    UpdateRoutes(const RouteTlv &aRoute, uint8_t aRouterId);
 
     static void HandleAddressSolicitResponse(void *               aContext,
                                              otMessage *          aMessage,
                                              const otMessageInfo *aMessageInfo,
-                                             otError              result);
-    void HandleAddressSolicitResponse(Coap::Message *aMessage, const Ip6::MessageInfo *aMessageInfo, otError result);
+                                             otError              aResult);
+    void HandleAddressSolicitResponse(Coap::Message *aMessage, const Ip6::MessageInfo *aMessageInfo, otError aResult);
     static void HandleAddressRelease(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
     void        HandleAddressRelease(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
     static void HandleAddressSolicit(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);

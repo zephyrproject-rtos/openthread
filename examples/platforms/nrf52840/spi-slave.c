@@ -39,6 +39,10 @@
 #include <hal/nrf_spis.h>
 #include <platform-nrf5.h>
 
+#include "openthread-system.h"
+
+#if (SPIS_AS_SERIAL_TRANSPORT == 1)
+
 /**
  *  SPI Slave transaction variables.
  */
@@ -228,6 +232,10 @@ void SPIM0_SPIS0_TWIM0_TWIS0_SPI0_TWI0_IRQHandler(void)
         {
             /* Further processing is required. */
             sFurtherProcessingFlag = true;
+
+            otSysEventSignalPending();
         }
     }
 }
+
+#endif // SPIS_AS_SERIAL_TRANSPORT == 1

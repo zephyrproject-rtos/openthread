@@ -17,7 +17,7 @@ OpenThread test scripts use the CLI to execute test cases.
 * [coaps](#coaps-start-checkpeercert)
 * [commissioner](#commissioner-start-provisioningurl)
 * [contextreusedelay](#contextreusedelay)
-* [counter](#counter)
+* [counters](#counters)
 * [dataset](#dataset-help)
 * [delaytimermin](#delaytimermin)
 * [discover](#discover-channel)
@@ -493,22 +493,23 @@ Set the CONTEXT_ID_REUSE_DELAY value.
 Done
 ```
 
-### counter
+### counters
 
 Get the supported counter names.
 
 ```bash
->counter
+>counters
 mac
+mle
 Done
 ```
 
-### counter \<countername\>
+### counters \<countername\>
 
 Get the counter value.
 
 ```bash
->counter mac
+> counters mac
 TxTotal: 10
     TxUnicast: 3
     TxBroadcast: 7
@@ -522,6 +523,7 @@ TxTotal: 10
     TxOther: 0
     TxRetry: 0
     TxErrCca: 0
+    TxErrBusyChannel: 0
 RxTotal: 2
     RxUnicast: 1
     RxBroadcast: 1
@@ -539,6 +541,18 @@ RxTotal: 2
     RxErrSec: 0
     RxErrFcs: 0
     RxErrOther: 0
+Done
+> counters mle
+Role Disabled: 0
+Role Detached: 1
+Role Child: 0
+Role Router: 0
+Role Leader: 1
+Attach Attempts: 1
+Partition Id Changes: 1
+Better Partition Attach Attempts: 0
+Parent Changes: 0
+Done
 ```
 
 ### dataset
@@ -677,7 +691,7 @@ Done
 Send MGMT_ACTIVE_GET.
 
 ```bash
-> dataset mgmtgetcommand active address fdde:ad00:beef:0:558:f56b:d688:799 activetimestamp 123 binary 0001
+> dataset mgmtgetcommand active address fdde:ad00:beef:0:558:f56b:d688:799 activetimestamp binary 0c030001ff
 Done
 ```
 
@@ -686,7 +700,7 @@ Done
 Send MGMT_ACTIVE_SET.
 
 ```bash
-> dataset mgmtsetcommand active activetimestamp binary 820155
+> dataset mgmtsetcommand active activetimestamp 123 binary 0c030001ff
 Done
 ```
 
@@ -695,7 +709,7 @@ Done
 Send MGMT_PENDING_GET.
 
 ```bash
-> dataset mgmtgetcommand pending address fdde:ad00:beef:0:558:f56b:d688:799 activetimestamp binary 0001
+> dataset mgmtgetcommand pending address fdde:ad00:beef:0:558:f56b:d688:799 activetimestamp binary 0c030001ff
 Done
 ```
 
@@ -704,7 +718,7 @@ Done
 Send MGMT_PENDING_SET.
 
 ```bash
-> dataset mgmtsetcommand pending activetimestamp binary 820155
+> dataset mgmtsetcommand pending activetimestamp 123 binary 0c030001ff
 Done
 ```
 
@@ -1398,6 +1412,10 @@ Done
 ### ping \<ipaddr\> [size] [count] [interval]
 
 Send an ICMPv6 Echo Request.
+
+* size: The number of data bytes to be sent.
+* count: The number of ICMPv6 Echo Requests to be sent.
+* interval: The interval between two consecutive ICMPv6 Echo Requests in seconds. The value may have fractional form, for example `0.5`.
 
 ```bash
 > ping fdde:ad00:beef:0:558:f56b:d688:799

@@ -36,7 +36,7 @@
 
 #include "common/code_utils.hpp"
 
-#if OPENTHREAD_ENABLE_NCP_UART || OPENTHREAD_POSIX_APP
+#if OPENTHREAD_ENABLE_NCP_UART || OPENTHREAD_PLATFORM_POSIX_APP
 
 namespace ot {
 namespace Hdlc {
@@ -201,9 +201,9 @@ exit:
     return error;
 }
 
-Decoder::Decoder(FrameWritePointer &aWritePointer, FrameHandler aFrameHandler, void *aContext)
+Decoder::Decoder(FrameWritePointer &aFrameWritePointer, FrameHandler aFrameHandler, void *aContext)
     : mState(kStateNoSync)
-    , mWritePointer(aWritePointer)
+    , mWritePointer(aFrameWritePointer)
     , mFrameHandler(aFrameHandler)
     , mContext(aContext)
     , mFcs(0)
@@ -242,7 +242,11 @@ void Decoder::Decode(const uint8_t *aData, uint16_t aLength)
                 {
                     otError error = OT_ERROR_PARSE;
 
-                    if ((mDecodedLength >= kFcsSize) && (mFcs == kGoodFcs))
+                    if ((mDecodedLength >= kFcsSize)
+#ifndef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
+                        && (mFcs == kGoodFcs)
+#endif
+                    )
                     {
                         // Remove the FCS from the frame.
                         mWritePointer.UndoLastWrites(kFcsSize);
@@ -297,4 +301,4 @@ void Decoder::Decode(const uint8_t *aData, uint16_t aLength)
 } // namespace Hdlc
 } // namespace ot
 
-#endif // OPENTHREAD_ENABLE_NCP_UART || OPENTHREAD_POSIX_APP
+#endif // OPENTHREAD_ENABLE_NCP_UART || OPENTHREAD_PLATFORM_POSIX_APP

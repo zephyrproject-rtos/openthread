@@ -33,16 +33,8 @@ lib_LIBRARIES = libopenthread-samr21.a
 override CFLAGS                              := $(filter-out -pedantic-errors,$(CFLAGS))
 override CXXFLAGS                            := $(filter-out -pedantic-errors,$(CXXFLAGS))
 
-#SAMR21_BOARD=USER_BOARD
-#SAMR21_CPU=__SAMR21E18A__
-
-SAMR21_BOARD=SAMR21_XPLAINED_PRO
-SAMR21_CPU=__SAMR21G18A__
-
 libopenthread_samr21_a_CPPFLAGS                                                                              = \
     -D ARM_MATH_CM0PLUS=true                                                                                   \
-    -D BOARD=$(SAMR21_BOARD)                                                                                   \
-    -D $(SAMR21_CPU)                                                                                           \
     -D PHY_AT86RF233                                                                                           \
     -D SAL_TYPE=AT86RF2xx                                                                                      \
     -D USART_CALLBACK_MODE=true                                                                                \
@@ -78,7 +70,6 @@ libopenthread_samr21_a_CPPFLAGS                                                 
     -I$(top_srcdir)/third_party/microchip/asf/sam0/drivers/sercom/i2c/i2c_sam0                                 \
     -I$(top_srcdir)/third_party/microchip/asf/sam0/drivers/sercom/spi                                          \
     -I$(top_srcdir)/third_party/microchip/asf/sam0/drivers/sercom/usart                                        \
-    -I$(top_srcdir)/third_party/microchip/asf/sam0/utils                                                       \
     -I$(top_srcdir)/third_party/microchip/asf/sam0/utils/cmsis/samr21/include                                  \
     -I$(top_srcdir)/third_party/microchip/asf/sam0/utils/cmsis/samr21/source                                   \
     -I$(top_srcdir)/third_party/microchip/asf/sam0/utils/header_files                                          \
@@ -96,6 +87,7 @@ libopenthread_samr21_a_CPPFLAGS                                                 
     $(NULL)
 
 PLATFORM_SOURCES                                                                                             = \
+    crypto/aes_alt.c                                                                                           \
     alarm.c                                                                                                    \
     diag.c                                                                                                     \
     cxx_helpers.c                                                                                              \

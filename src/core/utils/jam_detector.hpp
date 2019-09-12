@@ -107,10 +107,8 @@ public:
      *
      * @param[in]  aRssiThreshold  The RSSI threshold.
      *
-     * @retval OT_ERROR_NONE       Successfully set the threshold.
-     *
      */
-    otError SetRssiThreshold(int8_t aThreshold);
+    void SetRssiThreshold(int8_t aThreshold);
 
     /**
      * Get the Jam Detection RSSI Threshold (in dBm).
@@ -189,7 +187,7 @@ private:
     void        SetJamState(bool aNewState);
     static void HandleTimer(Timer &aTimer);
     void        HandleTimer(void);
-    void        UpdateHistory(bool aThresholdExceeded);
+    void        UpdateHistory(bool aDidExceedThreshold);
     void        UpdateJamState(void);
     static void HandleStateChanged(Notifier::Callback &aCallback, otChangedFlags aFlags);
     void        HandleStateChanged(otChangedFlags aFlags);

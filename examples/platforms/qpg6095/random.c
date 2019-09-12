@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2017, The OpenThread Authors.
+ *  Copyright (c) 2019, The OpenThread Authors.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -28,38 +28,43 @@
 
 /**
  * @file
- *   This file includes definitions for owner locator.
+ *   This file implements a random number generator.
+ *
  */
 
-#ifndef OWNER_LOCATOR_HPP_
-#define OWNER_LOCATOR_HPP_
+#include "assert.h"
+#include "random_qorvo.h"
+#include <common/code_utils.hpp>
+#include <openthread/platform/radio.h>
+#include <openthread/platform/random.h>
 
-#include "openthread-core-config.h"
+#define GP_COMPONENT_ID GP_COMPONENT_ID_APP
 
-#include "common/instance.hpp"
-#include "common/locator.hpp"
+// uint8_t pseudoRandom = 0x34;
 
-namespace ot {
-
-#if !OPENTHREAD_ENABLE_MULTIPLE_INSTANCES
-
-template <typename OwnerType> OwnerType &OwnerLocator::GetOwner(void)
+void qorvoRandomInit(void)
 {
-    // This method uses the `Instance` template method `Get<Type>`
-    // to get to the given `Type` from the single OpenThread
-    // instance.
-    //
-    // The specializations of `Instance::Get<Type>` should be defined
-    // for any class (type) which would use `GetOwner<Type>` method
-    // (i.e., any class that is an owner of a callback providing object
-    // such as a `Timer`, `Tasklet`, or in general any sub-class of
-    // `OwnerLocator`).
-
-    return Instance::Get().Get<OwnerType>();
+    // pseudoRandom += (uint8_t) (seed&0xFF);
 }
 
-#endif
+uint32_t otPlatRandomGet(void)
+{
+    uint32_t random = 0;
+    otPlatRandomGetTrue((uint8_t *)(&random), sizeof(uint32_t));
+    return random;
+}
 
-} // namespace ot
+otError otPlatRandomGetTrue(uint8_t *aOutput, uint16_t aOutputLength)
+{
+    otError error = OT_ERROR_NONE;
+    assert(aOutputLength < 256);
+    // uint8_t i;
 
-#endif // OWNER_LOCATOR_HPP_
+    qorvoRandomGet((uint8_t *)aOutput, (uint8_t)aOutputLength);
+    // for(i=0; i<aOutputLength; i++)
+    // {
+    //     aOutput[i] = pseudoRandom;
+    //     pseudoRandom = (pseudoRandom * 97 + 1)%256;
+    // }
+    return error;
+}

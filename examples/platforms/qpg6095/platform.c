@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2016, The OpenThread Authors.
+ *  Copyright (c) 2019, The OpenThread Authors.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -28,67 +28,57 @@
 
 /**
  * @file
- *   This file implements the spi stubs.
- *
+ * @brief
+ *   This file includes the platform-specific initializers.
  */
 
-#include "openthread-core-config.h"
-#include "platform-posix.h"
-
-#include <stdio.h>
-#include <stdlib.h>
-
-#include <openthread/config.h>
-#include <openthread/platform/spi-slave.h>
+#include "alarm_qorvo.h"
+#include "platform_qorvo.h"
+#include "radio_qorvo.h"
+#include "random_qorvo.h"
+#include "uart_qorvo.h"
+#include <openthread/tasklet.h>
 #include <openthread/platform/uart.h>
 
-#if OPENTHREAD_ENABLE_NCP_SPI
+#include "stdio.h"
+#include "stdlib.h"
 
-// Spi-slave stubs
+static otInstance *localInstance = NULL;
 
-otError otPlatSpiSlaveEnable(otPlatSpiSlaveTransactionCompleteCallback aCompleteCallback,
-                             otPlatSpiSlaveTransactionProcessCallback  aProcessCallback,
-                             void *                                    aContext)
+bool qorvoPlatGotoSleepCheck(void)
 {
-    OT_UNUSED_VARIABLE(aCompleteCallback);
-    OT_UNUSED_VARIABLE(aProcessCallback);
-    OT_UNUSED_VARIABLE(aContext);
-
-    fprintf(stderr, "\nNo SPI support for posix platform.");
-    exit(OT_EXIT_FAILURE);
-
-    return OT_ERROR_NOT_IMPLEMENTED;
+    if (localInstance)
+    {
+        return !otTaskletsArePending(localInstance);
+    }
+    else
+    {
+        return true;
+    }
 }
 
-void otPlatSpiSlaveDisable(void)
+void otSysInit(int argc, char *argv[])
 {
+    OT_UNUSED_VARIABLE(argc);
+    OT_UNUSED_VARIABLE(argv);
+    qorvoPlatInit((qorvoPlatGotoSleepCheckCallback_t)qorvoPlatGotoSleepCheck);
+    qorvoAlarmInit();
+    qorvoRandomInit();
+    qorvoRadioInit();
 }
 
-otError otPlatSpiSlavePrepareTransaction(uint8_t *aOutputBuf,
-                                         uint16_t aOutputBufLen,
-                                         uint8_t *aInputBuf,
-                                         uint16_t aInputBufLen,
-                                         bool     aRequestTransactionFlag)
+bool otSysPseudoResetWasRequested(void)
 {
-    OT_UNUSED_VARIABLE(aOutputBuf);
-    OT_UNUSED_VARIABLE(aOutputBufLen);
-    OT_UNUSED_VARIABLE(aInputBuf);
-    OT_UNUSED_VARIABLE(aInputBufLen);
-    OT_UNUSED_VARIABLE(aRequestTransactionFlag);
-
-    return OT_ERROR_NOT_IMPLEMENTED;
+    return false;
 }
 
-// Uart
-
-void otPlatUartSendDone(void)
+void otSysProcessDrivers(otInstance *aInstance)
 {
-}
+    if (localInstance == NULL)
+    {
+        // local copy in case we need to perform a callback.
+        localInstance = aInstance;
+    }
 
-void otPlatUartReceived(const uint8_t *aBuf, uint16_t aBufLength)
-{
-    OT_UNUSED_VARIABLE(aBuf);
-    OT_UNUSED_VARIABLE(aBufLength);
+    qorvoPlatMainLoop(!otTaskletsArePending(aInstance));
 }
-
-#endif // OPENTHREAD_ENABLE_NCP_SPI

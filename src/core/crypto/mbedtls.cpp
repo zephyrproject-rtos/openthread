@@ -33,11 +33,12 @@
 
 #include "mbedtls.hpp"
 
+#include <mbedtls/debug.h>
 #include <mbedtls/platform.h>
 
 #include "common/instance.hpp"
 
-#if !OPENTHREAD_ENABLE_MULTIPLE_INSTANCES
+#if !OPENTHREAD_ENABLE_MULTIPLE_INSTANCES && OPENTHREAD_CONFIG_ENABLE_BUILTIN_MBEDTLS
 
 namespace ot {
 namespace Crypto {
@@ -54,10 +55,14 @@ static void Free(void *aPointer)
 
 MbedTls::MbedTls(void)
 {
+#ifdef MBEDTLS_DEBUG_C
+    // mbedTLS's debug level is almost the same as OpenThread's
+    mbedtls_debug_set_threshold(OPENTHREAD_CONFIG_LOG_LEVEL);
+#endif
     mbedtls_platform_set_calloc_free(CAlloc, Free);
 }
 
 } // namespace Crypto
 } // namespace ot
 
-#endif // #if !OPENTHREAD_ENABLE_MULTIPLE_INSTANCES
+#endif // !OPENTHREAD_ENABLE_MULTIPLE_INSTANCES && OPENTHREAD_CONFIG_ENABLE_BUILTIN_MBEDTLS

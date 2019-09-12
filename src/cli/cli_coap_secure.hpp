@@ -41,11 +41,6 @@
 #include "coap/coap_message.hpp"
 #include "coap/coap_secure.hpp"
 
-/**
- * to test the default handler for not handled requests set to 1.
- */
-#define CLI_COAP_SECURE_USE_COAP_DEFAULT_HANDLER 0
-
 namespace ot {
 namespace Cli {
 
@@ -64,7 +59,7 @@ public:
      * @param[in]  aInterpreter  The CLI interpreter.
      *
      */
-    CoapSecure(Interpreter &aInterpreter);
+    explicit CoapSecure(Interpreter &aInterpreter);
 
     /**
      * This method interprets a list of CLI arguments.
@@ -90,7 +85,7 @@ private:
 
     otError ProcessRequest(int argc, char *argv[]);
 
-    otError Stop(void);
+    void Stop(void);
 
     static void OTCALL HandleServerResponse(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
     void               HandleServerResponse(otMessage *aMessage, const otMessageInfo *aMessageInfo);
@@ -102,8 +97,8 @@ private:
     void               HandleClientResponse(otMessage *aMessage, const otMessageInfo *aMessageInfo, otError aError);
 
 #if CLI_COAP_SECURE_USE_COAP_DEFAULT_HANDLER
-    static void OTCALL DefaultHandle(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
-    void               DefaultHandle(otMessage *aMessage, const otMessageInfo *aMessageInfo);
+    static void OTCALL DefaultHandler(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
+    void               DefaultHandler(otMessage *aMessage, const otMessageInfo *aMessageInfo);
 #endif // CLI_COAP_SECURE_USE_COAP_DEFAULT_HANDLER
 
     static void OTCALL HandleClientConnect(bool aConnected, void *aContext);

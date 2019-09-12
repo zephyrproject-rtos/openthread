@@ -75,10 +75,8 @@ public:
      *
      * @param[in]  The Joiner UDP Port number.
      *
-     * @retval OT_ERROR_NONE    Successfully set the Joiner UDP Port.
-     *
      */
-    otError SetJoinerUdpPort(uint16_t aJoinerUdpPort);
+    void SetJoinerUdpPort(uint16_t aJoinerUdpPort);
 
 private:
     enum
@@ -98,8 +96,8 @@ private:
     static void HandleJoinerEntrustResponse(void *               aContext,
                                             otMessage *          aMessage,
                                             const otMessageInfo *aMessageInfo,
-                                            otError              result);
-    void HandleJoinerEntrustResponse(Coap::Message *aMessage, const Ip6::MessageInfo *aMessageInfo, otError result);
+                                            otError              aResult);
+    void HandleJoinerEntrustResponse(Coap::Message *aMessage, const Ip6::MessageInfo *aMessageInfo, otError aResult);
 
     static void HandleTimer(Timer &aTimer);
     void        HandleTimer(void);

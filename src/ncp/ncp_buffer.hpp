@@ -161,11 +161,8 @@ public:
      *
      * @param[in] aPriority             Priority level of the new input frame.
      *
-     * @retval OT_ERROR_NONE            Successfully started a new frame.
-     * @retval OT_ERROR_NO_BUFS         Insufficient buffer space available to start a new frame.
-     *
      */
-    otError InFrameBegin(Priority aPriority);
+    void InFrameBegin(Priority aPriority);
 
     /**
      * This method adds a single byte to current input frame.
@@ -450,7 +447,7 @@ private:
      * -------------------------------
      *
      * `NcpFrameBuffer` internally stores a frame as a sequence of data segments. Each segment stores a portion of
-     * frame. The data segments are stored in the the main buffer `mBuffer`. `mBuffer` is utilized as a circular buffer.
+     * frame. The data segments are stored in the main buffer `mBuffer`. `mBuffer` is utilized as a circular buffer.
 
      * The content of messages (which are added using `InFrameFeedMessage()`) are not directly copied in the `mBuffer`
      * but instead they are enqueued in a message queue `mMessageQueue`.
@@ -598,7 +595,7 @@ private:
     };
 
     uint8_t *GetUpdatedBufPtr(uint8_t *aBufPtr, uint16_t aOffset, Direction aDirection) const;
-    uint16_t GetDistance(uint8_t *aStartPtr, uint8_t *aEndPtr, Direction aDirection) const;
+    uint16_t GetDistance(const uint8_t *aStartPtr, const uint8_t *aEndPtr, Direction aDirection) const;
 
     uint16_t ReadUint16At(uint8_t *aBufPtr, Direction aDirection);
     void     WriteUint16At(uint8_t *aBufPtr, uint16_t aValue, Direction aDirection);
@@ -620,7 +617,7 @@ private:
 
     uint8_t *const mBuffer;       // Pointer to the buffer used to store the data.
     uint8_t *const mBufferEnd;    // Points to after the end of buffer.
-    const uint16_t mBufferLength; // Length of the the buffer.
+    const uint16_t mBufferLength; // Length of the buffer.
 
     BufferCallback mFrameAddedCallback;   // Callback to signal when a new frame is added
     void *         mFrameAddedContext;    // Context passed to `mFrameAddedCallback`.

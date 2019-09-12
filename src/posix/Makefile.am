@@ -77,15 +77,9 @@ bin_PROGRAMS                                                           = \
     $(NULL)
 
 if OPENTHREAD_ENABLE_EXECUTABLE
-if OPENTHREAD_ENABLE_NCP
-bin_PROGRAMS                                                          += \
-    ot-ncp                                                               \
-    $(NULL)
-endif
-
 ot_ncp_CPPFLAGS                                                        = \
     $(CPPFLAGS_COMMON)                                                   \
-    -DOPENTHREAD_POSIX_APP=1                                             \
+    -DOPENTHREAD_POSIX_APP_TYPE=1                                        \
     $(NULL)
 
 ot_ncp_SOURCES                                                         = \
@@ -96,6 +90,7 @@ ot_ncp_LDADD                                                           = \
     $(top_builddir)/src/ncp/libopenthread-ncp-ftd.a                      \
     $(top_builddir)/src/core/libopenthread-ftd.a                         \
     $(LDADD_COMMON)                                                      \
+    $(top_builddir)/src/ncp/libopenthread-ncp-ftd.a                      \
     $(top_builddir)/src/core/libopenthread-ftd.a                         \
     $(LDADD_COMMON)                                                      \
     $(NULL)
@@ -108,25 +103,73 @@ ot_ncp_LIBTOOLFLAGS                                                    = \
     $(LIBTOOLFLAGS_COMMON)                                               \
     $(NULL)
 
+if OPENTHREAD_ENABLE_POSIX_APP_DAEMON
+bin_PROGRAMS                                                          += \
+    ot-ctl                                                               \
+    ot-daemon                                                            \
+    $(NULL)
+else # OPENTHREAD_ENABLE_POSIX_APP_DAEMON
 if OPENTHREAD_ENABLE_CLI
 bin_PROGRAMS                                                          += \
     ot-cli                                                               \
     $(NULL)
 endif
+if OPENTHREAD_ENABLE_NCP
+bin_PROGRAMS                                                          += \
+    ot-ncp                                                               \
+    $(NULL)
+endif
+endif # OPENTHREAD_ENABLE_POSIX_APP_DAEMON
+
+ot_ctl_SOURCES                                                         = \
+    client.c                                                             \
+    $(NULL)
+
+ot_ctl_CPPFLAGS                                                        = \
+    $(CPPFLAGS_COMMON)                                                   \
+    $(NULL)
+
+ot_daemon_CPPFLAGS                                                     = \
+    $(CPPFLAGS_COMMON)                                                   \
+    -DOPENTHREAD_POSIX_APP_TYPE=2                                        \
+    $(NULL)
+
+ot_daemon_SOURCES                                                      = \
+    main.c                                                               \
+    $(NULL)
+
+ot_daemon_LDADD                                                        = \
+    $(top_builddir)/src/cli/libopenthread-cli-ftd.a                      \
+    $(top_builddir)/src/core/libopenthread-ftd.a                         \
+    $(LDADD_COMMON)                                                      \
+    $(top_builddir)/src/cli/libopenthread-cli-ftd.a                      \
+    $(top_builddir)/src/core/libopenthread-ftd.a                         \
+    $(LDADD_COMMON)                                                      \
+    $(NULL)
+
+ot_daemon_LDFLAGS                                                      = \
+    $(LDFLAGS_COMMON)                                                    \
+    $(NULL)
+
+ot_daemon_LIBTOOLFLAGS                                                 = \
+    $(LIBTOOLFLAGS_COMMON)                                               \
+    $(NULL)
 
 ot_cli_CPPFLAGS                                                        = \
     $(CPPFLAGS_COMMON)                                                   \
-    -DOPENTHREAD_POSIX_APP=2                                             \
+    -DOPENTHREAD_POSIX_APP_TYPE=2                                        \
     $(NULL)
 
 ot_cli_SOURCES                                                         = \
     main.c                                                               \
+    console_cli.c                                                        \
     $(NULL)
 
 ot_cli_LDADD                                                           = \
     $(top_builddir)/src/cli/libopenthread-cli-ftd.a                      \
     $(top_builddir)/src/core/libopenthread-ftd.a                         \
     $(LDADD_COMMON)                                                      \
+    $(top_builddir)/src/cli/libopenthread-cli-ftd.a                      \
     $(top_builddir)/src/core/libopenthread-ftd.a                         \
     $(LDADD_COMMON)                                                      \
     $(NULL)
@@ -152,5 +195,9 @@ CPPFLAGS_COMMON                                                       += \
 CLEANFILES                                                             = $(wildcard *.gcda *.gcno)
 endif # OPENTHREAD_BUILD_COVERAGE
 endif # OPENTHREAD_ENABLE_EXECUTABLE
+
+noinst_HEADERS                                                         = \
+    console_cli.h                                                        \
+    $(NULL)
 
 include $(abs_top_nlbuild_autotools_dir)/automake/post.am

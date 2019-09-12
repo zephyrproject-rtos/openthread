@@ -147,10 +147,10 @@ otError CoapSecure::Process(int argc, char *argv[])
             }
         }
         otCoapSecureSetSslAuthMode(mInterpreter.mInstance, mVerifyPeerCert);
-        SuccessOrExit(error = otCoapSecureStart(mInterpreter.mInstance, OT_DEFAULT_COAP_SECURE_PORT, this));
+        SuccessOrExit(error = otCoapSecureStart(mInterpreter.mInstance, OT_DEFAULT_COAP_SECURE_PORT));
         otCoapSecureSetClientConnectedCallback(mInterpreter.mInstance, &CoapSecure::HandleClientConnect, this);
 #if CLI_COAP_SECURE_USE_COAP_DEFAULT_HANDLER
-        otCoapSecureSetDefaultHandler(mInterpreter.mInstance, &CoapSecure::DefaultHandle, this);
+        otCoapSecureSetDefaultHandler(mInterpreter.mInstance, &CoapSecure::DefaultHandler, this);
 #endif // CLI_COAP_SECURE_USE_COAP_DEFAULT_HANDLER
 #ifdef MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED
         if (mUseCertificate)
@@ -263,18 +263,18 @@ otError CoapSecure::Process(int argc, char *argv[])
     }
     else if (strcmp(argv[0], "disconnect") == 0)
     {
-        SuccessOrExit(error = otCoapSecureDisconnect(mInterpreter.mInstance));
+        otCoapSecureDisconnect(mInterpreter.mInstance);
     }
     else if (strcmp(argv[0], "stop") == 0)
     {
         if (otCoapSecureIsConnectionActive(mInterpreter.mInstance))
         {
-            error         = otCoapSecureDisconnect(mInterpreter.mInstance);
+            otCoapSecureDisconnect(mInterpreter.mInstance);
             mShutdownFlag = true;
         }
         else
         {
-            SuccessOrExit(error = Stop());
+            Stop();
         }
     }
     else if (strcmp(argv[0], "help") == 0)
@@ -311,13 +311,11 @@ exit:
     return error;
 }
 
-otError CoapSecure::Stop(void)
+void CoapSecure::Stop(void)
 {
-    otError error = OT_ERROR_ABORT;
     otCoapRemoveResource(mInterpreter.mInstance, &mResource);
-    error = otCoapSecureStop(mInterpreter.mInstance);
-    mInterpreter.mServer->OutputFormat("Coap Secure service stopped: ");
-    return error;
+    otCoapSecureStop(mInterpreter.mInstance);
+    mInterpreter.mServer->OutputFormat("Coap Secure service stopped");
 }
 
 void OTCALL CoapSecure::HandleClientConnect(bool aConnected, void *aContext)
@@ -342,14 +340,8 @@ void CoapSecure::HandleClientConnect(bool aConnected)
         else
         {
             mInterpreter.mServer->OutputFormat("CoAP Secure disconnected before stop.\r\n> ");
-            if (Stop() == OT_ERROR_NONE)
-            {
-                mInterpreter.mServer->OutputFormat(" Done\r\n> ");
-            }
-            else
-            {
-                mInterpreter.mServer->OutputFormat(" With error\r\n> ");
-            }
+            Stop();
+            mInterpreter.mServer->OutputFormat(" Done\r\n> ");
             mShutdownFlag = false;
         }
     }
@@ -594,30 +586,26 @@ void CoapSecure::HandleClientResponse(otMessage *aMessage, const otMessageInfo *
 }
 
 #if CLI_COAP_SECURE_USE_COAP_DEFAULT_HANDLER
-void OTCALL CoapSecure::DefaultHandle(void *               aContext,
-                                      otCoapMessage *      aHeader,
-                                      otMessage *          aMessage,
-                                      const otMessageInfo *aMessageInfo)
+void OTCALL CoapSecure::DefaultHandler(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
-    static_cast<CoapSecure *>(aContext)->DefaultHandle(aHeader, aMessage, aMessageInfo);
+    static_cast<CoapSecure *>(aContext)->DefaultHandler(aMessage, aMessageInfo);
 }
 
-void CoapSecure::DefaultHandle(otCoapMessage *aHeader, otMessage *aMessage, const otMessageInfo *aMessageInfo)
+void CoapSecure::DefaultHandler(otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
-    OT_UNUSED_VARIABLE(aMessage);
+    otError    error = OT_ERROR_NONE;
+    otMessage *responseMessage;
 
-    otError       error = OT_ERROR_NONE;
-    otCoapMessage responseHeader;
-    otMessage *   responseMessage;
-
-    if (otCoapMessageGetType(aHeader) == OT_COAP_TYPE_CONFIRMABLE || otCoapMessageGetCode(aHeader) == OT_COAP_CODE_GET)
+    if ((otCoapMessageGetType(aMessage) == OT_COAP_TYPE_CONFIRMABLE) ||
+        (otCoapMessageGetCode(aMessage) == OT_COAP_CODE_GET))
     {
-        otCoapMessageInit(&responseHeader, OT_COAP_TYPE_NON_CONFIRMABLE, OT_COAP_CODE_NOT_FOUND);
-        otCoapMessageSetMessageId(&responseHeader, otCoapMessageGetMessageId(aHeader));
-        otCoapMessageSetToken(&responseHeader, otCoapMessageGetToken(aHeader), otCoapMessageGetTokenLength(aHeader));
-
         responseMessage = otCoapNewMessage(mInterpreter.mInstance, NULL);
         VerifyOrExit(responseMessage != NULL, error = OT_ERROR_NO_BUFS);
+
+        otCoapMessageInit(responseMessage, OT_COAP_TYPE_NON_CONFIRMABLE, OT_COAP_CODE_NOT_FOUND);
+        otCoapMessageSetMessageId(responseMessage, otCoapMessageGetMessageId(aMessage));
+        otCoapMessageSetToken(responseMessage, otCoapMessageGetToken(aMessage), otCoapMessageGetTokenLength(aMessage));
+
         SuccessOrExit(error = otCoapSecureSendResponse(mInterpreter.mInstance, responseMessage, aMessageInfo));
     }
 

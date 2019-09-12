@@ -49,7 +49,7 @@
 #include <hal/nrf_gpio.h>
 #include <hal/nrf_uart.h>
 
-#if (USB_CDC_AS_SERIAL_TRANSPORT == 0)
+#if (UART_AS_SERIAL_TRANSPORT == 1)
 
 bool sUartEnabled = false;
 
@@ -295,6 +295,7 @@ void UARTE0_UART0_IRQHandler(void)
         {
             sReceiveBuffer[sReceiveHead] = byte;
             sReceiveHead                 = (sReceiveHead + 1) % UART_RX_BUFFER_SIZE;
+
             otSysEventSignalPending();
         }
     }
@@ -314,12 +315,13 @@ void UARTE0_UART0_IRQHandler(void)
         {
             sTransmitDone = true;
             nrf_uart_task_trigger(UART_INSTANCE, NRF_UART_TASK_STOPTX);
+
             otSysEventSignalPending();
         }
     }
 }
 
-#endif // USB_CDC_AS_SERIAL_TRANSPORT == 0
+#endif // UART_AS_SERIAL_TRANSPORT == 1
 
 /**
  * The UART driver weak functions definition.

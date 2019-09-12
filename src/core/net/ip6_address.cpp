@@ -130,6 +130,12 @@ bool Address::IsAnycastRoutingLocator(void) const
             mFields.m16[6] == HostSwap16(0xfe00) && mFields.m8[14] == kAloc16Mask);
 }
 
+bool Address::IsAnycastServiceLocator(void) const
+{
+    return IsAnycastRoutingLocator() && (mFields.m16[7] >= HostSwap16(Mle::kAloc16ServiceStart)) &&
+           (mFields.m16[7] <= HostSwap16(Mle::kAloc16ServiceEnd));
+}
+
 bool Address::IsSubnetRouterAnycast(void) const
 {
     return (mFields.m32[2] == 0 && mFields.m32[3] == 0);
@@ -236,7 +242,7 @@ uint8_t Address::PrefixMatch(const uint8_t *aPrefixA, const uint8_t *aPrefixB, u
     return rval;
 }
 
-uint8_t Address::PrefixMatch(const Address &aOther) const
+uint8_t Address::PrefixMatch(const otIp6Address &aOther) const
 {
     return PrefixMatch(mFields.m8, aOther.mFields.m8, sizeof(Address));
 }

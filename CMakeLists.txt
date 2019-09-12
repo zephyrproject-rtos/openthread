@@ -94,16 +94,13 @@ set(configure_flags
   --enable-no-executables-hack
   --disable-docs
   --with-platform-info=zephyr
+  --enable-builtin-mbedtls=no
 )
 
 # TODO: Simplify
-set(ZEPHYR_MBEDTLS_CPPFLAGS "${ZEPHYR_MBEDTLS_CPPFLAGS} ")
-set(ZEPHYR_MBEDTLS_CPPFLAGS "-DMBEDTLS_CONFIG_FILE='\"mbedtls-config.h\"'")
-set(ZEPHYR_MBEDTLS_CPPFLAGS "${ZEPHYR_MBEDTLS_CPPFLAGS} -DMBEDTLS_USER_CONFIG_FILE='\"zephyr-mbedtls-config.h\"'")
-set(ZEPHYR_MBEDTLS_CPPFLAGS "${ZEPHYR_MBEDTLS_CPPFLAGS} -I${ot_port_path}")
-set(ZEPHYR_MBEDTLS_CPPFLAGS "${ZEPHYR_MBEDTLS_CPPFLAGS} -I${ot_SOURCE_DIR}/third_party/mbedtls")
-set(ZEPHYR_MBEDTLS_CPPFLAGS "${ZEPHYR_MBEDTLS_CPPFLAGS} -I${ot_SOURCE_DIR}/third_party/mbedtls/repo/include")
-set(ZEPHYR_MBEDTLS_CPPFLAGS "${ZEPHYR_MBEDTLS_CPPFLAGS} -I${ot_SOURCE_DIR}/third_party/mbedtls/repo/include/mbedtls")
+set(ZEPHYR_MBEDTLS_CPPFLAGS "${ZEPHYR_MBEDTLS_CPPFLAGS} -DMBEDTLS_CONFIG_FILE='\"${CONFIG_MBEDTLS_CFG_FILE}\"'")
+set(ZEPHYR_MBEDTLS_CPPFLAGS "${ZEPHYR_MBEDTLS_CPPFLAGS} -I$ENV{ZEPHYR_BASE}/../modules/crypto/mbedtls/include")
+set(ZEPHYR_MBEDTLS_CPPFLAGS "${ZEPHYR_MBEDTLS_CPPFLAGS} -I$ENV{ZEPHYR_BASE}/../modules/crypto/mbedtls/configs")
 
 list(APPEND configure_flags
   "MBEDTLS_CPPFLAGS=${ZEPHYR_MBEDTLS_CPPFLAGS}"
@@ -210,7 +207,6 @@ zephyr_include_directories(${ot_platforms_dir})
 # Determine which libs should be linked in
 set(ot_libs
   openthread-platform-utils
-  mbedcrypto
   )
 
 if(CONFIG_OPENTHREAD_FTD)

@@ -101,8 +101,6 @@ elseif(CONFIG_OPENTHREAD_MTD)
 list(APPEND ot_libs openthread-mtd)
 endif()
 
-list(APPEND ot_libs openthread-platform-utils-static)
-
 zephyr_link_libraries(${ot_libs})
 
 endif()

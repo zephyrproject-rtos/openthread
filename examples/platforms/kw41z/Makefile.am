@@ -51,11 +51,14 @@ libopenthread_kw41z_a_CPPFLAGS                                                  
 PLATFORM_SOURCES                                                                                   = \
     alarm.c                                                                                          \
     diag.c                                                                                           \
+    entropy.c                                                                                        \
     flash.c                                                                                          \
     logging.c                                                                                        \
     misc.c                                                                                           \
+    openthread-core-kw41z-config.h                                                                   \
+    openthread-core-kw41z-config-check.h                                                             \
+    platform-kw41z.h                                                                                 \
     radio.c                                                                                          \
-    random.c                                                                                         \
     system.c                                                                                         \
     uart.c                                                                                           \
     $(NULL)
@@ -90,11 +93,6 @@ libopenthread_kw41z_a_SOURCES                                                   
 
 libopenthread_kw41z_a_SOURCES                                                                     += \
     $(PLATFORM_SOURCES)                                                                              \
-    $(NULL)
-
-noinst_HEADERS                                                                                     = \
-    platform-kw41z.h                                                                                 \
-    @top_builddir@/third_party/nxp/MKW41Z4/clock_config.h                                            \
     $(NULL)
 
 PRETTY_FILES                                                                                       = \

@@ -33,8 +33,6 @@
 
 #if OPENTHREAD_FTD
 
-#define WPP_NAME "joiner_router.tmh"
-
 #include "joiner_router.hpp"
 
 #include <stdio.h>
@@ -78,11 +76,11 @@ void JoinerRouter::HandleStateChanged(otChangedFlags aFlags)
     VerifyOrExit(Get<Mle::MleRouter>().IsFullThreadDevice());
     VerifyOrExit(aFlags & OT_CHANGED_THREAD_NETDATA);
 
-    Get<Ip6::Filter>().RemoveUnsecurePort(mSocket.GetSockName().mPort);
-
     if (Get<NetworkData::Leader>().IsJoiningEnabled())
     {
         Ip6::SockAddr sockaddr;
+
+        VerifyOrExit(!mSocket.IsBound());
 
         sockaddr.mPort = GetJoinerUdpPort();
 
@@ -93,6 +91,8 @@ void JoinerRouter::HandleStateChanged(otChangedFlags aFlags)
     }
     else
     {
+        Get<Ip6::Filter>().RemoveUnsecurePort(mSocket.GetSockName().mPort);
+
         mSocket.Close();
     }
 
@@ -148,10 +148,8 @@ void JoinerRouter::HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &a
 
     VerifyOrExit((message = NewMeshCoPMessage(Get<Coap::Coap>())) != NULL, error = OT_ERROR_NO_BUFS);
 
-    message->Init(OT_COAP_TYPE_NON_CONFIRMABLE, OT_COAP_CODE_POST);
-    message->SetToken(Coap::Message::kDefaultTokenLength);
-    message->AppendUriPathOptions(OT_URI_PATH_RELAY_RX);
-    message->SetPayloadMarker();
+    SuccessOrExit(error = message->Init(OT_COAP_TYPE_NON_CONFIRMABLE, OT_COAP_CODE_POST, OT_URI_PATH_RELAY_RX));
+    SuccessOrExit(error = message->SetPayloadMarker());
 
     udpPort.Init();
     udpPort.SetUdpPort(aMessageInfo.GetPeerPort());
@@ -246,7 +244,6 @@ void JoinerRouter::HandleRelayTransmit(Coap::Message &aMessage, const Ip6::Messa
     messageInfo.mPeerAddr.mFields.m16[0] = HostSwap16(0xfe80);
     memcpy(messageInfo.mPeerAddr.mFields.m8 + 8, joinerIid.GetIid(), 8);
     messageInfo.SetPeerPort(joinerPort.GetUdpPort());
-    messageInfo.SetInterfaceId(Get<ThreadNetif>().GetInterfaceId());
 
     SuccessOrExit(error = mSocket.SendTo(*message, messageInfo));
 
@@ -283,8 +280,8 @@ otError JoinerRouter::DelaySendingJoinerEntrust(const Ip6::MessageInfo &aMessage
     VerifyOrExit((message = NewMeshCoPMessage(Get<Coap::Coap>())) != NULL, error = OT_ERROR_NO_BUFS);
 
     message->Init(OT_COAP_TYPE_CONFIRMABLE, OT_COAP_CODE_POST);
-    message->AppendUriPathOptions(OT_URI_PATH_JOINER_ENTRUST);
-    message->SetPayloadMarker();
+    SuccessOrExit(error = message->AppendUriPathOptions(OT_URI_PATH_JOINER_ENTRUST));
+    SuccessOrExit(error = message->SetPayloadMarker());
     message->SetSubType(Message::kSubTypeJoinerEntrust);
 
     masterKey.Init();
@@ -300,7 +297,7 @@ otError JoinerRouter::DelaySendingJoinerEntrust(const Ip6::MessageInfo &aMessage
     SuccessOrExit(error = message->AppendTlv(extendedPanId));
 
     networkName.Init();
-    networkName.SetNetworkName(Get<Mac::Mac>().GetNetworkName());
+    networkName.SetNetworkName(Get<Mac::Mac>().GetNetworkName().GetAsData());
     SuccessOrExit(error = message->AppendTlv(networkName));
 
     Get<ActiveDataset>().Read(dataset);
@@ -327,13 +324,13 @@ otError JoinerRouter::DelaySendingJoinerEntrust(const Ip6::MessageInfo &aMessage
         SuccessOrExit(error = message->AppendTlv(channelMask));
     }
 
-    if ((tlv = dataset.Get(Tlv::kPSKc)) != NULL)
+    if ((tlv = dataset.Get(Tlv::kPskc)) != NULL)
     {
         SuccessOrExit(error = message->AppendTlv(*tlv));
     }
     else
     {
-        PSKcTlv pskc;
+        PskcTlv pskc;
         pskc.Init();
         SuccessOrExit(error = message->AppendTlv(pskc));
     }
@@ -356,8 +353,9 @@ otError JoinerRouter::DelaySendingJoinerEntrust(const Ip6::MessageInfo &aMessage
     messageInfo = aMessageInfo;
     messageInfo.SetPeerPort(kCoapUdpPort);
 
-    delayedMessage = DelayedJoinEntHeader(TimerMilli::GetNow() + kDelayJoinEnt, messageInfo, aKek.GetKek());
-    SuccessOrExit(delayedMessage.AppendTo(*message));
+    delayedMessage.Init(TimerMilli::GetNow() + kDelayJoinEnt, messageInfo, aKek.GetKek());
+    SuccessOrExit(error = delayedMessage.AppendTo(*message));
+
     mDelayedJoinEnts.Enqueue(*message);
 
     if (!mTimer.IsRunning())
@@ -389,7 +387,7 @@ void JoinerRouter::SendDelayedJoinerEntrust(void)
 {
     DelayedJoinEntHeader delayedJoinEnt;
     Coap::Message *      message = static_cast<Coap::Message *>(mDelayedJoinEnts.GetHead());
-    uint32_t             now     = TimerMilli::GetNow();
+    TimeMilli            now     = TimerMilli::GetNow();
     Ip6::MessageInfo     messageInfo;
 
     VerifyOrExit(message != NULL);

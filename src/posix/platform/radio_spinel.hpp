@@ -37,7 +37,8 @@
 #include <openthread/platform/radio.h>
 
 #include "hdlc_interface.hpp"
-#include "spinel.h"
+#include "ncp/ncp_config.h"
+#include "ncp/spinel.h"
 
 namespace ot {
 namespace PosixApp {
@@ -56,9 +57,10 @@ public:
      *
      * @param[in]   aRadioFile    The path to either a uart device or an executable.
      * @param[in]   aRadioConfig  Parameters given to the device or executable.
+     * @param[in]   aReset        Whether to reset RCP when initializing.
      *
      */
-    void Init(const char *aRadioFile, const char *aRadioConfig);
+    void Init(const char *aRadioFile, const char *aRadioConfig, bool aReset);
 
     /**
      * Deinitialize this radio transceiver.
@@ -161,6 +163,30 @@ public:
     otError SetTransmitPower(int8_t aPower);
 
     /**
+     * This method gets the radio's CCA ED threshold in dBm.
+     *
+     * @param[out]  aThreshold    The CCA ED threshold in dBm.
+     *
+     * @retval  OT_ERROR_NONE               Succeeded.
+     * @retval  OT_ERROR_BUSY               Failed due to another operation is on going.
+     * @retval  OT_ERROR_RESPONSE_TIMEOUT   Failed due to no response received from the transceiver.
+     *
+     */
+    otError GetCcaEnergyDetectThreshold(int8_t &aThreshold);
+
+    /**
+     * This method sets the radio's CCA ED threshold in dBm.
+     *
+     * @param[in]   aThreshold     The CCA ED threshold in dBm.
+     *
+     * @retval  OT_ERROR_NONE               Succeeded.
+     * @retval  OT_ERROR_BUSY               Failed due to another operation is on going.
+     * @retval  OT_ERROR_RESPONSE_TIMEOUT   Failed due to no response received from the transceiver.
+     *
+     */
+    otError SetCcaEnergyDetectThreshold(int8_t aThreshold);
+
+    /**
      * This method returns the radio sw version string.
      *
      * @returns A pointer to the radio version string.
@@ -194,6 +220,41 @@ public:
      *
      */
     int8_t GetReceiveSensitivity(void) const { return mRxSensitivity; }
+
+#if OPENTHREAD_CONFIG_PLATFORM_RADIO_COEX_ENABLE
+    /**
+     * Enable the radio coex.
+     *
+     * @param[in] aInstance  The OpenThread instance structure.
+     * @param[in] aEnabled   TRUE to enable the radio coex, FALSE otherwise.
+     *
+     * @retval OT_ERROR_NONE     Successfully enabled.
+     * @retval OT_ERROR_FAILED   The radio coex could not be enabled.
+     *
+     */
+    otError SetCoexEnabled(bool aEnabled);
+
+    /**
+     * Check whether radio coex is enabled or not.
+     *
+     * @param[in] aInstance  The OpenThread instance structure.
+     *
+     * @returns TRUE if the radio coex is enabled, FALSE otherwise.
+     *
+     */
+    bool IsCoexEnabled(void);
+
+    /**
+     * This method retrieves the radio coexistence metrics.
+     *
+     * @param[out] aCoexMetrics  A reference to the coexistence metrics structure.
+     *
+     * @retval OT_ERROR_NONE          Successfully retrieved the coex metrics.
+     * @retval OT_ERROR_INVALID_ARGS  @p aCoexMetrics was NULL.
+     *
+     */
+    otError GetCoexMetrics(otRadioCoexMetrics &aCoexMetrics);
+#endif
 
     /**
      * This method returns a reference to the transmit buffer.
@@ -407,7 +468,7 @@ public:
     void Update(struct timeval &aTimeout);
 #endif
 
-#if OPENTHREAD_ENABLE_DIAG
+#if OPENTHREAD_CONFIG_DIAG_ENABLE
     /**
      * This method enables/disables the factory diagnostics mode.
      *
@@ -617,7 +678,7 @@ private:
     bool  mIsReady : 1;           ///< NCP ready.
     bool  mSupportsLogStream : 1; ///< RCP supports `LOG_STREAM` property with OpenThread log meta-data format.
 
-#if OPENTHREAD_ENABLE_DIAG
+#if OPENTHREAD_CONFIG_DIAG_ENABLE
     bool   mDiagMode;
     char * mDiagOutput;
     size_t mDiagOutputMaxLen;

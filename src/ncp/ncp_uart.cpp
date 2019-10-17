@@ -47,9 +47,14 @@
 #include "net/ip6.hpp"
 #include "utils/static_assert.hpp"
 
-#if OPENTHREAD_ENABLE_NCP_UART
+#if OPENTHREAD_CONFIG_NCP_UART_ENABLE
 
-#if OPENTHREAD_ENABLE_DIAG
+#if OPENTHREAD_CONFIG_DIAG_ENABLE
+OT_STATIC_ASSERT(OPENTHREAD_CONFIG_DIAG_OUTPUT_BUFFER_SIZE <= OPENTHREAD_CONFIG_NCP_UART_RX_BUFFER_SIZE -
+                                                                  ot::Ncp::NcpBase::kSpinelCmdHeaderSize -
+                                                                  ot::Ncp::NcpBase::kSpinelPropIdSize,
+                 "diag output should be smaller than NCP UART rx buffer");
+
 OT_STATIC_ASSERT(OPENTHREAD_CONFIG_DIAG_CMD_LINE_BUFFER_SIZE <= OPENTHREAD_CONFIG_NCP_UART_RX_BUFFER_SIZE,
                  "diag command line should be smaller than NCP UART rx buffer");
 #endif
@@ -74,7 +79,7 @@ extern "C" void otNcpInit(otInstance *aInstance)
     }
 }
 
-#endif // OPENTHREAD_ENABLE_SPINEL_VENDOR_SUPPORT == 0
+#endif // OPENTHREAD_ENABLE_NCP_VENDOR_HOOK == 0
 
 NcpUart::NcpUart(Instance *aInstance)
     : NcpBase(aInstance)
@@ -145,7 +150,7 @@ void NcpUart::EncodeAndSendToUart(void)
                 otPlatWakeHost();
             }
 
-            VerifyOrExit(super_t::ShouldDeferHostSend() == false);
+            VerifyOrExit(!super_t::ShouldDeferHostSend());
             SuccessOrExit(mFrameEncoder.BeginFrame());
 
             txFrameBuffer.OutFrameBegin();
@@ -373,4 +378,4 @@ void NcpUart::NcpFrameBufferEncrypterReader::Reset(void)
 } // namespace Ncp
 } // namespace ot
 
-#endif // OPENTHREAD_ENABLE_NCP_UART
+#endif // OPENTHREAD_CONFIG_NCP_UART_ENABLE

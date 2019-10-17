@@ -33,7 +33,7 @@
 
 #include "cli_coap.hpp"
 
-#if OPENTHREAD_ENABLE_APPLICATION_COAP
+#if OPENTHREAD_CONFIG_COAP_API_ENABLE
 
 #include <ctype.h>
 
@@ -217,7 +217,7 @@ otError Coap::ProcessRequest(int argc, char *argv[])
 
         if (payloadLength > 0)
         {
-            otCoapMessageSetPayloadMarker(message);
+            SuccessOrExit(error = otCoapMessageSetPayloadMarker(message));
         }
     }
 
@@ -228,9 +228,8 @@ otError Coap::ProcessRequest(int argc, char *argv[])
     }
 
     memset(&messageInfo, 0, sizeof(messageInfo));
-    messageInfo.mPeerAddr    = coapDestinationIp;
-    messageInfo.mPeerPort    = OT_DEFAULT_COAP_PORT;
-    messageInfo.mInterfaceId = OT_NETIF_INTERFACE_ID_THREAD;
+    messageInfo.mPeerAddr = coapDestinationIp;
+    messageInfo.mPeerPort = OT_DEFAULT_COAP_PORT;
 
     if ((coapType == OT_COAP_TYPE_CONFIRMABLE) || (coapCode == OT_COAP_CODE_GET))
     {
@@ -287,12 +286,9 @@ void Coap::HandleRequest(otMessage *aMessage, const otMessageInfo *aMessageInfo)
     otCoapCode responseCode    = OT_COAP_CODE_EMPTY;
     char       responseContent = '0';
 
-    mInterpreter.mServer->OutputFormat(
-        "coap request from [%x:%x:%x:%x:%x:%x:%x:%x] ", HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[0]),
-        HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[1]), HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[2]),
-        HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[3]), HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[4]),
-        HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[5]), HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[6]),
-        HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[7]));
+    mInterpreter.mServer->OutputFormat("coap request from ");
+    mInterpreter.OutputIp6Address(aMessageInfo->mPeerAddr);
+    mInterpreter.mServer->OutputFormat(" ");
 
     switch (otCoapMessageGetCode(aMessage))
     {
@@ -334,13 +330,12 @@ void Coap::HandleRequest(otMessage *aMessage, const otMessageInfo *aMessageInfo)
         responseMessage = otCoapNewMessage(mInterpreter.mInstance, NULL);
         VerifyOrExit(responseMessage != NULL, error = OT_ERROR_NO_BUFS);
 
-        otCoapMessageInit(responseMessage, OT_COAP_TYPE_ACKNOWLEDGMENT, responseCode);
-        otCoapMessageSetMessageId(responseMessage, otCoapMessageGetMessageId(aMessage));
-        otCoapMessageSetToken(responseMessage, otCoapMessageGetToken(aMessage), otCoapMessageGetTokenLength(aMessage));
+        SuccessOrExit(
+            error = otCoapMessageInitResponse(responseMessage, aMessage, OT_COAP_TYPE_ACKNOWLEDGMENT, responseCode));
 
         if (otCoapMessageGetCode(aMessage) == OT_COAP_CODE_GET)
         {
-            otCoapMessageSetPayloadMarker(responseMessage);
+            SuccessOrExit(error = otCoapMessageSetPayloadMarker(responseMessage));
             SuccessOrExit(error = otMessageAppend(responseMessage, &responseContent, sizeof(responseContent)));
         }
 
@@ -378,12 +373,8 @@ void Coap::HandleResponse(otMessage *aMessage, const otMessageInfo *aMessageInfo
     }
     else
     {
-        mInterpreter.mServer->OutputFormat(
-            "coap response from [%x:%x:%x:%x:%x:%x:%x:%x]", HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[0]),
-            HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[1]), HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[2]),
-            HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[3]), HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[4]),
-            HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[5]), HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[6]),
-            HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[7]));
+        mInterpreter.mServer->OutputFormat("coap response from ");
+        mInterpreter.OutputIp6Address(aMessageInfo->mPeerAddr);
 
         PrintPayload(aMessage);
     }
@@ -392,4 +383,4 @@ void Coap::HandleResponse(otMessage *aMessage, const otMessageInfo *aMessageInfo
 } // namespace Cli
 } // namespace ot
 
-#endif // OPENTHREAD_ENABLE_APPLICATION_COAP
+#endif // OPENTHREAD_CONFIG_COAP_API_ENABLE

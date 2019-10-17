@@ -41,6 +41,7 @@
 
 #include "coap/coap.hpp"
 #include "common/locator.hpp"
+#include "common/timer.hpp"
 #include "net/udp6.hpp"
 #include "thread/lowpan.hpp"
 #include "thread/mle_router.hpp"
@@ -92,7 +93,7 @@ class NetworkData : public InstanceLocator
 public:
     enum
     {
-        kMaxSize = 255, ///< Maximum size of Thread Network Data in bytes.
+        kMaxSize = 254, ///< Maximum size of Thread Network Data in bytes.
     };
 
     /**
@@ -184,7 +185,7 @@ public:
      */
     otError GetNextExternalRoute(otNetworkDataIterator *aIterator, uint16_t aRloc16, otExternalRouteConfig *aConfig);
 
-#if OPENTHREAD_ENABLE_SERVICE
+#if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
     /**
      * This method provides the next service in the Thread Network Data.
      *
@@ -250,7 +251,7 @@ public:
      */
     bool ContainsExternalRoutes(NetworkData &aCompare, uint16_t aRloc16);
 
-#if OPENTHREAD_ENABLE_SERVICE
+#if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
     /**
      * This method indicates whether or not the Thread Network Data contains all of the service information
      * in @p aCompare associated with @p aRloc16.
@@ -361,7 +362,7 @@ protected:
      */
     PrefixTlv *FindPrefix(const uint8_t *aPrefix, uint8_t aPrefixLength, uint8_t *aTlvs, uint8_t aTlvsLength);
 
-#if OPENTHREAD_ENABLE_SERVICE
+#if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
     /**
      * This method returns a pointer to a matching Service TLV.
      *
@@ -432,7 +433,7 @@ protected:
      */
     void RemoveTemporaryData(uint8_t *aData, uint8_t &aDataLength, PrefixTlv &aPrefix);
 
-#if OPENTHREAD_ENABLE_SERVICE
+#if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
     /**
      * This method strips non-stable Sub-TLVs from a Service TLV.
      *
@@ -517,7 +518,7 @@ private:
 
     const Type mType;
     bool       mLastAttemptWait;
-    uint32_t   mLastAttempt;
+    TimeMilli  mLastAttempt;
 };
 
 } // namespace NetworkData

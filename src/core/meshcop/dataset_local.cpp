@@ -32,8 +32,6 @@
  *
  */
 
-#define WPP_NAME "dataset_local.tmh"
-
 #include "dataset_local.hpp"
 
 #include <stdio.h>
@@ -50,7 +48,7 @@
 namespace ot {
 namespace MeshCoP {
 
-DatasetLocal::DatasetLocal(Instance &aInstance, const Tlv::Type aType)
+DatasetLocal::DatasetLocal(Instance &aInstance, Tlv::Type aType)
     : InstanceLocator(aInstance)
     , mUpdateTime(0)
     , mType(aType)

@@ -37,7 +37,7 @@
 #include "net/udp6.hpp"
 #include "thread/thread_netif.hpp"
 
-#if OPENTHREAD_ENABLE_DNS_CLIENT
+#if OPENTHREAD_CONFIG_DNS_CLIENT_ENABLE
 
 /**
  * @file
@@ -48,6 +48,30 @@ using ot::Encoding::BigEndian::HostSwap16;
 
 namespace ot {
 namespace Dns {
+
+QueryMetadata::QueryMetadata(void)
+    : mHostname(NULL)
+    , mResponseHandler(NULL)
+    , mResponseContext(NULL)
+    , mTransmissionTime()
+    , mDestinationPort(0)
+    , mRetransmissionCount(0)
+{
+    mSourceAddress.Clear();
+    mDestinationAddress.Clear();
+}
+
+QueryMetadata::QueryMetadata(otDnsResponseHandler aHandler, void *aContext)
+    : mHostname(NULL)
+    , mResponseHandler(aHandler)
+    , mResponseContext(aContext)
+    , mTransmissionTime()
+    , mDestinationPort(0)
+    , mRetransmissionCount(0)
+{
+    mSourceAddress.Clear();
+    mDestinationAddress.Clear();
+}
 
 Client::Client(Ip6::Netif &aNetif)
     : mSocket(aNetif.Get<Ip6::Udp>())
@@ -159,10 +183,10 @@ exit:
 
 Message *Client::CopyAndEnqueueMessage(const Message &aMessage, const QueryMetadata &aQueryMetadata)
 {
-    otError  error       = OT_ERROR_NONE;
-    uint32_t now         = TimerMilli::GetNow();
-    Message *messageCopy = NULL;
-    uint32_t nextTransmissionTime;
+    otError   error       = OT_ERROR_NONE;
+    TimeMilli now         = TimerMilli::GetNow();
+    Message * messageCopy = NULL;
+    TimeMilli nextTransmissionTime;
 
     // Create a message copy for further retransmissions.
     VerifyOrExit((messageCopy = aMessage.Clone()) != NULL, error = OT_ERROR_NO_BUFS);
@@ -394,8 +418,8 @@ void Client::HandleRetransmissionTimer(Timer &aTimer)
 
 void Client::HandleRetransmissionTimer(void)
 {
-    uint32_t         now       = TimerMilli::GetNow();
-    uint32_t         nextDelta = 0xffffffff;
+    TimeMilli        now       = TimerMilli::GetNow();
+    uint32_t         nextDelta = TimeMilli::kMaxDuration;
     QueryMetadata    queryMetadata;
     Message *        message     = mPendingQueries.GetHead();
     Message *        nextMessage = NULL;
@@ -408,23 +432,29 @@ void Client::HandleRetransmissionTimer(void)
 
         if (queryMetadata.IsLater(now))
         {
+            uint32_t diff = queryMetadata.mTransmissionTime - TimerMilli::GetNow();
+
             // Calculate the next delay and choose the lowest.
-            if (queryMetadata.mTransmissionTime - now < nextDelta)
+            if (diff < nextDelta)
             {
-                nextDelta = queryMetadata.mTransmissionTime - now;
+                nextDelta = diff;
             }
         }
         else if (queryMetadata.mRetransmissionCount < kMaxRetransmit)
         {
+            uint32_t diff;
+
             // Increment retransmission counter and timer.
             queryMetadata.mRetransmissionCount++;
             queryMetadata.mTransmissionTime = now + kResponseTimeout;
             queryMetadata.UpdateIn(*message);
 
+            diff = kResponseTimeout;
+
             // Check if retransmission time is lower than current lowest.
-            if (queryMetadata.mTransmissionTime - now < nextDelta)
+            if (diff < nextDelta)
             {
-                nextDelta = queryMetadata.mTransmissionTime - now;
+                nextDelta = kResponseTimeout;
             }
 
             // Retransmit
@@ -443,7 +473,7 @@ void Client::HandleRetransmissionTimer(void)
         message = nextMessage;
     }
 
-    if (nextDelta != 0xffffffff)
+    if (nextDelta != TimeMilli::kMaxDuration)
     {
         mRetransmissionTimer.Start(nextDelta);
     }
@@ -471,7 +501,7 @@ void Client::HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessag
     VerifyOrExit(aMessage.Read(aMessage.GetOffset(), sizeof(responseHeader), &responseHeader) ==
                  sizeof(responseHeader));
     VerifyOrExit(responseHeader.GetType() == Header::kTypeResponse && responseHeader.GetQuestionCount() == 1 &&
-                 responseHeader.IsTruncationFlagSet() == false);
+                 !responseHeader.IsTruncationFlagSet());
 
     aMessage.MoveOffset(sizeof(responseHeader));
     offset = aMessage.GetOffset();
@@ -520,4 +550,4 @@ exit:
 } // namespace Dns
 } // namespace ot
 
-#endif // OPENTHREAD_ENABLE_DNS_CLIENT
+#endif // OPENTHREAD_CONFIG_DNS_CLIENT_ENABLE

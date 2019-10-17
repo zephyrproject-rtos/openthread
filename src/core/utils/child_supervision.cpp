@@ -43,7 +43,7 @@
 namespace ot {
 namespace Utils {
 
-#if OPENTHREAD_ENABLE_CHILD_SUPERVISION
+#if OPENTHREAD_CONFIG_CHILD_SUPERVISION_ENABLE
 
 #if OPENTHREAD_FTD
 
@@ -63,8 +63,8 @@ void ChildSupervisor::SetSupervisionInterval(uint16_t aInterval)
 
 Child *ChildSupervisor::GetDestination(const Message &aMessage) const
 {
-    Child * child = NULL;
-    uint8_t childIndex;
+    Child *  child = NULL;
+    uint16_t childIndex;
 
     VerifyOrExit(aMessage.GetType() == Message::kTypeSupervision);
 
@@ -78,7 +78,7 @@ exit:
 void ChildSupervisor::SendMessage(Child &aChild)
 {
     Message *message = NULL;
-    uint8_t  childIndex;
+    uint16_t childIndex;
 
     VerifyOrExit(aChild.GetIndirectMessageCount() == 0);
 
@@ -126,7 +126,7 @@ void ChildSupervisor::HandleTimer(void)
 
         child.IncrementSecondsSinceLastSupervision();
 
-        if ((child.GetSecondsSinceLastSupervision() >= mSupervisionInterval) && (child.IsRxOnWhenIdle() == false))
+        if ((child.GetSecondsSinceLastSupervision() >= mSupervisionInterval) && !child.IsRxOnWhenIdle())
         {
             SendMessage(child);
         }
@@ -220,9 +220,9 @@ exit:
 void SupervisionListener::RestartTimer(void)
 {
     if ((mTimeout != 0) && (Get<Mle::MleRouter>().GetRole() != OT_DEVICE_ROLE_DISABLED) &&
-        (Get<MeshForwarder>().GetRxOnWhenIdle() == false))
+        !Get<MeshForwarder>().GetRxOnWhenIdle())
     {
-        mTimer.Start(TimerMilli::SecToMsec(mTimeout));
+        mTimer.Start(Time::SecToMsec(mTimeout));
     }
     else
     {
@@ -237,8 +237,7 @@ void SupervisionListener::HandleTimer(Timer &aTimer)
 
 void SupervisionListener::HandleTimer(void)
 {
-    VerifyOrExit((Get<Mle::MleRouter>().GetRole() == OT_DEVICE_ROLE_CHILD) &&
-                 (Get<MeshForwarder>().GetRxOnWhenIdle() == false));
+    VerifyOrExit((Get<Mle::MleRouter>().GetRole() == OT_DEVICE_ROLE_CHILD) && !Get<MeshForwarder>().GetRxOnWhenIdle());
 
     otLogWarnUtil("Supervision timeout. No frame from parent in %d sec", mTimeout);
 
@@ -248,7 +247,7 @@ exit:
     RestartTimer();
 }
 
-#endif // #if OPENTHREAD_ENABLE_CHILD_SUPERVISION
+#endif // #if OPENTHREAD_CONFIG_CHILD_SUPERVISION_ENABLE
 
 } // namespace Utils
 } // namespace ot

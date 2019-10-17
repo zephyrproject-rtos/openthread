@@ -75,14 +75,17 @@ libmbedcrypto_a_SOURCES                       = \
     repo/library/ssl_srv.c                      \
     repo/library/ssl_ticket.c                   \
     repo/library/ssl_tls.c                      \
+    repo/library/threading.c                    \
     repo/library/x509.c                         \
     repo/library/x509_crt.c                     \
     $(NULL)
 
-if !OPENTHREAD_EXAMPLES_EFR32
+if !OPENTHREAD_EXAMPLES_EFR32MG12
+if !OPENTHREAD_EXAMPLES_EFR32MG21
 libmbedcrypto_a_SOURCES                      += \
     repo/library/ecp.c                          \
     $(NULL)
+endif
 endif
 
 if OPENTHREAD_BUILD_COVERAGE

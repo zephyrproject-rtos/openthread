@@ -49,6 +49,7 @@ void Message::Init(void)
     SetVersion(kVersion1);
     SetOffset(0);
     GetHelpData().mHeaderLength = kMinHeaderLength;
+
     SetLength(GetHelpData().mHeaderLength);
 }
 
@@ -57,6 +58,18 @@ void Message::Init(Type aType, Code aCode)
     Init();
     SetType(aType);
     SetCode(aCode);
+}
+
+otError Message::Init(Type aType, Code aCode, const char *aUriPath)
+{
+    otError error;
+
+    Init(aType, aCode);
+    SuccessOrExit(error = SetToken(kDefaultTokenLength));
+    SuccessOrExit(error = AppendUriPathOptions(aUriPath));
+
+exit:
+    return error;
 }
 
 void Message::Finish(void)
@@ -117,8 +130,8 @@ otError Message::AppendOption(uint16_t aNumber, uint16_t aLength, const void *aV
         *cur++       = optionLength & 0xff;
     }
 
-    Append(buf, static_cast<uint16_t>(cur - buf));
-    Append(aValue, aLength);
+    SuccessOrExit(error = Append(buf, static_cast<uint16_t>(cur - buf)));
+    SuccessOrExit(error = Append(aValue, aLength));
 
     GetHelpData().mOptionLast = aNumber;
 
@@ -248,7 +261,14 @@ const otCoapOption *Message::GetNextOption(void)
     }
     else
     {
+        // RFC7252 (Section 3):
+        // Reserved for payload marker.
         VerifyOrExit(optionLength == 0xf, error = OT_ERROR_PARSE);
+
+        // The presence of a marker followed by a zero-length payload MUST be processed
+        // as a message format error.
+        VerifyOrExit(GetHelpData().mNextOptionOffset < GetLength(), error = OT_ERROR_PARSE);
+
         ExitNow(error = OT_ERROR_NOT_FOUND);
     }
 
@@ -308,8 +328,11 @@ otError Message::SetPayloadMarker(void)
     uint8_t marker = 0xff;
 
     VerifyOrExit(GetLength() < kMaxHeaderLength, error = OT_ERROR_NO_BUFS);
-    Append(&marker, sizeof(marker));
+    SuccessOrExit(error = Append(&marker, sizeof(marker)));
     GetHelpData().mHeaderLength = GetLength();
+
+    // Set offset to the start of payload.
+    SetOffset(GetHelpData().mHeaderLength);
 
 exit:
     return error;
@@ -340,31 +363,34 @@ exit:
     return error;
 }
 
-void Message::SetToken(const uint8_t *aToken, uint8_t aTokenLength)
+otError Message::SetToken(const uint8_t *aToken, uint8_t aTokenLength)
 {
     GetHelpData().mHeader.mVersionTypeToken = (GetHelpData().mHeader.mVersionTypeToken & ~kTokenLengthMask) |
                                               ((aTokenLength << kTokenLengthOffset) & kTokenLengthMask);
     memcpy(GetHelpData().mHeader.mToken, aToken, aTokenLength);
     GetHelpData().mHeaderLength += aTokenLength;
-    SetLength(GetHelpData().mHeaderLength);
+
+    return SetLength(GetHelpData().mHeaderLength);
 }
 
-void Message::SetToken(uint8_t aTokenLength)
+otError Message::SetToken(uint8_t aTokenLength)
 {
     uint8_t token[kMaxTokenLength] = {0};
 
     assert(aTokenLength <= sizeof(token));
 
-    Random::FillBuffer(token, aTokenLength);
+    Random::NonCrypto::FillBuffer(token, aTokenLength);
 
-    SetToken(token, aTokenLength);
+    return SetToken(token, aTokenLength);
 }
 
-void Message::SetDefaultResponseHeader(const Message &aRequest)
+otError Message::SetDefaultResponseHeader(const Message &aRequest)
 {
     Init(OT_COAP_TYPE_ACKNOWLEDGMENT, OT_COAP_CODE_CHANGED);
+
     SetMessageId(aRequest.GetMessageId());
-    SetToken(aRequest.GetToken(), aRequest.GetTokenLength());
+
+    return SetToken(aRequest.GetToken(), aRequest.GetTokenLength());
 }
 
 Message *Message::Clone(uint16_t aLength) const
@@ -379,7 +405,7 @@ exit:
     return message;
 }
 
-#if OPENTHREAD_ENABLE_APPLICATION_COAP
+#if OPENTHREAD_CONFIG_COAP_API_ENABLE
 const char *Message::CodeToString(void) const
 {
     const char *codeString;
@@ -474,7 +500,7 @@ const char *Message::CodeToString(void) const
 
     return codeString;
 }
-#endif // OPENTHREAD_ENABLE_APPLICATION_COAP
+#endif // OPENTHREAD_CONFIG_COAP_API_ENABLE
 
 } // namespace Coap
 } // namespace ot

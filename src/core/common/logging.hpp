@@ -43,16 +43,6 @@
 #include <openthread/logging.h>
 #include <openthread/platform/logging.h>
 
-#ifdef WINDOWS_LOGGING
-#ifdef _KERNEL_MODE
-#include <wdm.h>
-#endif
-#include "openthread/platform/logging-windows.h"
-#ifdef WPP_NAME
-#include WPP_NAME
-#endif
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -203,8 +193,6 @@ extern "C" {
 #else
 #define otLogDebg(aRegion, aFormat, ...)
 #endif
-
-#ifndef WINDOWS_LOGGING
 
 /**
  * @def otLogCritApi
@@ -1032,7 +1020,7 @@ extern "C" {
  *
  *
  */
-#if OPENTHREAD_ENABLE_CERT_LOG
+#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
 #define otLogCertMeshCoP(aFormat, ...) \
     _otLogFormatter(OT_LOG_LEVEL_NONE, OT_LOG_REGION_MESH_COP, aFormat, ##__VA_ARGS__)
 #else
@@ -1235,8 +1223,6 @@ extern "C" {
 #define otLogInfoPlat(aFormat, ...)
 #define otLogDebgPlat(aFormat, ...)
 #endif
-
-#endif // WINDOWS_LOGGING
 
 /**
  * @def otDumpCrit
@@ -1872,7 +1858,7 @@ extern "C" {
  * @param[in]  aLength      Number of bytes to print.
  *
  */
-#if OPENTHREAD_ENABLE_CERT_LOG
+#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
 #define otDumpCertMeshCoP(aId, aBuf, aLength) otDump(OT_LOG_LEVEL_NONE, OT_LOG_REGION_MESH_COP, aId, aBuf, aLength)
 #else
 #define otDumpCertMeshCoP(aId, aBuf, aLength)
@@ -1932,7 +1918,7 @@ const char *otLogLevelToPrefixString(otLogLevel aLogLevel);
     OPENTHREAD_CONFIG_PLAT_LOG_FUNCTION(aLogLevel, aRegion, aFormat, ##__VA_ARGS__)
 
 #ifdef __cplusplus
-};
+}
 #endif
 
 #endif // LOGGING_HPP_

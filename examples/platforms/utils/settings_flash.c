@@ -101,6 +101,8 @@ struct settingsBlock
 #error "Invalid value for `SETTINGS_CONFIG_PAGE_NUM` (should be >= 2)"
 #endif
 
+#if !OPENTHREAD_SETTINGS_RAM
+
 static uint32_t sSettingsBaseAddress;
 static uint32_t sSettingsUsedSize;
 
@@ -301,25 +303,9 @@ void otPlatSettingsInit(otInstance *aInstance)
     }
 }
 
-otError otPlatSettingsBeginChange(otInstance *aInstance)
+void otPlatSettingsDeinit(otInstance *aInstance)
 {
     OT_UNUSED_VARIABLE(aInstance);
-
-    return OT_ERROR_NONE;
-}
-
-otError otPlatSettingsCommitChange(otInstance *aInstance)
-{
-    OT_UNUSED_VARIABLE(aInstance);
-
-    return OT_ERROR_NONE;
-}
-
-otError otPlatSettingsAbandonChange(otInstance *aInstance)
-{
-    OT_UNUSED_VARIABLE(aInstance);
-
-    return OT_ERROR_NONE;
 }
 
 otError otPlatSettingsGet(otInstance *aInstance, uint16_t aKey, int aIndex, uint8_t *aValue, uint16_t *aValueLength)
@@ -446,3 +432,5 @@ void otPlatSettingsWipe(otInstance *aInstance)
     initSettings(sSettingsBaseAddress, (uint32_t)OT_SETTINGS_IN_USE);
     otPlatSettingsInit(aInstance);
 }
+
+#endif /* OPENTHREAD_SETTINGS_RAM */

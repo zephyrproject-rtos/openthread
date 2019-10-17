@@ -31,13 +31,9 @@
  *   This file implements the Joiner role.
  */
 
-#define WPP_NAME "joiner.tmh"
-
 #include "joiner.hpp"
 
 #include <stdio.h>
-
-#include <openthread/platform/radio.h>
 
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
@@ -47,10 +43,11 @@
 #include "common/logging.hpp"
 #include "mac/mac_frame.hpp"
 #include "meshcop/meshcop.hpp"
+#include "radio/radio.hpp"
 #include "thread/thread_netif.hpp"
 #include "thread/thread_uri_paths.hpp"
 
-#if OPENTHREAD_ENABLE_JOINER
+#if OPENTHREAD_CONFIG_JOINER_ENABLE
 
 using ot::Encoding::BigEndian::HostSwap16;
 
@@ -73,7 +70,7 @@ Joiner::Joiner(Instance &aInstance)
 
 void Joiner::GetJoinerId(Mac::ExtAddress &aJoinerId) const
 {
-    otPlatRadioGetIeeeEui64(&GetInstance(), aJoinerId.m8);
+    Get<Radio>().GetIeeeEui64(aJoinerId);
     ComputeJoinerId(aJoinerId, aJoinerId);
 }
 
@@ -83,13 +80,12 @@ void Joiner::SetState(otJoinerState aState)
 
     otLogInfoMeshCoP("JoinerState: %s -> %s", JoinerStateToString(mState), JoinerStateToString(aState));
     mState = aState;
-    Get<Notifier>().Signal(OT_CHANGED_JOINER_STATE);
 
 exit:
     return;
 }
 
-otError Joiner::Start(const char *     aPSKd,
+otError Joiner::Start(const char *     aPskd,
                       const char *     aProvisioningUrl,
                       const char *     aVendorName,
                       const char *     aVendorModel,
@@ -111,8 +107,8 @@ otError Joiner::Start(const char *     aPSKd,
     Get<Mle::MleRouter>().UpdateLinkLocalAddress();
 
     SuccessOrExit(error = Get<Coap::CoapSecure>().Start(kJoinerUdpPort));
-    SuccessOrExit(error = Get<Coap::CoapSecure>().SetPsk(reinterpret_cast<const uint8_t *>(aPSKd),
-                                                         static_cast<uint8_t>(strlen(aPSKd))));
+    SuccessOrExit(error = Get<Coap::CoapSecure>().SetPsk(reinterpret_cast<const uint8_t *>(aPskd),
+                                                         static_cast<uint8_t>(strlen(aPskd))));
 
     for (JoinerRouter *router = &mJoinerRouters[0]; router < OT_ARRAY_END(mJoinerRouters); router++)
     {
@@ -344,8 +340,7 @@ otError Joiner::Connect(JoinerRouter &aRouter)
 
     sockaddr.GetAddress().mFields.m16[0] = HostSwap16(0xfe80);
     sockaddr.GetAddress().SetIid(aRouter.mExtAddr);
-    sockaddr.mPort    = aRouter.mJoinerUdpPort;
-    sockaddr.mScopeId = OT_NETIF_INTERFACE_ID_THREAD;
+    sockaddr.mPort = aRouter.mJoinerUdpPort;
 
     SuccessOrExit(error = Get<Coap::CoapSecure>().Connect(sockaddr, Joiner::HandleSecureCoapClientConnect, this));
 
@@ -402,8 +397,8 @@ otError Joiner::PrepareJoinerFinalizeMessage(const char *aProvisioningUrl,
     VerifyOrExit((mFinalizeMessage = NewMeshCoPMessage(Get<Coap::CoapSecure>())) != NULL, error = OT_ERROR_NO_BUFS);
 
     mFinalizeMessage->Init(OT_COAP_TYPE_CONFIRMABLE, OT_COAP_CODE_POST);
-    mFinalizeMessage->AppendUriPathOptions(OT_URI_PATH_JOINER_FINALIZE);
-    mFinalizeMessage->SetPayloadMarker();
+    SuccessOrExit(error = mFinalizeMessage->AppendUriPathOptions(OT_URI_PATH_JOINER_FINALIZE));
+    SuccessOrExit(error = mFinalizeMessage->SetPayloadMarker());
     mFinalizeMessage->SetOffset(mFinalizeMessage->GetLength());
 
     stateTlv.Init();
@@ -467,7 +462,7 @@ void Joiner::SendJoinerFinalize(void)
 {
     assert(mFinalizeMessage != NULL);
 
-#if OPENTHREAD_ENABLE_CERT_LOG
+#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
     LogCertMessage("[THCI] direction=send | type=JOIN_FIN.req |", *mFinalizeMessage);
 #endif
 
@@ -508,7 +503,7 @@ void Joiner::HandleJoinerFinalizeResponse(Coap::Message &         aMessage,
 
     otLogInfoMeshCoP("Joiner received finalize response %d", static_cast<uint8_t>(state.GetState()));
 
-#if OPENTHREAD_ENABLE_CERT_LOG
+#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
     LogCertMessage("[THCI] direction=recv | type=JOIN_FIN.rsp |", aMessage);
 #endif
 
@@ -550,7 +545,6 @@ void Joiner::HandleJoinerEntrust(Coap::Message &aMessage, const Ip6::MessageInfo
     VerifyOrExit(extendedPanId.IsValid(), error = OT_ERROR_PARSE);
 
     SuccessOrExit(error = Tlv::GetTlv(aMessage, Tlv::kNetworkName, sizeof(networkName), networkName));
-    VerifyOrExit(networkName.IsValid(), error = OT_ERROR_PARSE);
 
     SuccessOrExit(error = Tlv::GetTlv(aMessage, Tlv::kActiveTimestamp, sizeof(activeTimestamp), activeTimestamp));
     VerifyOrExit(activeTimestamp.IsValid(), error = OT_ERROR_PARSE);
@@ -563,7 +557,7 @@ void Joiner::HandleJoinerEntrust(Coap::Message &aMessage, const Ip6::MessageInfo
     Get<Mle::MleRouter>().SetMeshLocalPrefix(meshLocalPrefix.GetMeshLocalPrefix());
     Get<Mac::Mac>().SetExtendedPanId(extendedPanId.GetExtendedPanId());
 
-    Get<Mac::Mac>().SetNetworkName(networkName.GetNetworkName(), networkName.GetLength());
+    Get<Mac::Mac>().SetNetworkName(networkName.GetNetworkName());
 
     otLogInfoMeshCoP("Joiner successful!");
 
@@ -587,7 +581,7 @@ void Joiner::SendJoinerEntrustResponse(const Coap::Message &aRequest, const Ip6:
     Ip6::MessageInfo responseInfo(aRequestInfo);
 
     VerifyOrExit((message = NewMeshCoPMessage(Get<Coap::Coap>())) != NULL, error = OT_ERROR_NO_BUFS);
-    message->SetDefaultResponseHeader(aRequest);
+    SuccessOrExit(error = message->SetDefaultResponseHeader(aRequest));
     message->SetSubType(Message::kSubTypeJoinerEntrust);
 
     memset(&responseInfo.mSockAddr, 0, sizeof(responseInfo.mSockAddr));
@@ -642,6 +636,8 @@ void Joiner::HandleTimer(void)
     Finish(error);
 }
 
+// LOCV_EXCL_START
+
 const char *Joiner::JoinerStateToString(otJoinerState aState)
 {
     const char *str = "Unknown";
@@ -671,7 +667,7 @@ const char *Joiner::JoinerStateToString(otJoinerState aState)
     return str;
 }
 
-#if OPENTHREAD_ENABLE_CERT_LOG
+#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
 void Joiner::LogCertMessage(const char *aText, const Coap::Message &aMessage) const
 {
     uint8_t buf[OPENTHREAD_CONFIG_MESSAGE_BUFFER_SIZE];
@@ -686,7 +682,9 @@ exit:
 }
 #endif
 
+// LCOV_EXCL_STOP
+
 } // namespace MeshCoP
 } // namespace ot
 
-#endif // OPENTHREAD_ENABLE_JOINER
+#endif // OPENTHREAD_CONFIG_JOINER_ENABLE

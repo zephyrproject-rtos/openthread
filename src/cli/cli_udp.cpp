@@ -84,8 +84,7 @@ otError UdpExample::ProcessBind(int argc, char *argv[])
     error = Interpreter::ParseLong(argv[1], value);
     SuccessOrExit(error);
 
-    sockaddr.mPort    = static_cast<uint16_t>(value);
-    sockaddr.mScopeId = OT_NETIF_INTERFACE_ID_THREAD;
+    sockaddr.mPort = static_cast<uint16_t>(value);
 
     error = otUdpBind(&mSocket, &sockaddr);
 
@@ -109,8 +108,7 @@ otError UdpExample::ProcessConnect(int argc, char *argv[])
     error = Interpreter::ParseLong(argv[1], value);
     SuccessOrExit(error);
 
-    sockaddr.mPort    = static_cast<uint16_t>(value);
-    sockaddr.mScopeId = OT_NETIF_INTERFACE_ID_THREAD;
+    sockaddr.mPort = static_cast<uint16_t>(value);
 
     error = otUdpConnect(&mSocket, &sockaddr);
 
@@ -138,14 +136,30 @@ otError UdpExample::ProcessSend(int argc, char *argv[])
 {
     otError       error;
     otMessageInfo messageInfo;
-    otMessage *   message = NULL;
-    int           curArg  = 0;
+    otMessage *   message              = NULL;
+    int           curArg               = 0;
+    bool          autoGenPayload       = false;
+    unsigned long autoGenPayloadLength = 0;
 
     memset(&messageInfo, 0, sizeof(messageInfo));
 
-    VerifyOrExit(argc == 1 || argc == 3, error = OT_ERROR_INVALID_ARGS);
+    VerifyOrExit(argc == 1 || argc == 3 || argc == 4, error = OT_ERROR_INVALID_ARGS);
 
-    if (argc == 3)
+    if (argc == 4)
+    {
+        if (strcmp(argv[curArg++], "-s") == 0)
+        {
+            autoGenPayload = true;
+            error          = Interpreter::ParseUnsignedLong(argv[curArg++], autoGenPayloadLength);
+            SuccessOrExit(error);
+        }
+        else
+        {
+            ExitNow(error = OT_ERROR_INVALID_ARGS);
+        }
+    }
+
+    if (argc >= 3)
     {
         long value;
 
@@ -155,14 +169,20 @@ otError UdpExample::ProcessSend(int argc, char *argv[])
         error = Interpreter::ParseLong(argv[curArg++], value);
         SuccessOrExit(error);
 
-        messageInfo.mPeerPort    = static_cast<uint16_t>(value);
-        messageInfo.mInterfaceId = OT_NETIF_INTERFACE_ID_THREAD;
+        messageInfo.mPeerPort = static_cast<uint16_t>(value);
     }
 
     message = otUdpNewMessage(mInterpreter.mInstance, NULL);
     VerifyOrExit(message != NULL, error = OT_ERROR_NO_BUFS);
 
-    error = otMessageAppend(message, argv[curArg], static_cast<uint16_t>(strlen(argv[curArg])));
+    if (autoGenPayload)
+    {
+        error = WriteCharToBuffer(message, static_cast<uint16_t>(autoGenPayloadLength));
+    }
+    else
+    {
+        error = otMessageAppend(message, argv[curArg], static_cast<uint16_t>(strlen(argv[curArg])));
+    }
     SuccessOrExit(error);
 
     error = otUdpSend(&mSocket, message, &messageInfo);
@@ -174,6 +194,34 @@ exit:
         otMessageFree(message);
     }
 
+    return error;
+}
+
+otError UdpExample::WriteCharToBuffer(otMessage *aMessage, uint16_t aMessageSize)
+{
+    otError error     = OT_ERROR_NONE;
+    uint8_t character = 0x30; // 0
+
+    for (uint16_t index = 0; index < aMessageSize; index++)
+    {
+        SuccessOrExit(error = otMessageAppend(aMessage, &character, 1));
+        character++;
+
+        switch (character)
+        {
+        case 0x3A:            // 9
+            character = 0x41; // A
+            break;
+        case 0x5B:            // Z
+            character = 0x61; // a
+            break;
+        case 0x7B:            // z
+            character = 0x30; // 0
+            break;
+        }
+    }
+
+exit:
     return error;
 }
 
@@ -211,12 +259,8 @@ void UdpExample::HandleUdpReceive(otMessage *aMessage, const otMessageInfo *aMes
     int     length;
 
     mInterpreter.mServer->OutputFormat("%d bytes from ", otMessageGetLength(aMessage) - otMessageGetOffset(aMessage));
-    mInterpreter.mServer->OutputFormat(
-        "%x:%x:%x:%x:%x:%x:%x:%x %d ", HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[0]),
-        HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[1]), HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[2]),
-        HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[3]), HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[4]),
-        HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[5]), HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[6]),
-        HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[7]), aMessageInfo->mPeerPort);
+    mInterpreter.OutputIp6Address(aMessageInfo->mPeerAddr);
+    mInterpreter.mServer->OutputFormat(" %d ", aMessageInfo->mPeerPort);
 
     length      = otMessageRead(aMessage, otMessageGetOffset(aMessage), buf, sizeof(buf) - 1);
     buf[length] = '\0';

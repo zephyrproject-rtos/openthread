@@ -48,7 +48,7 @@ at_exit() {
 
 build() {
     make -f examples/Makefile-posix
-    make -f src/posix/Makefile-posix PLATFORM_NETIF=1 PLATFORM_UDP=1
+    make -f src/posix/Makefile-posix PLATFORM_NETIF=1 PLATFORM_UDP=1 UDP_FORWARD=0
 }
 
 check() {
@@ -69,7 +69,7 @@ check() {
     echo 'RADIO_PTY' $DEVICE_PTY
     echo 'CORE_PTY' $CORE_PTY
 
-    RADIO_NCP_PATH="$(pwd)/$(ls output/*linux*/bin/ot-ncp-radio)"
+    RADIO_NCP_PATH="$(pwd)/$(ls output/*linux*/bin/ot-rcp)"
     $RADIO_NCP_PATH 1 > $RADIO_PTY < $RADIO_PTY &
 
     if [[ "${DAEMON}" = 1 ]]; then
@@ -95,6 +95,8 @@ expect "Done"
 send "extaddr\r\n"
 expect "Done"
 send "ipaddr\r\n"
+expect "Done"
+send "coex\r\n"
 expect "Done"
 wait
 EOF

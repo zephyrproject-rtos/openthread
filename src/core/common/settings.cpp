@@ -31,8 +31,6 @@
  *   This file includes definitions for non-volatile storage of settings.
  */
 
-#define WPP_NAME "settings.tmh"
-
 #include "settings.hpp"
 
 #include <openthread/platform/settings.h>
@@ -46,6 +44,8 @@
 #include "thread/mle.hpp"
 
 namespace ot {
+
+// LCOV_EXCL_START
 
 #if (OPENTHREAD_CONFIG_LOG_UTIL != 0)
 #if (OPENTHREAD_CONFIG_LOG_LEVEL >= OT_LOG_LEVEL_INFO)
@@ -90,9 +90,16 @@ void SettingsBase::LogFailure(otError error, const char *aText, bool aIsDelete) 
 #endif // #if (OPENTHREAD_CONFIG_LOG_LEVEL >= OT_LOG_LEVEL_WARN)
 #endif // #if (OPENTHREAD_CONFIG_LOG_UTIL != 0)
 
+// LCOV_EXCL_STOP
+
 void Settings::Init(void)
 {
     otPlatSettingsInit(&GetInstance());
+}
+
+void Settings::Deinit(void)
+{
+    otPlatSettingsDeinit(&GetInstance());
 }
 
 void Settings::Wipe(void)

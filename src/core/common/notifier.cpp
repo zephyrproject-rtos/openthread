@@ -31,8 +31,6 @@
  *   This file implements the Notifier class.
  */
 
-#define WPP_NAME "notifier.tmh"
-
 #include "notifier.hpp"
 
 #include "common/code_utils.hpp"
@@ -172,7 +170,9 @@ exit:
     return;
 }
 
-#if (OPENTHREAD_CONFIG_LOG_LEVEL >= OT_LOG_LEVEL_INFO) && (OPENTHREAD_CONFIG_LOG_MAC == 1)
+// LCOV_EXCL_START
+
+#if (OPENTHREAD_CONFIG_LOG_LEVEL >= OT_LOG_LEVEL_INFO) && (OPENTHREAD_CONFIG_LOG_CORE == 1)
 
 void Notifier::LogChangedFlags(otChangedFlags aFlags) const
 {
@@ -265,20 +265,12 @@ const char *Notifier::FlagToString(otChangedFlags aFlag) const
         retval = "Child-";
         break;
 
-    case OT_CHANGED_IP6_MULTICAST_SUBSRCRIBED:
+    case OT_CHANGED_IP6_MULTICAST_SUBSCRIBED:
         retval = "Ip6Mult+";
         break;
 
-    case OT_CHANGED_IP6_MULTICAST_UNSUBSRCRIBED:
+    case OT_CHANGED_IP6_MULTICAST_UNSUBSCRIBED:
         retval = "Ip6Mult-";
-        break;
-
-    case OT_CHANGED_COMMISSIONER_STATE:
-        retval = "CommissionerState";
-        break;
-
-    case OT_CHANGED_JOINER_STATE:
-        retval = "JoinerState";
         break;
 
     case OT_CHANGED_THREAD_CHANNEL:
@@ -332,7 +324,7 @@ const char *Notifier::FlagToString(otChangedFlags aFlag) const
     return retval;
 }
 
-#else // #if (OPENTHREAD_CONFIG_LOG_LEVEL >= OT_LOG_LEVEL_INFO) && (OPENTHREAD_CONFIG_LOG_MAC == 1)
+#else // #if (OPENTHREAD_CONFIG_LOG_LEVEL >= OT_LOG_LEVEL_INFO) && (OPENTHREAD_CONFIG_LOG_CORE == 1)
 
 void Notifier::LogChangedFlags(otChangedFlags) const
 {
@@ -343,6 +335,8 @@ const char *Notifier::FlagToString(otChangedFlags) const
     return "";
 }
 
-#endif // #if (OPENTHREAD_CONFIG_LOG_LEVEL >= OT_LOG_LEVEL_INFO) && (OPENTHREAD_CONFIG_LOG_MAC == 1)
+#endif // #if (OPENTHREAD_CONFIG_LOG_LEVEL >= OT_LOG_LEVEL_INFO) && (OPENTHREAD_CONFIG_LOG_CORE == 1)
+
+// LCOV_EXCL_STOP
 
 } // namespace ot

@@ -33,11 +33,7 @@
 
 #if OPENTHREAD_FTD
 
-#define WPP_NAME "network_data_leader_ftd.tmh"
-
 #include "network_data_leader.hpp"
-
-#include <openthread/platform/random.h>
 
 #include "coap/coap_message.hpp"
 #include "common/code_utils.hpp"
@@ -290,32 +286,19 @@ void Leader::HandleCommissioningGet(void *aContext, otMessage *aMessage, const o
 
 void Leader::HandleCommissioningGet(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
-    MeshCoP::Tlv tlv;
-    uint16_t     offset = aMessage.GetOffset();
-    uint8_t      tlvs[NetworkData::kMaxSize];
-    uint8_t      length = 0;
+    uint16_t length = 0;
+    uint16_t offset;
 
-    while (offset < aMessage.GetLength())
-    {
-        aMessage.Read(offset, sizeof(tlv), &tlv);
+    SuccessOrExit(Tlv::GetValueOffset(aMessage, MeshCoP::Tlv::kGet, offset, length));
+    aMessage.SetOffset(offset);
 
-        if (tlv.GetType() == MeshCoP::Tlv::kGet)
-        {
-            length = tlv.GetLength();
-            aMessage.Read(offset + sizeof(MeshCoP::Tlv), length, tlvs);
-            break;
-        }
-
-        offset += sizeof(tlv) + tlv.GetLength();
-    }
-
-    SendCommissioningGetResponse(aMessage, aMessageInfo, tlvs, length);
+exit:
+    SendCommissioningGetResponse(aMessage, length, aMessageInfo);
 }
 
 void Leader::SendCommissioningGetResponse(const Coap::Message &   aRequest,
-                                          const Ip6::MessageInfo &aMessageInfo,
-                                          const uint8_t *         aTlvs,
-                                          uint8_t                 aLength)
+                                          uint16_t                aLength,
+                                          const Ip6::MessageInfo &aMessageInfo)
 {
     otError        error = OT_ERROR_NONE;
     Coap::Message *message;
@@ -325,8 +308,8 @@ void Leader::SendCommissioningGetResponse(const Coap::Message &   aRequest,
 
     VerifyOrExit((message = MeshCoP::NewMeshCoPMessage(Get<Coap::Coap>())) != NULL, error = OT_ERROR_NO_BUFS);
 
-    message->SetDefaultResponseHeader(aRequest);
-    message->SetPayloadMarker();
+    SuccessOrExit(error = message->SetDefaultResponseHeader(aRequest));
+    SuccessOrExit(error = message->SetPayloadMarker());
 
     for (NetworkDataTlv *cur                                            = reinterpret_cast<NetworkDataTlv *>(mTlvs);
          cur < reinterpret_cast<NetworkDataTlv *>(mTlvs + mLength); cur = cur->GetNext())
@@ -349,10 +332,14 @@ void Leader::SendCommissioningGetResponse(const Coap::Message &   aRequest,
     {
         for (index = 0; index < aLength; index++)
         {
+            uint8_t type;
+
+            aRequest.Read(aRequest.GetOffset() + index, sizeof(type), &type);
+
             for (MeshCoP::Tlv *cur                                          = reinterpret_cast<MeshCoP::Tlv *>(data);
                  cur < reinterpret_cast<MeshCoP::Tlv *>(data + length); cur = cur->GetNext())
             {
-                if (cur->GetType() == aTlvs[index])
+                if (cur->GetType() == type)
                 {
                     SuccessOrExit(error = message->AppendTlv(*cur));
                     break;
@@ -389,8 +376,8 @@ void Leader::SendCommissioningSetResponse(const Coap::Message &    aRequest,
 
     VerifyOrExit((message = MeshCoP::NewMeshCoPMessage(Get<Coap::Coap>())) != NULL, error = OT_ERROR_NO_BUFS);
 
-    message->SetDefaultResponseHeader(aRequest);
-    message->SetPayloadMarker();
+    SuccessOrExit(error = message->SetDefaultResponseHeader(aRequest));
+    SuccessOrExit(error = message->SetPayloadMarker());
 
     state.Init();
     state.SetState(aState);
@@ -444,7 +431,7 @@ otError Leader::RlocLookup(uint16_t  aRloc16,
     HasRouteTlv *      hasRoute;
     BorderRouterEntry *borderRouterEntry;
     HasRouteEntry *    hasRouteEntry;
-#if OPENTHREAD_ENABLE_SERVICE
+#if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
     ServiceTlv *service;
     ServerTlv * server;
 #endif
@@ -533,7 +520,7 @@ otError Leader::RlocLookup(uint16_t  aRloc16,
         }
         break;
 
-#if OPENTHREAD_ENABLE_SERVICE
+#if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
 
         case NetworkDataTlv::kTypeService:
         {
@@ -604,7 +591,7 @@ bool Leader::IsStableUpdated(uint8_t *aTlvs, uint8_t aTlvsLength, uint8_t *aTlvs
     bool            rval = false;
     NetworkDataTlv *cur  = reinterpret_cast<NetworkDataTlv *>(aTlvs);
     NetworkDataTlv *end  = reinterpret_cast<NetworkDataTlv *>(aTlvs + aTlvsLength);
-#if OPENTHREAD_ENABLE_SERVICE
+#if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
     ServiceTlv *service;
 #endif
 
@@ -635,7 +622,8 @@ bool Leader::IsStableUpdated(uint8_t *aTlvs, uint8_t aTlvsLength, uint8_t *aTlvs
                 {
                     BorderRouterTlv *borderRouterBase = FindBorderRouter(*prefixBase, true);
 
-                    if (!borderRouterBase || memcmp(borderRouter, borderRouterBase, borderRouter->GetLength()) != 0)
+                    if (!borderRouterBase || (borderRouter->GetLength() != borderRouterBase->GetLength()) ||
+                        (memcmp(borderRouter, borderRouterBase, borderRouter->GetLength()) != 0))
                     {
                         ExitNow(rval = true);
                     }
@@ -645,7 +633,8 @@ bool Leader::IsStableUpdated(uint8_t *aTlvs, uint8_t aTlvsLength, uint8_t *aTlvs
                 {
                     HasRouteTlv *hasRouteBase = FindHasRoute(*prefixBase, true);
 
-                    if (!hasRouteBase || (memcmp(hasRoute, hasRouteBase, hasRoute->GetLength()) != 0))
+                    if (!hasRouteBase || (hasRoute->GetLength() != hasRouteBase->GetLength()) ||
+                        (memcmp(hasRoute, hasRouteBase, hasRoute->GetLength()) != 0))
                     {
                         ExitNow(rval = true);
                     }
@@ -655,7 +644,7 @@ bool Leader::IsStableUpdated(uint8_t *aTlvs, uint8_t aTlvsLength, uint8_t *aTlvs
             break;
         }
 
-#if OPENTHREAD_ENABLE_SERVICE
+#if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
 
         case NetworkDataTlv::kTypeService:
             service = static_cast<ServiceTlv *>(cur);
@@ -796,7 +785,7 @@ exit:
 
 otError Leader::AddNetworkData(uint8_t *aTlvs, uint8_t aTlvsLength, uint8_t *aOldTlvs, uint8_t aOldTlvsLength)
 {
-#if !OPENTHREAD_ENABLE_SERVICE
+#if !OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
     OT_UNUSED_VARIABLE(aOldTlvs);
     OT_UNUSED_VARIABLE(aOldTlvsLength);
 #endif
@@ -816,7 +805,7 @@ otError Leader::AddNetworkData(uint8_t *aTlvs, uint8_t aTlvsLength, uint8_t *aOl
             otDumpDebgNetData("add prefix done", mTlvs, mLength);
             break;
 
-#if OPENTHREAD_ENABLE_SERVICE
+#if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
 
         case NetworkDataTlv::kTypeService:
             SuccessOrExit(error = AddService(*static_cast<ServiceTlv *>(cur), aOldTlvs, aOldTlvsLength));
@@ -872,7 +861,7 @@ exit:
     return error;
 }
 
-#if OPENTHREAD_ENABLE_SERVICE
+#if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
 otError Leader::AddService(ServiceTlv &aService, uint8_t *aOldTlvs, uint8_t aOldTlvsLength)
 {
     otError         error = OT_ERROR_NONE;
@@ -967,7 +956,7 @@ exit:
     return error;
 }
 
-#if OPENTHREAD_ENABLE_SERVICE
+#if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
 otError Leader::AddServer(ServiceTlv &aService, ServerTlv &aServer, uint8_t *aOldTlvs, uint8_t aOldTlvsLength)
 {
     otError     error               = OT_ERROR_NONE;
@@ -1204,9 +1193,9 @@ void Leader::StartContextReuseTimer(uint8_t aContextId)
 {
     mContextLastUsed[aContextId - kMinContextId] = TimerMilli::GetNow();
 
-    if (mContextLastUsed[aContextId - kMinContextId] == 0)
+    if (mContextLastUsed[aContextId - kMinContextId].GetValue() == 0)
     {
-        mContextLastUsed[aContextId - kMinContextId] = 1;
+        mContextLastUsed[aContextId - kMinContextId].SetValue(1);
     }
 
     mTimer.Start(kStateUpdatePeriod);
@@ -1214,7 +1203,7 @@ void Leader::StartContextReuseTimer(uint8_t aContextId)
 
 void Leader::StopContextReuseTimer(uint8_t aContextId)
 {
-    mContextLastUsed[aContextId - kMinContextId] = 0;
+    mContextLastUsed[aContextId - kMinContextId].SetValue(0);
 }
 
 otError Leader::SendServerDataNotification(uint16_t aRloc16)
@@ -1238,7 +1227,7 @@ void Leader::RemoveRloc(uint16_t aRloc16, MatchMode aMatchMode)
     NetworkDataTlv *cur = reinterpret_cast<NetworkDataTlv *>(mTlvs);
     NetworkDataTlv *end;
     PrefixTlv *     prefix;
-#if OPENTHREAD_ENABLE_SERVICE
+#if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
     ServiceTlv *service;
 #endif
 
@@ -1268,7 +1257,7 @@ void Leader::RemoveRloc(uint16_t aRloc16, MatchMode aMatchMode)
             break;
         }
 
-#if OPENTHREAD_ENABLE_SERVICE
+#if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
 
         case NetworkDataTlv::kTypeService:
         {
@@ -1363,7 +1352,7 @@ void Leader::RemoveRloc(PrefixTlv &aPrefix, uint16_t aRloc16, MatchMode aMatchMo
     }
 }
 
-#if OPENTHREAD_ENABLE_SERVICE
+#if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
 void Leader::RemoveRloc(ServiceTlv &aService, uint16_t aRloc16, MatchMode aMatchMode)
 {
     NetworkDataTlv *cur = aService.GetSubTlvs();
@@ -1570,12 +1559,12 @@ void Leader::HandleTimer(void)
 
     for (uint8_t i = 0; i < kNumContextIds; i++)
     {
-        if (mContextLastUsed[i] == 0)
+        if (mContextLastUsed[i].GetValue() == 0)
         {
             continue;
         }
 
-        if ((TimerMilli::GetNow() - mContextLastUsed[i]) >= TimerMilli::SecToMsec(mContextIdReuseDelay))
+        if (TimerMilli::GetNow() - mContextLastUsed[i] >= Time::SecToMsec(mContextIdReuseDelay))
         {
             FreeContext(kMinContextId + i);
         }

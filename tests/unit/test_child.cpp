@@ -41,7 +41,7 @@ static ot::Instance *sInstance;
 
 enum
 {
-    kMaxChildIp6Addresses = OPENTHREAD_CONFIG_IP_ADDRS_PER_CHILD,
+    kMaxChildIp6Addresses = OPENTHREAD_CONFIG_MLE_IP_ADDRS_PER_CHILD,
 };
 
 void VerifyChildIp6Addresses(const Child &aChild, uint8_t aAddressListLength, const Ip6::Address aAddressList[])
@@ -143,7 +143,7 @@ void TestChildIp6Address(void)
 
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     printf("Child state after init");
-    memset(&child, 0, sizeof(child));
+    child.Clear();
     VerifyChildIp6Addresses(child, 0, NULL);
     printf(" -- PASS\n");
 

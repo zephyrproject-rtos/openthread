@@ -189,10 +189,9 @@ public:
      * This constructor initializes the network interface.
      *
      * @param[in]  aInstance        A reference to the OpenThread instance.
-     * @param[in]  aInterfaceId     The interface ID for this object.
      *
      */
-    Netif(Instance &aInstance, int8_t aInterfaceId);
+    Netif(Instance &aInstance);
 
     /**
      * This method returns the next network interface in the list.
@@ -200,14 +199,6 @@ public:
      * @returns A pointer to the next network interface.
      */
     Netif *GetNext(void) const { return mNext; }
-
-    /**
-     * This method returns the network interface identifier.
-     *
-     * @returns The network interface identifier.
-     *
-     */
-    int8_t GetInterfaceId(void) const { return mInterfaceId; }
 
     /**
      * This method registers a callback to notify internal IPv6 address changes.
@@ -360,7 +351,7 @@ public:
      * @retval OT_ERROR_NOT_FOUND  No subsequent external multicast address.
      *
      */
-    otError GetNextExternalMulticast(uint8_t &aIterator, Address &aAddress);
+    otError GetNextExternalMulticast(uint8_t &aIterator, Address &aAddress) const;
 
     /**
      * This method subscribes the network interface to the external (to OpenThread) multicast address.
@@ -400,7 +391,7 @@ public:
      * @retval TRUE   If the multicast promiscuous mode is enabled.
      * @retval FALSE  If the multicast promiscuous mode is disabled.
      */
-    bool IsMulticastPromiscuousEnabled(void) { return mMulticastPromiscuous; }
+    bool IsMulticastPromiscuousEnabled(void) const { return mMulticastPromiscuous; }
 
     /**
      * This method enables multicast promiscuous mode on the network interface.
@@ -409,53 +400,6 @@ public:
      *
      */
     void SetMulticastPromiscuous(bool aEnabled) { mMulticastPromiscuous = aEnabled; }
-
-    /**
-     * This virtual method enqueues an IPv6 messages on this network interface.
-     *
-     * @param[in]  aMessage  A reference to the IPv6 message.
-     *
-     * @retval OT_ERROR_NONE  Successfully enqueued the IPv6 message.
-     *
-     */
-    virtual otError SendMessage(Message &aMessage)
-    {
-        OT_UNUSED_VARIABLE(aMessage);
-        return OT_ERROR_NOT_IMPLEMENTED;
-    }
-
-    /**
-     * This virtual method fills out @p aAddress with the link address.
-     *
-     * @param[out]  aAddress  A reference to the link address.
-     *
-     * @retval OT_ERROR_NONE  Successfully retrieved the link address.
-     *
-     */
-    virtual otError GetLinkAddress(LinkAddress &aAddress) const
-    {
-        OT_UNUSED_VARIABLE(aAddress);
-        return OT_ERROR_NOT_IMPLEMENTED;
-    }
-
-    /**
-     * This virtual method performs a source-destination route lookup.
-     *
-     * @param[in]   aSource       A reference to the IPv6 source address.
-     * @param[in]   aDestination  A reference to the IPv6 destination address.
-     * @param[out]  aPrefixMatch  The longest prefix match result.
-     *
-     * @retval OT_ERROR_NONE      Successfully found a route.
-     * @retval OT_ERROR_NO_ROUTE  No route to destination.
-     *
-     */
-    virtual otError RouteLookup(const Address &aSource, const Address &aDestination, uint8_t *aPrefixMatch)
-    {
-        OT_UNUSED_VARIABLE(aSource);
-        OT_UNUSED_VARIABLE(aDestination);
-        OT_UNUSED_VARIABLE(aPrefixMatch);
-        return OT_ERROR_NOT_IMPLEMENTED;
-    }
 
 protected:
     /**
@@ -480,15 +424,14 @@ private:
 
     NetifUnicastAddress *  mUnicastAddresses;
     NetifMulticastAddress *mMulticastAddresses;
-    int8_t                 mInterfaceId;
     bool                   mMulticastPromiscuous;
     Netif *                mNext;
 
     otIp6AddressCallback mAddressCallback;
     void *               mAddressCallbackContext;
 
-    NetifUnicastAddress   mExtUnicastAddresses[OPENTHREAD_CONFIG_MAX_EXT_IP_ADDRS];
-    NetifMulticastAddress mExtMulticastAddresses[OPENTHREAD_CONFIG_MAX_EXT_MULTICAST_IP_ADDRS];
+    NetifUnicastAddress   mExtUnicastAddresses[OPENTHREAD_CONFIG_IP6_MAX_EXT_UCAST_ADDRS];
+    NetifMulticastAddress mExtMulticastAddresses[OPENTHREAD_CONFIG_IP6_MAX_EXT_MCAST_ADDRS];
 
     static const otNetifMulticastAddress kRealmLocalAllMplForwardersMulticastAddress;
     static const otNetifMulticastAddress kLinkLocalAllNodesMulticastAddress;

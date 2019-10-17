@@ -51,6 +51,7 @@ if OPENTHREAD_BUILD_TESTS
 
 AM_CPPFLAGS                                                         = \
     -DOPENTHREAD_FTD=1                                                \
+    -DOPENTHREAD_CONFIG_LOG_PLATFORM=0                                \
     -I$(top_srcdir)/include                                           \
     -I$(top_srcdir)/src                                               \
     -I$(top_srcdir)/src/core                                          \
@@ -108,6 +109,7 @@ check_PROGRAMS                                                     += \
     test-child-table                                                  \
     test-heap                                                         \
     test-hmac-sha256                                                  \
+    test-ip6-address                                                  \
     test-link-quality                                                 \
     test-lowpan                                                       \
     test-mac-frame                                                    \
@@ -115,6 +117,7 @@ check_PROGRAMS                                                     += \
     test-message-queue                                                \
     test-network-data                                                 \
     test-priority-queue                                               \
+    test-pskc                                                         \
     test-string                                                       \
     test-strlcat                                                      \
     test-strlcpy                                                      \
@@ -122,24 +125,13 @@ check_PROGRAMS                                                     += \
     test-timer                                                        \
     $(NULL)
 
-if OPENTHREAD_ENABLE_COMMISSIONER
-check_PROGRAMS                                                     += \
-    test-pskc                                                         \
-    $(NULL)
-endif
-
 if OPENTHREAD_ENABLE_NCP
 check_PROGRAMS                                                     += \
+    test-hdlc                                                         \
     test-ncp-buffer                                                   \
     test-spinel-decoder                                               \
     test-spinel-encoder                                               \
-    $(NULL)   
-
-if OPENTHREAD_ENABLE_NCP_UART
-check_PROGRAMS                                                     += \
-    test-hdlc                                                         \
     $(NULL)
-endif
 endif
 endif # OPENTHREAD_ENABLE_FTD
 
@@ -186,6 +178,9 @@ test_heap_SOURCES            = test_platform.cpp test_heap.cpp
 
 test_hmac_sha256_LDADD       = $(COMMON_LDADD)
 test_hmac_sha256_SOURCES     = test_platform.cpp test_hmac_sha256.cpp
+
+test_ip6_address_LDADD       = $(COMMON_LDADD)
+test_ip6_address_SOURCES     = test_platform.cpp test_ip6_address.cpp
 
 test_link_quality_LDADD      = $(COMMON_LDADD)
 test_link_quality_SOURCES    = test_platform.cpp test_link_quality.cpp
@@ -239,6 +234,7 @@ test_toolchain_LDADD         = $(NULL)
 test_toolchain_SOURCES       = test_toolchain.cpp test_toolchain_c.c
 
 PRETTY_FILES                                                        = \
+    $(noinst_HEADERS)                                                 \
     $(test_address_sanitizer_SOURCES)                                 \
     $(test_aes_SOURCES)                                               \
     $(test_child_SOURCES)                                             \

@@ -43,6 +43,7 @@
 #include "common/tlvs.hpp"
 #include "meshcop/timestamp.hpp"
 #include "net/ip6_address.hpp"
+#include "thread/device_mode.hpp"
 #include "thread/mle_constants.hpp"
 
 namespace ot {
@@ -110,7 +111,7 @@ public:
 
         /**
          * Applicable/Required only when time synchronization service
-         * (`OPENTHREAD_CONFIG_ENABLE_TIME_SYNC`) is enabled.
+         * (`OPENTHREAD_CONFIG_TIME_SYNC_ENABLE`) is enabled.
          *
          */
         kTimeRequest   = 252, ///< Time Request TLV
@@ -196,7 +197,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(Tlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(Tlv); }
 
     /**
      * This method returns the RLOC16 value.
@@ -243,15 +244,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(Tlv); }
-
-    enum
-    {
-        kModeRxOnWhenIdle      = 1 << 3,
-        kModeSecureDataRequest = 1 << 2,
-        kModeFullThreadDevice  = 1 << 1,
-        kModeFullNetworkData   = 1 << 0,
-    };
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(Tlv); }
 
     /**
      * This method returns the Mode value.
@@ -259,7 +252,7 @@ public:
      * @returns The Mode value.
      *
      */
-    uint8_t GetMode(void) const { return mMode; }
+    DeviceMode GetMode(void) const { return DeviceMode(mMode); }
 
     /**
      * This method sets the Mode value.
@@ -267,7 +260,7 @@ public:
      * @param[in]  aMode  The Mode value.
      *
      */
-    void SetMode(uint8_t aMode) { mMode = aMode; }
+    void SetMode(DeviceMode aMode) { mMode = aMode.Get(); }
 
 private:
     uint8_t mMode;
@@ -298,7 +291,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(Tlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(Tlv); }
 
     /**
      * This method returns the Timeout value.
@@ -330,6 +323,7 @@ class ChallengeTlv : public Tlv
 public:
     enum
     {
+        kMinSize = 4, ///< Minimum size in bytes (Thread Specification).
         kMaxSize = 8, ///< Maximum size in bytes (Thread Specification).
     };
 
@@ -350,7 +344,18 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() >= 4 && GetLength() <= 8; }
+    bool IsValid(void) const { return GetLength() >= kMinSize; }
+
+    /**
+     * This method returns the Challenge length.
+     *
+     * @returns The Challenge length.
+     *
+     */
+    uint8_t GetChallengeLength(void) const
+    {
+        return GetLength() <= sizeof(mChallenge) ? GetLength() : sizeof(mChallenge);
+    }
 
     /**
      * This method returns a pointer to the Challenge value.
@@ -366,7 +371,7 @@ public:
      * @param[in]  aChallenge  A pointer to the Challenge value.
      *
      */
-    void SetChallenge(const uint8_t *aChallenge) { memcpy(mChallenge, aChallenge, GetLength()); }
+    void SetChallenge(const uint8_t *aChallenge) { memcpy(mChallenge, aChallenge, GetChallengeLength()); }
 
 private:
     uint8_t mChallenge[kMaxSize];
@@ -382,6 +387,7 @@ class ResponseTlv : public Tlv
 public:
     enum
     {
+        kMinSize = 4, ///< Minimum size in bytes (Thread Specification).
         kMaxSize = 8, ///< Maximum size in bytes (Thread Specification).
     };
 
@@ -398,11 +404,22 @@ public:
     /**
      * This method indicates whether or not the TLV appears to be well-formed.
      *
+     * OpenThread only generates Challenge values with 8-byte length. As a result, Response value lengths must also
+     * have 8-byte length.
+     *
      * @retval TRUE   If the TLV appears to be well-formed.
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(Tlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(Tlv); }
+
+    /**
+     * This method returns the Response length.
+     *
+     * @returns The Response length.
+     *
+     */
+    uint8_t GetResponseLength(void) const { return GetLength() <= sizeof(mResponse) ? GetLength() : sizeof(mResponse); }
 
     /**
      * This method returns a pointer to the Response value.
@@ -418,7 +435,7 @@ public:
      * @param[in]  aResponse  A pointer to the Response value.
      *
      */
-    void SetResponse(const uint8_t *aResponse) { memcpy(mResponse, aResponse, GetLength()); }
+    void SetResponse(const uint8_t *aResponse) { memcpy(mResponse, aResponse, GetResponseLength()); }
 
 private:
     uint8_t mResponse[kMaxSize];
@@ -449,7 +466,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(Tlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(Tlv); }
 
     /**
      * This method returns the Frame Counter value.
@@ -471,7 +488,7 @@ private:
     uint32_t mFrameCounter;
 } OT_TOOL_PACKED_END;
 
-#if !OPENTHREAD_CONFIG_ENABLE_LONG_ROUTES
+#if !OPENTHREAD_CONFIG_MLE_LONG_ROUTES_ENABLE
 
 /**
  * This class implements Source Address TLV generation and parsing.
@@ -489,6 +506,8 @@ public:
     {
         SetType(kRoute);
         SetLength(sizeof(*this) - sizeof(Tlv));
+        memset(mRouterIdMask, 0, sizeof(mRouterIdMask));
+        memset(mRouteData, 0, sizeof(mRouteData));
     }
 
     /**
@@ -498,11 +517,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const
-    {
-        return GetLength() >= sizeof(mRouterIdSequence) + sizeof(mRouterIdMask) &&
-               GetLength() <= sizeof(*this) - sizeof(Tlv);
-    }
+    bool IsValid(void) const { return GetLength() >= sizeof(mRouterIdSequence) + sizeof(mRouterIdMask); }
 
     /**
      * This method returns the Router ID Sequence value.
@@ -647,7 +662,7 @@ private:
     uint8_t mRouteData[kMaxRouterId + 1];
 } OT_TOOL_PACKED_END;
 
-#else // OPENTHREAD_CONFIG_ENABLE_LONG_ROUTES
+#else // OPENTHREAD_CONFIG_MLE_LONG_ROUTES_ENABLE
 
 /**
  * This class implements Source Address TLV generation and parsing.
@@ -674,11 +689,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const
-    {
-        return GetLength() >= sizeof(mRouterIdSequence) + sizeof(mRouterIdMask) &&
-               GetLength() <= sizeof(*this) - sizeof(Tlv);
-    }
+    bool IsValid(void) const { return GetLength() >= sizeof(mRouterIdSequence) + sizeof(mRouterIdMask); }
 
     /**
      * This method returns the Router ID Sequence value.
@@ -861,7 +872,7 @@ private:
     uint8_t mRouteData[kMaxRouterId + 1 + kMaxRouterId / 2 + 1];
 } OT_TOOL_PACKED_END;
 
-#endif // OPENTHREAD_CONFIG_ENABLE_LONG_ROUTES
+#endif // OPENTHREAD_CONFIG_MLE_LONG_ROUTES_ENABLE
 
 /**
  * This class implements Source Address TLV generation and parsing.
@@ -888,7 +899,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(Tlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(Tlv); }
 
     /**
      * This method returns the Frame Counter value.
@@ -935,7 +946,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(Tlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(Tlv); }
 
     /**
      * This method returns the RLOC16 value.
@@ -982,7 +993,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(Tlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(Tlv); }
 
     /**
      * This method returns the Partition ID value.
@@ -1152,7 +1163,7 @@ public:
      * @retval OT_ERROR_NOT_FOUND   No subsequent Tlv exists in TlvRequestTlv.
      *
      */
-    otError GetNextTlv(TlvRequestIterator &aIterator, uint8_t &aTlv)
+    otError GetNextTlv(TlvRequestIterator &aIterator, uint8_t &aTlv) const
     {
         otError error = OT_ERROR_NOT_FOUND;
 
@@ -1207,7 +1218,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(Tlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(Tlv); }
 
     enum
     {
@@ -1233,7 +1244,7 @@ public:
      * @retval TRUE   If the Router flag is set.
      * @retval FALSE  If the Router flag is not set.
      */
-    bool IsRouterFlagSet(void) { return (mMask & kRouterFlag) != 0; }
+    bool IsRouterFlagSet(void) const { return (mMask & kRouterFlag) != 0; }
 
     /**
      * This method clears the End Device flag.
@@ -1253,7 +1264,7 @@ public:
      * @retval TRUE   If the End Device flag is set.
      * @retval FALSE  If the End Device flag is not set.
      */
-    bool IsEndDeviceFlagSet(void) { return (mMask & kEndDeviceFlag) != 0; }
+    bool IsEndDeviceFlagSet(void) const { return (mMask & kEndDeviceFlag) != 0; }
 
     /**
      * This method sets the Mask byte value.
@@ -1326,7 +1337,7 @@ public:
      */
     void SetParentPriority(int8_t aParentPriority)
     {
-        mParentPriority = (aParentPriority << kParentPriorityOffset) & kParentPriorityMask;
+        mParentPriority = (static_cast<uint8_t>(aParentPriority) << kParentPriorityOffset) & kParentPriorityMask;
     }
 
     /**
@@ -1518,7 +1529,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(Tlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(Tlv); }
 
     /**
      * This method returns the Link Margin value.
@@ -1565,7 +1576,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(Tlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(Tlv); }
 
     /**
      * Status values.
@@ -1620,7 +1631,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(Tlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(Tlv); }
 
     /**
      * This method returns the Version value.
@@ -1762,7 +1773,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(Tlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(Tlv); }
 
     /**
      * This method returns the Channel Page value.
@@ -1826,7 +1837,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(Tlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(Tlv); }
 
     /**
      * This method returns the PAN ID value.
@@ -1848,7 +1859,7 @@ private:
     uint16_t mPanId;
 } OT_TOOL_PACKED_END;
 
-#if OPENTHREAD_CONFIG_ENABLE_TIME_SYNC
+#if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
 /**
  * This class implements Time Request TLV generation and parsing.
  *
@@ -1874,7 +1885,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(Tlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(Tlv); }
 } OT_TOOL_PACKED_END;
 
 /**
@@ -1902,7 +1913,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(Tlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(Tlv); }
 
     /**
      * This method returns the time sync period.
@@ -1966,7 +1977,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(Tlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(Tlv); }
 
     /**
      * This method returns the XTAL accuracy.
@@ -1987,7 +1998,7 @@ public:
 private:
     uint16_t mXtalAccuracy;
 } OT_TOOL_PACKED_END;
-#endif // OPENTHREAD_CONFIG_ENABLE_TIME_SYNC
+#endif // OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
 
 /**
  * This class implements Active Timestamp TLV generation and parsing.
@@ -2015,7 +2026,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(Tlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(Tlv); }
 } OT_TOOL_PACKED_END;
 
 /**
@@ -2044,7 +2055,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(Tlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(Tlv); }
 } OT_TOOL_PACKED_END;
 
 /**

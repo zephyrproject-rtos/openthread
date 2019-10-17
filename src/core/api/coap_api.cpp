@@ -39,7 +39,7 @@
 #include "common/instance.hpp"
 #include "common/locator-getters.hpp"
 
-#if OPENTHREAD_ENABLE_APPLICATION_COAP
+#if OPENTHREAD_CONFIG_COAP_API_ENABLE
 
 using namespace ot;
 
@@ -64,9 +64,20 @@ void otCoapMessageInit(otMessage *aMessage, otCoapType aType, otCoapCode aCode)
     static_cast<Coap::Message *>(aMessage)->Init(aType, aCode);
 }
 
-void otCoapMessageSetToken(otMessage *aMessage, const uint8_t *aToken, uint8_t aTokenLength)
+otError otCoapMessageInitResponse(otMessage *aResponse, const otMessage *aRequest, otCoapType aType, otCoapCode aCode)
 {
-    static_cast<Coap::Message *>(aMessage)->SetToken(aToken, aTokenLength);
+    Coap::Message &      response = *static_cast<Coap::Message *>(aResponse);
+    const Coap::Message &request  = *static_cast<const Coap::Message *>(aRequest);
+
+    response.Init(aType, aCode);
+    response.SetMessageId(request.GetMessageId());
+
+    return response.SetToken(request.GetToken(), request.GetTokenLength());
+}
+
+otError otCoapMessageSetToken(otMessage *aMessage, const uint8_t *aToken, uint8_t aTokenLength)
+{
+    return static_cast<Coap::Message *>(aMessage)->SetToken(aToken, aTokenLength);
 }
 
 void otCoapMessageGenerateToken(otMessage *aMessage, uint8_t aTokenLength)
@@ -117,11 +128,6 @@ otError otCoapMessageAppendUriQueryOption(otMessage *aMessage, const char *aUriQ
 otError otCoapMessageSetPayloadMarker(otMessage *aMessage)
 {
     return static_cast<Coap::Message *>(aMessage)->SetPayloadMarker();
-}
-
-void otCoapMessageSetMessageId(otMessage *aMessage, uint16_t aMessageId)
-{
-    return static_cast<Coap::Message *>(aMessage)->SetMessageId(aMessageId);
 }
 
 otCoapType otCoapMessageGetType(const otMessage *aMessage)
@@ -225,4 +231,4 @@ otError otCoapSendResponse(otInstance *aInstance, otMessage *aMessage, const otM
                                                      *static_cast<const Ip6::MessageInfo *>(aMessageInfo));
 }
 
-#endif // OPENTHREAD_ENABLE_APPLICATION_COAP
+#endif // OPENTHREAD_CONFIG_COAP_API_ENABLE

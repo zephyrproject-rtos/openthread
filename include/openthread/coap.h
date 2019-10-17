@@ -50,8 +50,7 @@ extern "C" {
  * @brief
  *   This module includes functions that control CoAP communication.
  *
- *   The functions in this module are available when application-coap feature (`OPENTHREAD_ENABLE_APPLICATION_COAP`) is
- *   enabled.
+ *   The functions in this module are available when CoAP API feature (`OPENTHREAD_CONFIG_COAP_API_ENABLE`) is enabled.
  *
  * @{
  *
@@ -344,14 +343,33 @@ typedef struct otCoapResource
 void otCoapMessageInit(otMessage *aMessage, otCoapType aType, otCoapCode aCode);
 
 /**
+ * This function initializes a response message.
+ *
+ * @note Both message ID and token are set according to @p aRequest.
+ *
+ * @param[inout] aResponse  A pointer to the CoAP response message.
+ * @param[in]    aRequest   A pointer to the CoAP request message.
+ * @param[in]    aType      CoAP message type.
+ * @param[in]    aCode      CoAP message code.
+ *
+ * @retval OT_ERROR_NONE     Successfully initialized the response message.
+ * @retval OT_ERROR_NO_BUFS  Insufficient message buffers available to initialize the response message.
+ *
+ */
+otError otCoapMessageInitResponse(otMessage *aResponse, const otMessage *aRequest, otCoapType aType, otCoapCode aCode);
+
+/**
  * This function sets the Token value and length in a header.
  *
  * @param[inout]  aMessage          A pointer to the CoAP message.
  * @param[in]     aToken            A pointer to the Token value.
  * @param[in]     aTokenLength      The Length of @p aToken.
  *
+ * @retval OT_ERROR_NONE     Successfully set the Token value.
+ * @retval OT_ERROR_NO_BUFS  Insufficient buffers to set the Token value.
+ *
  */
-void otCoapMessageSetToken(otMessage *aMessage, const uint8_t *aToken, uint8_t aTokenLength);
+otError otCoapMessageSetToken(otMessage *aMessage, const uint8_t *aToken, uint8_t aTokenLength);
 
 /**
  * This function sets the Token length and randomizes its value.
@@ -487,15 +505,6 @@ otError otCoapMessageAppendUriQueryOption(otMessage *aMessage, const char *aUriQ
  *
  */
 otError otCoapMessageSetPayloadMarker(otMessage *aMessage);
-
-/**
- * This function sets the Message ID value.
- *
- * @param[in]  aMessage     A pointer to the CoAP message.
- * @param[in]  aMessageId   The Message ID value.
- *
- */
-void otCoapMessageSetMessageId(otMessage *aMessage, uint16_t aMessageId);
 
 /**
  * This function returns the Type value.

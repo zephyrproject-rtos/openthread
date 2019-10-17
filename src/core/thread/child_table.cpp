@@ -102,10 +102,18 @@ ChildTable::ChildTable(Instance &aInstance)
     : InstanceLocator(aInstance)
     , mMaxChildrenAllowed(kMaxChildren)
 {
-    memset(mChildren, 0, sizeof(mChildren));
+    Clear();
 }
 
-Child *ChildTable::GetChildAtIndex(uint8_t aChildIndex)
+void ChildTable::Clear(void)
+{
+    for (Child *child = &mChildren[0]; child < OT_ARRAY_END(mChildren); child++)
+    {
+        child->Clear();
+    }
+}
+
+Child *ChildTable::GetChildAtIndex(uint16_t aChildIndex)
 {
     Child *child = NULL;
 
@@ -124,7 +132,7 @@ Child *ChildTable::GetNewChild(void)
     {
         if (child->GetState() == Child::kStateInvalid)
         {
-            memset(child, 0, sizeof(Child));
+            child->Clear();
             ExitNow();
         }
     }
@@ -209,9 +217,9 @@ exit:
     return rval;
 }
 
-uint8_t ChildTable::GetNumChildren(StateFilter aFilter) const
+uint16_t ChildTable::GetNumChildren(StateFilter aFilter) const
 {
-    uint8_t      numChildren = 0;
+    uint16_t     numChildren = 0;
     const Child *child       = mChildren;
 
     for (uint16_t num = mMaxChildrenAllowed; num != 0; num--, child++)
@@ -225,7 +233,7 @@ uint8_t ChildTable::GetNumChildren(StateFilter aFilter) const
     return numChildren;
 }
 
-otError ChildTable::SetMaxChildrenAllowed(uint8_t aMaxChildren)
+otError ChildTable::SetMaxChildrenAllowed(uint16_t aMaxChildren)
 {
     otError error = OT_ERROR_NONE;
 

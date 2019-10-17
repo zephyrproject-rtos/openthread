@@ -40,7 +40,28 @@ OPENTHREAD_COMMON_FLAGS                                          := \
     -DPACKAGE_TARNAME=\"openthread\"                                \
     -DVERSION=\"$(OPENTHREAD_DEFAULT_VERSION)\"                     \
     -DPACKAGE_URL=\"http://github.com/openthread/openthread\"       \
+    -DOPENTHREAD_CONFIG_MAC_FILTER_ENABLE=1                         \
     $(NULL)
+
+# Enable required features for on-device tests.
+ifeq ($(TARGET_BUILD_VARIANT),eng)
+OPENTHREAD_COMMON_FLAGS                                          += \
+    -DOPENTHREAD_CONFIG_DIAG_ENABLE=1                               \
+    $(NULL)
+endif
+
+# Enable all optional features for CI tests.
+ifeq ($(TARGET_PRODUCT),generic)
+OPENTHREAD_COMMON_FLAGS                                          += \
+    -DOPENTHREAD_CONFIG_COAP_API_ENABLE=1                           \
+    -DOPENTHREAD_CONFIG_COMMISSIONER_ENABLE=1                       \
+    -DOPENTHREAD_CONFIG_DHCP6_CLIENT_ENABLE=1                       \
+    -DOPENTHREAD_CONFIG_DHCP6_SERVER_ENABLE=1                       \
+    -DOPENTHREAD_CONFIG_DNS_CLIENT_ENABLE=1                         \
+    -DOPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE=0                   \
+    -DOPENTHREAD_CONFIG_TMF_NETWORK_DIAG_MTD_ENABLE=1               \
+    $(NULL)
+endif
 
 include $(CLEAR_VARS)
 
@@ -68,14 +89,12 @@ LOCAL_C_INCLUDES                                         := \
     $(NULL)
 
 LOCAL_CFLAGS                                                                := \
-    -D_GNU_SOURCE                                                              \
     -DMBEDTLS_CONFIG_FILE=\"mbedtls-config.h\"                                 \
     -DOPENTHREAD_CONFIG_FILE=\<openthread-config-android.h\>                   \
     $(OPENTHREAD_COMMON_FLAGS)                                                 \
     -DOPENTHREAD_CONFIG_POSIX_APP_ENABLE_PTY_DEVICE=1                          \
     -DOPENTHREAD_FTD=1                                                         \
     -DOPENTHREAD_POSIX=1                                                       \
-    -DOPENTHREAD_PROJECT_CORE_CONFIG_FILE=\"openthread-core-posix-config.h\"   \
     -DSPINEL_PLATFORM_HEADER=\"spinel_platform.h\"                             \
     $(NULL)
 
@@ -93,6 +112,7 @@ LOCAL_SRC_FILES                                          := \
     src/core/api/crypto_api.cpp                             \
     src/core/api/dataset_api.cpp                            \
     src/core/api/dataset_ftd_api.cpp                        \
+    src/core/api/diags_api.cpp                              \
     src/core/api/dns_api.cpp                                \
     src/core/api/icmp6_api.cpp                              \
     src/core/api/instance_api.cpp                           \
@@ -104,6 +124,8 @@ LOCAL_SRC_FILES                                          := \
     src/core/api/logging_api.cpp                            \
     src/core/api/message_api.cpp                            \
     src/core/api/netdata_api.cpp                            \
+    src/core/api/random_crypto_api.cpp                      \
+    src/core/api/random_noncrypto_api.cpp                   \
     src/core/api/server_api.cpp                             \
     src/core/api/tasklet_api.cpp                            \
     src/core/api/thread_api.cpp                             \
@@ -117,6 +139,7 @@ LOCAL_SRC_FILES                                          := \
     src/core/common/logging.cpp                             \
     src/core/common/message.cpp                             \
     src/core/common/notifier.cpp                            \
+    src/core/common/random_manager.cpp                      \
     src/core/common/settings.cpp                            \
     src/core/common/string.cpp                              \
     src/core/common/tasklet.cpp                             \
@@ -129,7 +152,10 @@ LOCAL_SRC_FILES                                          := \
     src/core/crypto/mbedtls.cpp                             \
     src/core/crypto/pbkdf2_cmac.cpp                         \
     src/core/crypto/sha256.cpp                              \
+    src/core/diags/factory_diags.cpp                        \
     src/core/mac/channel_mask.cpp                           \
+    src/core/mac/data_poll_handler.cpp                      \
+    src/core/mac/data_poll_sender.cpp                       \
     src/core/mac/mac.cpp                                    \
     src/core/mac/mac_filter.cpp                             \
     src/core/mac/mac_frame.cpp                              \
@@ -160,16 +186,17 @@ LOCAL_SRC_FILES                                          := \
     src/core/net/ip6_filter.cpp                             \
     src/core/net/ip6_headers.cpp                            \
     src/core/net/ip6_mpl.cpp                                \
-    src/core/net/ip6_routes.cpp                             \
     src/core/net/netif.cpp                                  \
     src/core/net/udp6.cpp                                   \
-    src/core/phy/radio_weak.cpp                             \
+    src/core/radio/radio_callbacks.cpp                      \
+    src/core/radio/radio_platform.cpp                       \
     src/core/thread/address_resolver.cpp                    \
     src/core/thread/announce_begin_server.cpp               \
     src/core/thread/announce_sender.cpp                     \
     src/core/thread/child_table.cpp                         \
-    src/core/thread/data_poll_manager.cpp                   \
+    src/core/thread/device_mode.cpp                         \
     src/core/thread/energy_scan_server.cpp                  \
+    src/core/thread/indirect_sender.cpp                     \
     src/core/thread/key_manager.cpp                         \
     src/core/thread/link_quality.cpp                        \
     src/core/thread/lowpan.cpp                              \
@@ -198,18 +225,16 @@ LOCAL_SRC_FILES                                          := \
     src/core/utils/missing_strnlen.c                        \
     src/core/utils/parse_cmdline.cpp                        \
     src/core/utils/slaac_address.cpp                        \
-    src/diag/diag_process.cpp                               \
-    src/diag/openthread-diag.cpp                            \
     src/ncp/hdlc.cpp                                        \
     src/ncp/spinel.c                                        \
     src/ncp/spinel_decoder.cpp                              \
     src/ncp/spinel_encoder.cpp                              \
     src/posix/platform/alarm.c                              \
+    src/posix/platform/entropy.c                            \
     src/posix/platform/hdlc_interface.cpp                   \
     src/posix/platform/logging.c                            \
     src/posix/platform/misc.c                               \
     src/posix/platform/radio_spinel.cpp                     \
-    src/posix/platform/random.c                             \
     src/posix/platform/settings.cpp                         \
     src/posix/platform/system.c                             \
     src/posix/platform/uart.c                               \
@@ -242,6 +267,12 @@ LOCAL_SRC_FILES                                          := \
 
 include $(OT_EXTRA_BUILD_CONFIG)
 
+ifeq ($(filter -DOPENTHREAD_PROJECT_CORE_CONFIG_FILE=%,$(LOCAL_CFLAGS)),)
+LOCAL_CFLAGS                                                                += \
+    -DOPENTHREAD_PROJECT_CORE_CONFIG_FILE=\"openthread-core-posix-config.h\"   \
+    $(NULL)
+endif
+
 include $(BUILD_STATIC_LIBRARY)
 
 include $(CLEAR_VARS)
@@ -260,7 +291,6 @@ LOCAL_C_INCLUDES                                         := \
     $(NULL)
 
 LOCAL_CFLAGS                                                                := \
-    -D_GNU_SOURCE                                                              \
     -DMBEDTLS_CONFIG_FILE=\"mbedtls-config.h\"                                 \
     -DOPENTHREAD_CONFIG_FILE=\<openthread-config-android.h\>                   \
     $(OPENTHREAD_COMMON_FLAGS)                                                 \
@@ -269,7 +299,6 @@ LOCAL_CFLAGS                                                                := \
     -DOPENTHREAD_FTD=1                                                         \
     -DOPENTHREAD_POSIX=1                                                       \
     -DOPENTHREAD_POSIX_APP_TYPE=2                                              \
-    -DOPENTHREAD_PROJECT_CORE_CONFIG_FILE=\"openthread-core-posix-config.h\"   \
     -DSPINEL_PLATFORM_HEADER=\"spinel_platform.h\"                             \
     $(NULL)
 
@@ -283,8 +312,10 @@ LOCAL_LDLIBS                               := \
 LOCAL_SRC_FILES                            := \
     src/cli/cli.cpp                           \
     src/cli/cli_coap.cpp                      \
+    src/cli/cli_commissioner.cpp              \
     src/cli/cli_console.cpp                   \
     src/cli/cli_dataset.cpp                   \
+    src/cli/cli_joiner.cpp                    \
     src/cli/cli_server.cpp                    \
     src/cli/cli_uart.cpp                      \
     src/cli/cli_udp.cpp                       \
@@ -292,6 +323,12 @@ LOCAL_SRC_FILES                            := \
     $(NULL)
 
 include $(OT_EXTRA_BUILD_CONFIG)
+
+ifeq ($(filter -DOPENTHREAD_PROJECT_CORE_CONFIG_FILE=%,$(LOCAL_CFLAGS)),)
+LOCAL_CFLAGS                                                                += \
+    -DOPENTHREAD_PROJECT_CORE_CONFIG_FILE=\"openthread-core-posix-config.h\"   \
+    $(NULL)
+endif
 
 LOCAL_STATIC_LIBRARIES = ot-core
 include $(BUILD_EXECUTABLE)
@@ -312,7 +349,6 @@ LOCAL_C_INCLUDES                                         := \
     $(NULL)
 
 LOCAL_CFLAGS                                                                := \
-    -D_GNU_SOURCE                                                              \
     -DMBEDTLS_CONFIG_FILE=\"mbedtls-config.h\"                                 \
     -DOPENTHREAD_CONFIG_FILE=\<openthread-config-android.h\>                   \
     $(OPENTHREAD_COMMON_FLAGS)                                                 \
@@ -320,7 +356,6 @@ LOCAL_CFLAGS                                                                := \
     -DOPENTHREAD_FTD=1                                                         \
     -DOPENTHREAD_POSIX=1                                                       \
     -DOPENTHREAD_POSIX_APP_TYPE=1                                              \
-    -DOPENTHREAD_PROJECT_CORE_CONFIG_FILE=\"openthread-core-posix-config.h\"   \
     -DSPINEL_PLATFORM_HEADER=\"spinel_platform.h\"                             \
     $(NULL)
 
@@ -343,6 +378,12 @@ LOCAL_SRC_FILES                            := \
     $(NULL)
 
 include $(OT_EXTRA_BUILD_CONFIG)
+
+ifeq ($(filter -DOPENTHREAD_PROJECT_CORE_CONFIG_FILE=%,$(LOCAL_CFLAGS)),)
+LOCAL_CFLAGS                                                                += \
+    -DOPENTHREAD_PROJECT_CORE_CONFIG_FILE=\"openthread-core-posix-config.h\"   \
+    $(NULL)
+endif
 
 LOCAL_STATIC_LIBRARIES = ot-core
 include $(BUILD_EXECUTABLE)

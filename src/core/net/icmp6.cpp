@@ -31,8 +31,6 @@
  *   This file implements ICMPv6.
  */
 
-#define WPP_NAME "icmp6.tmh"
-
 #include "icmp6.hpp"
 
 #include "utils/wrap_string.h"
@@ -233,8 +231,6 @@ otError Icmp::HandleEchoRequest(Message &aRequestMessage, const MessageInfo &aMe
     {
         replyMessageInfo.SetSockAddr(aMessageInfo.GetSockAddr());
     }
-
-    replyMessageInfo.SetInterfaceId(aMessageInfo.mInterfaceId);
 
     SuccessOrExit(error = Get<Ip6>().SendDatagram(*replyMessage, replyMessageInfo, kProtoIcmp6));
 

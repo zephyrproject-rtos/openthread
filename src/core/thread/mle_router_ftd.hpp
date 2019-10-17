@@ -282,7 +282,7 @@ public:
      * @returns The current router selection jitter timeout value.
      *
      */
-    uint8_t GetRouterSelectionJitterTimeout(void) { return mRouterSelectionJitterTimeout; }
+    uint8_t GetRouterSelectionJitterTimeout(void) const { return mRouterSelectionJitterTimeout; }
 
     /**
      * This method returns the ROUTER_UPGRADE_THRESHOLD value.
@@ -315,17 +315,6 @@ public:
      *
      */
     void SetRouterDowngradeThreshold(uint8_t aThreshold) { mRouterDowngradeThreshold = aThreshold; }
-
-    /**
-     * This method removes a link to a neighbor.
-     *
-     * @param[in]  aAddress  The link address of the neighbor.
-     *
-     * @retval OT_ERROR_NONE       Successfully removed the neighbor.
-     * @retval OT_ERROR_NOT_FOUND  Could not find the neighbor.
-     *
-     */
-    otError RemoveNeighbor(const Mac::Address &aAddress);
 
     /**
      * This method removes a link to a neighbor.
@@ -430,7 +419,7 @@ public:
      * @param[out]  aChildInfo   The child information.
      *
      */
-    otError GetChildInfoByIndex(uint8_t aChildIndex, otChildInfo &aChildInfo);
+    otError GetChildInfoByIndex(uint16_t aChildIndex, otChildInfo &aChildInfo);
 
     /**
      * This methods gets the next IPv6 address (using an iterator) for a given child.
@@ -445,7 +434,7 @@ public:
      * @retval OT_ERROR_INVALID_ARGS  Child at @p aChildIndex is not valid.
      *
      */
-    otError GetChildNextIp6Address(uint8_t aChildIndex, Child::Ip6AddressIterator &aIterator, Ip6::Address &aAddress);
+    otError GetChildNextIp6Address(uint16_t aChildIndex, Child::Ip6AddressIterator &aIterator, Ip6::Address &aAddress);
 
     /**
      * This method indicates whether or not the RLOC16 is an MTD child of this device.
@@ -550,7 +539,7 @@ public:
 
     otError SendLinkRequest(Neighbor *aNeighbor);
 
-#if OPENTHREAD_CONFIG_ENABLE_STEERING_DATA_SET_OOB
+#if OPENTHREAD_CONFIG_MLE_STEERING_DATA_SET_OOB_ENABLE
     /**
      * This method sets steering data out of band
      *
@@ -559,11 +548,9 @@ public:
      *                          All 0xFFs sets steering data to 0xFF
      *                          Anything else is used to compute the bloom filter
      *
-     * @retval OT_ERROR_NONE  Steering data was set
-     *
      */
-    otError SetSteeringData(const Mac::ExtAddress *aExtAddress);
-#endif // OPENTHREAD_CONFIG_ENABLE_STEERING_DATA_SET_OOB
+    void SetSteeringData(const Mac::ExtAddress *aExtAddress);
+#endif // OPENTHREAD_CONFIG_MLE_STEERING_DATA_SET_OOB_ENABLE
 
     /**
      * This method gets the assigned parent priority.
@@ -597,23 +584,27 @@ public:
     otError GetMaxChildTimeout(uint32_t &aTimeout) const;
 
     /**
-     * This method sets the "child table changed" callback function.
+     * This method register the "neighbor table changed" callback function.
      *
-     * The provided callback (if non-NULL) will be invoked when a child entry is being added/remove to/from the child
-     * table. Subsequent calls to this method will overwrite the previous callback.
+     * The provided callback (if non-NULL) will be invoked when a child/router entry is being added/remove to/from the
+     * neighbor table. Subsequent calls to this method will overwrite the previous callback.
      *
      * @param[in] aCallback    A pointer to callback handler function.
      *
      */
-    void SetChildTableChangedCallback(otThreadChildTableCallback aCallback) { mChildTableChangedCallback = aCallback; }
+    void RegisterNeighborTableChangedCallback(otNeighborTableCallback aCallback)
+    {
+        mNeighborTableChangedCallback = aCallback;
+    }
 
     /**
-     * This method gets the "child table changed" callback function.
+     * This method signals a "neighbor table changed" events (invoking the registered callback function).
      *
-     * @returns  The callback function pointer.
+     * @param[in] aEvent     The event to emit (child/router added/removed).
+     * @param[in] aNeighbor  The neighbor that is being added/removed.
      *
      */
-    otThreadChildTableCallback GetChildTableChangedCallback(void) const { return mChildTableChangedCallback; }
+    void Signal(otNeighborTableEvent aEvent, Neighbor &aNeighbor);
 
     /**
      * This method returns whether the device has any sleepy children subscribed the address.
@@ -654,7 +645,7 @@ public:
      */
     static uint8_t LinkQualityToCost(uint8_t aLinkQuality);
 
-#if OPENTHREAD_CONFIG_ENABLE_TIME_SYNC
+#if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
     /**
      * This method generates an MLE Time Synchronization message.
      *
@@ -679,6 +670,7 @@ private:
     otError AppendActiveDataset(Message &aMessage);
     otError AppendPendingDataset(Message &aMessage);
     otError GetChildInfo(Child &aChild, otChildInfo &aChildInfo);
+    void    GetNeighborInfo(Neighbor &aNeighbor, otNeighborInfo &aNeighInfo);
     otError RefreshStoredChildren(void);
     void    HandleDetachStart(void);
     otError HandleChildStart(AttachMode aMode);
@@ -703,7 +695,7 @@ private:
     otError HandleDataRequest(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
     void    HandleNetworkDataUpdateRouter(void);
     otError HandleDiscoveryRequest(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
-#if OPENTHREAD_CONFIG_ENABLE_TIME_SYNC
+#if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
     void HandleTimeSync(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
 #endif
 
@@ -739,6 +731,7 @@ private:
     void    SynchronizeChildNetworkData(void);
     otError UpdateChildAddresses(const Message &aMessage, uint16_t aOffset, Child &aChild);
     void    UpdateRoutes(const RouteTlv &aRoute, uint8_t aRouterId);
+    bool    UpdateLinkQualityOut(const RouteTlv &aRoute, Router &aNeighbor, bool &aResetAdvInterval);
 
     static void HandleAddressSolicitResponse(void *               aContext,
                                              otMessage *          aMessage,
@@ -766,8 +759,6 @@ private:
     static void HandleStateUpdateTimer(Timer &aTimer);
     void        HandleStateUpdateTimer(void);
 
-    void SignalChildUpdated(otThreadChildTableEvent aEvent, Child &aChild);
-
     TrickleTimer mAdvertiseTimer;
     TimerMilli   mStateUpdateTimer;
 
@@ -777,7 +768,7 @@ private:
     ChildTable  mChildTable;
     RouterTable mRouterTable;
 
-    otThreadChildTableCallback mChildTableChangedCallback;
+    otNeighborTableCallback mNeighborTableChangedCallback;
 
     uint8_t  mChallengeTimeout;
     uint8_t  mChallenge[8];
@@ -803,9 +794,9 @@ private:
 
     int8_t mParentPriority; ///< The assigned parent priority value, -2 means not assigned.
 
-#if OPENTHREAD_CONFIG_ENABLE_STEERING_DATA_SET_OOB
+#if OPENTHREAD_CONFIG_MLE_STEERING_DATA_SET_OOB_ENABLE
     MeshCoP::SteeringDataTlv mSteeringData;
-#endif // OPENTHREAD_CONFIG_ENABLE_STEERING_DATA_SET_OOB
+#endif // OPENTHREAD_CONFIG_MLE_STEERING_DATA_SET_OOB_ENABLE
 };
 
 } // namespace Mle

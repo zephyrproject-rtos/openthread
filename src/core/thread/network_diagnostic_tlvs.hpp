@@ -45,7 +45,8 @@
 #include "common/tlvs.hpp"
 #include "meshcop/meshcop_tlvs.hpp"
 #include "net/ip6_address.hpp"
-#include "phy/phy.hpp"
+#include "radio/radio.hpp"
+#include "thread/device_mode.hpp"
 #include "thread/mle_constants.hpp"
 
 namespace ot {
@@ -179,7 +180,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(NetworkDiagnosticTlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(NetworkDiagnosticTlv); }
 
     /**
      * This method returns a pointer to the Extended MAC Address.
@@ -226,7 +227,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(NetworkDiagnosticTlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(NetworkDiagnosticTlv); }
 
     /**
      * This method returns the RLOC16 value.
@@ -273,31 +274,23 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(NetworkDiagnosticTlv); }
-
-    enum
-    {
-        kModeRxOnWhenIdle      = 1 << 3,
-        kModeSecureDataRequest = 1 << 2,
-        kModeFullThreadDevice  = 1 << 1,
-        kModeFullNetworkData   = 1 << 0,
-    };
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(NetworkDiagnosticTlv); }
 
     /**
-     * This method returns the Mode value.
+     * This method returns the Device Mode.
      *
-     * @returns The Mode value.
+     * @returns The Device Mode.
      *
      */
-    uint8_t GetMode(void) const { return mMode; }
+    Mle::DeviceMode GetMode(void) const { return Mle::DeviceMode(mMode); }
 
     /**
-     * This method sets the Mode value.
+     * This method sets the Device Mode
      *
-     * @param[in]  aMode  The Mode value.
+     * @param[in]  aMode  The Device Mode
      *
      */
-    void SetMode(uint8_t aMode) { mMode = aMode; }
+    void SetMode(Mle::DeviceMode aMode) { mMode = aMode.Get(); }
 
 private:
     uint8_t mMode;
@@ -328,7 +321,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(NetworkDiagnosticTlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(NetworkDiagnosticTlv); }
 
     /**
      * This method returns the Timeout value.
@@ -377,9 +370,9 @@ public:
      */
     bool IsValid(void) const
     {
-        return (GetLength() == sizeof(*this) - sizeof(NetworkDiagnosticTlv) ||
-                GetLength() ==
-                    sizeof(*this) - sizeof(NetworkDiagnosticTlv) - sizeof(mSedBufferSize) - sizeof(mSedDatagramCount));
+        return ((GetLength() >= sizeof(*this) - sizeof(NetworkDiagnosticTlv)) ||
+                (GetLength() ==
+                 sizeof(*this) - sizeof(NetworkDiagnosticTlv) - sizeof(mSedBufferSize) - sizeof(mSedDatagramCount)));
     }
 
     /**
@@ -572,11 +565,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const
-    {
-        return GetLength() >= sizeof(mRouterIdSequence) + sizeof(mRouterIdMask) &&
-               GetLength() <= sizeof(*this) - sizeof(NetworkDiagnosticTlv);
-    }
+    bool IsValid(void) const { return GetLength() >= sizeof(mRouterIdSequence) + sizeof(mRouterIdMask); }
 
     /**
      * This method returns the Router ID Sequence value.
@@ -746,7 +735,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(NetworkDiagnosticTlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(NetworkDiagnosticTlv); }
 
     /**
      * This method returns the Partition ID value.
@@ -891,11 +880,6 @@ OT_TOOL_PACKED_BEGIN
 class Ip6AddressListTlv : public NetworkDiagnosticTlv
 {
 public:
-    enum
-    {
-        kMaxSize = 8, ///< Maximum size in bytes (Thread Specification).
-    };
-
     /**
      * This method initializes the TLV.
      *
@@ -905,15 +889,6 @@ public:
         SetType(kIp6AddressList);
         SetLength(sizeof(*this) - sizeof(NetworkDiagnosticTlv));
     }
-
-    /**
-     * This method indicates whether or not the TLV appears to be well-formed.
-     *
-     * @retval TRUE   If the TLV appears to be well-formed.
-     * @retval FALSE  If the TLV does not appear to be well-formed.
-     *
-     */
-    bool IsValid(void) const { return GetLength() <= sizeof(Ip6::Address) * kMaxSize; }
 
     /**
      * This method returns a pointer to the IPv6 address entry.
@@ -955,7 +930,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(NetworkDiagnosticTlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(NetworkDiagnosticTlv); }
 
     /**
      * This method returns the IfInUnknownProtos counter.
@@ -1146,7 +1121,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(NetworkDiagnosticTlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(NetworkDiagnosticTlv); }
 
     /**
      * This method returns the Status value.
@@ -1193,7 +1168,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(NetworkDiagnosticTlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(NetworkDiagnosticTlv); }
 
     /**
      * This method returns the Status value.
@@ -1273,20 +1248,20 @@ public:
     }
 
     /**
-     * This method returns the Mode value.
+     * This method returns the Device Mode
      *
-     * @returns The Mode value.
+     * @returns The Device Mode
      *
      */
-    uint8_t GetMode(void) const { return mMode; }
+    Mle::DeviceMode GetMode(void) const { return Mle::DeviceMode(mMode); }
 
     /**
-     * This method sets the Mode value.
+     * This method sets the Device Mode.
      *
-     * @param[in]  aMode  The Mode value.
+     * @param[in]  aMode  The Device Mode.
      *
      */
-    void SetMode(uint8_t aMode) { mMode = aMode; }
+    void SetMode(Mle::DeviceMode aMode) { mMode = aMode.Get(); }
 
     /**
      * This method returns the Reserved value.
@@ -1351,7 +1326,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(NetworkDiagnosticTlv); }
+    bool IsValid(void) const { return (GetLength() % sizeof(ChildTableEntry)) == 0; }
 
     /**
      * This method returns the number of Child Table entries.
@@ -1368,9 +1343,29 @@ public:
      *
      * @returns  A reference to the Child Table entry.
      */
-    ChildTableEntry &GetEntry(uint8_t aIndex)
+    ChildTableEntry &GetEntry(uint16_t aIndex)
     {
         return *reinterpret_cast<ChildTableEntry *>(GetValue() + (aIndex * sizeof(ChildTableEntry)));
+    }
+
+    /**
+     * This method reads the Child Table entry at @p aIndex.
+     *
+     * @param[out]  aEntry      A reference to a ChildTableEntry.
+     * @param[in]   aMessage    A reference to the message.
+     * @param[in]   aOffset     The offset of the ChildTableTLV in aMessage.
+     * @param[in]   aIndex      The index into the Child Table list.
+     *
+     * @retval  OT_ERROR_NOT_FOUND  No such entry is found.
+     * @retval  OT_ERROR_NONE       Successfully read the entry.
+     */
+    otError ReadEntry(ChildTableEntry &aEntry, Message &aMessage, uint16_t aOffset, uint8_t aIndex) const
+    {
+        return (aIndex < GetNumEntries() &&
+                aMessage.Read(aOffset + sizeof(ChildTableTlv) + (aIndex * sizeof(ChildTableEntry)),
+                              sizeof(ChildTableEntry), &aEntry) == sizeof(ChildTableEntry))
+                   ? OT_ERROR_NONE
+                   : OT_ERROR_INVALID_ARGS;
     }
 
 } OT_TOOL_PACKED_END;
@@ -1394,18 +1389,15 @@ public:
     }
 
     /**
-     * This method indicates whether or not the TLV appears to be well-formed.
+     * This method returns a pointer to the list of Channel Pages.
      *
-     * @retval TRUE   If the TLV appears to be well-formed.
-     * @retval FALSE  If the TLV does not appear to be well-formed.
+     * @returns A pointer to the list of Channel Pages.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(NetworkDiagnosticTlv); }
-
     uint8_t *GetChannelPages(void) { return mChannelPages; }
 
 private:
-    uint8_t mChannelPages[Phy::kNumChannelPages];
+    uint8_t mChannelPages[Radio::kNumChannelPages];
 } OT_TOOL_PACKED_END;
 
 /**
@@ -1425,22 +1417,6 @@ public:
         SetType(kTypeList);
         SetLength(sizeof(*this) - sizeof(NetworkDiagnosticTlv));
     }
-
-    /**
-     * This method indicates whether or not the TLV appears to be well-formed.
-     *
-     * @retval TRUE   If the TLV appears to be well-formed.
-     * @retval FALSE  If the TLV does not appear to be well-formed.
-     *
-     */
-    bool IsValid(void) const { return GetLength() <= OT_NETWORK_DIAGNOSTIC_TYPELIST_MAX_ENTRIES; }
-
-    /**
-     * This method returns a pointer to the Challenge value.
-     *
-     * @returns A pointer to the Challenge value.
-     *
-     */
 } OT_TOOL_PACKED_END;
 
 /**
@@ -1468,7 +1444,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(NetworkDiagnosticTlv); }
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(NetworkDiagnosticTlv); }
 
     /**
      * This method returns the Timeout value.

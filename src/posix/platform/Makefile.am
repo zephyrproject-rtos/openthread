@@ -32,8 +32,8 @@ lib_LIBRARIES                             = libopenthread-posix.a
 
 libopenthread_posix_a_CPPFLAGS            = \
     -I$(top_srcdir)/include                 \
+    -I$(top_srcdir)/src                     \
     -I$(top_srcdir)/src/core                \
-    -I$(top_srcdir)/src/ncp                 \
     -I$(top_srcdir)/src/posix/platform      \
     -D_GNU_SOURCE                           \
     $(OPENTHREAD_TARGET_DEFINES)            \
@@ -41,42 +41,31 @@ libopenthread_posix_a_CPPFLAGS            = \
 
 libopenthread_posix_a_SOURCES             = \
     alarm.c                                 \
+    entropy.c                               \
     hdlc_interface.cpp                      \
     logging.c                               \
     misc.c                                  \
     netif.cpp                               \
     radio_spinel.cpp                        \
-    random.c                                \
     settings.cpp                            \
     sim.c                                   \
     system.c                                \
     uart.c                                  \
-    $(NULL)
-
-INC_NCP_SOURCES                           = \
-    inc_spinel.c                            \
-    inc_hdlc.cpp                            \
-    $(NULL)
-
-nodist_libopenthread_posix_a_SOURCES      = \
-    $(INC_NCP_SOURCES)                      \
-    $(NULL)
-
-inc_%: ../../ncp/%
-	echo '#include "$<"' > $@
-
-if OPENTHREAD_ENABLE_PLATFORM_UDP
-libopenthread_posix_a_SOURCES            += \
     udp.cpp                                 \
     $(NULL)
-endif
 
 noinst_HEADERS                            = \
-    openthread-system.h                     \
     platform-posix.h                        \
     hdlc_interface.hpp                      \
     radio_spinel.hpp                        \
     $(NULL)
+
+openthread_HEADERS                        = \
+    openthread-system.h                     \
+    $(NULL)
+
+openthreaddir = $(includedir)/openthread
+dist_openthread_HEADERS = $(openthread_headers)
 
 PRETTY_FILES                              = \
     $(libopenthread_posix_a_SOURCES)        \
@@ -92,6 +81,7 @@ check_PROGRAMS = test-settings
 test_settings_CPPFLAGS                    = \
     -I$(top_srcdir)/include                 \
     -I$(top_srcdir)/src/core                \
+    -DOPENTHREAD_CONFIG_LOG_PLATFORM=0      \
     -DSELF_TEST                             \
     $(NULL)
 

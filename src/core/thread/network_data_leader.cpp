@@ -31,11 +31,7 @@
  *   This file implements the Thread Network Data managed by the Thread Leader.
  */
 
-#define WPP_NAME "network_data_leader.tmh"
-
 #include "network_data_leader.hpp"
-
-#include <openthread/platform/random.h>
 
 #include "coap/coap_message.hpp"
 #include "common/code_utils.hpp"
@@ -45,6 +41,7 @@
 #include "common/locator-getters.hpp"
 #include "common/logging.hpp"
 #include "common/message.hpp"
+#include "common/random.hpp"
 #include "common/timer.hpp"
 #include "mac/mac_frame.hpp"
 #include "thread/lowpan.hpp"
@@ -64,8 +61,8 @@ LeaderBase::LeaderBase(Instance &aInstance)
 
 void LeaderBase::Reset(void)
 {
-    mVersion       = static_cast<uint8_t>(otPlatRandomGet());
-    mStableVersion = static_cast<uint8_t>(otPlatRandomGet());
+    mVersion       = Random::NonCrypto::GetUint8();
+    mStableVersion = Random::NonCrypto::GetUint8();
     mLength        = 0;
     Get<Notifier>().Signal(OT_CHANGED_THREAD_NETDATA);
 }
@@ -166,7 +163,6 @@ exit:
     return error;
 }
 
-#if OPENTHREAD_ENABLE_DHCP6_SERVER || OPENTHREAD_ENABLE_DHCP6_CLIENT
 otError LeaderBase::GetRlocByContextId(uint8_t aContextId, uint16_t &aRloc16)
 {
     otError         error = OT_ERROR_NOT_FOUND;
@@ -191,7 +187,6 @@ otError LeaderBase::GetRlocByContextId(uint8_t aContextId, uint16_t &aRloc16)
 exit:
     return error;
 }
-#endif // OPENTHREAD_ENABLE_DHCP6_SERVER || OPENTHREAD_ENABLE_DHCP6_CLIENT
 
 bool LeaderBase::IsOnMesh(const Ip6::Address &aAddress)
 {
@@ -372,7 +367,7 @@ otError LeaderBase::DefaultRouteLookup(PrefixTlv &aPrefix, uint16_t *aRloc16)
         {
             entry = borderRouter->GetEntry(i);
 
-            if (entry->IsDefaultRoute() == false)
+            if (!entry->IsDefaultRoute())
             {
                 continue;
             }

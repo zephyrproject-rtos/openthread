@@ -7,19 +7,20 @@ OpenThread test scripts use the CLI to execute test cases.
 
 ## OpenThread Command List
 
-* [autostart](#autostart)
 * [bufferinfo](#bufferinfo)
 * [channel](#channel)
 * [child](#child-list)
+* [childip](#childip)
 * [childmax](#childmax)
 * [childtimeout](#childtimeout)
-* [coap](#coap-start)
-* [coaps](#coaps-start-checkpeercert)
-* [commissioner](#commissioner-start-provisioningurl)
+* [coap](README_COAP.md)
+* [coaps](README_COAPS.md)
+* [commissioner](README_COMMISSIONER.md)
 * [contextreusedelay](#contextreusedelay)
 * [counters](#counters)
-* [dataset](#dataset-help)
+* [dataset](README_DATASET.md)
 * [delaytimermin](#delaytimermin)
+* [diag](#diag)
 * [discover](#discover-channel)
 * [dns](#dns-resolve-hostname-dns-server-ip-dns-server-port)
 * [eidcache](#eidcache)
@@ -30,15 +31,14 @@ OpenThread test scripts use the CLI to execute test cases.
 * [ifconfig](#ifconfig)
 * [ipaddr](#ipaddr)
 * [ipmaddr](#ipmaddr)
-* [joiner](#joiner-start-pskd-provisioningurl)
-* [joinerid](#joinerid)
+* [joiner](README_JOINER.md)
 * [joinerport](#joinerport-port)
 * [keysequence](#keysequence-counter)
 * [leaderdata](#leaderdata)
 * [leaderpartitionid](#leaderpartitionid)
 * [leaderweight](#leaderweight)
 * [linkquality](#linkquality-extaddr)
-* [logfilename](#logfilename)
+* [logfilename](#logfilename-filename)
 * [macfilter](#macfilter)
 * [masterkey](#masterkey)
 * [mode](#mode)
@@ -65,45 +65,16 @@ OpenThread test scripts use the CLI to execute test cases.
 * [routerrole](#routerrole)
 * [routerselectionjitter](#routerselectionjitter)
 * [routerupgradethreshold](#routerupgradethreshold)
-* [scan](#scan)
+* [scan](#scan-channel)
+* [service](#service)
 * [singleton](#singleton)
 * [sntp](#sntp-query-sntp-server-ip-sntp-server-port)
 * [state](#state)
 * [thread](#thread-start)
 * [txpower](#txpower)
 * [version](#version)
-* [diag](#diag)
-* [service](#service)
 
 ## OpenThread Command Details
-
-### autostart enable
-
-Automatically start Thread on initialization.
-
-```bash
-> autostart enable
-Done
-```
-
-### autostart disable
-
-Don't automatically start Thread on initialization.
-
-```bash
-> autostart disable
-Done
-```
-
-### autostart
-
-Show the status of automatically starting Thread on initialization.
-
-```bash
-> autostart
-Disabled
-Done
-```
 
 ### bufferinfo
 
@@ -183,6 +154,16 @@ RSSI: -20
 Done
 ```
 
+### childip
+
+Get the list of IP addresses stored for MTD children.
+
+```bash
+> childip
+3401: fdde:ad00:beef:0:3037:3e03:8c5f:bc0c
+Done
+```
+
 ### childmax
 
 Get the Thread maximum number of allowed children.
@@ -218,259 +199,6 @@ Set the Thread Child Timeout value.
 
 ```bash
 > childtimeout 300
-Done
-```
-
-### coap start
-
-Starts the application coap service.
-
-```bash
-> coap start
-Coap service started: Done
-```
-
-### coap stop
-
-Stops the application coap service.
-
-```bash
-> coap stop
-Coap service stopped: Done
-```
-
-### coap resource \[uri-path\]
-
-Sets the URI-Path for the test resource.
-
-```bash
-> coap resource test
-Resource name is 'test': Done
-> coap resource
-Resource name is 'test': Done
-```
-
-### coap \<method\> \<address\> \<uri\> \[payload\] \[type\]
-
-* method: CoAP method to be used (GET/PUT/POST/DELETE).
-* address: IP address of the CoAP server to query.
-* uri: URI String of the resource on the CoAP server.
-* payload: In case of PUT/POST/DELETE a payload can be encapsulated.
-* type: Switch between confirmable ("con") and non-confirmable (default).
-
-```bash
-> coap get fdde:ad00:beef:0:dbaa:f1d0:8afb:30dc test
-Sending coap message: Done
-Received coap request from [fdde:ad00:beef:0:dbaa:f1d0:8afb:30dc]: GET
-coap response sent successfully!
-Received coap response with payload: 30
-> coap put fdde:ad00:beef:0:dbaa:f1d0:8afb:30dc test non-con somePayload
-Sending coap message: Done
-Received coap request from [fdde:ad00:beef:0:dbaa:f1d0:8afb:30dc]: PUT with payload: 73 6f 6d 65 50 61 79 6c 6f 61 64
-> coap put fdde:ad00:beef:0:dbaa:f1d0:8afb:30dc test con 123
-Sending coap message: Done
-Received coap request from [fdde:ad00:beef:0:dbaa:f1d0:8afb:30dc]: PUT with payload: 31 32 33
-coap response sent successfully!
-Received coap response
-```
-
-### coaps start \<checkPeerCert\>
-
-Starts the Application CoAP Secure Service.
-
-* checkPeerCert: Peer Certificate Check can be disabled by typing false.
-
-```bash
-> coaps start false
-Verify Peer Certificate: false. Coap Secure service started: Done
-> coaps start
-Verify Peer Certificate: true. Coap Secure service started: Done
-```
-
-### coaps stop
-
-Stops the Application CoAP Secure Service.
-
-```bash
-> coaps stop
-Coap Secure service stopped:  Done
-```
-
-### coaps set psk \<preSharedKey\> \<keyIdentity\>
-
-Set a pre-shared key with his identifier and the ciphersuite 
-"DTLS_PSK_WITH_AES_128_CCM_8" for the dtls session.
-
-* preSharedKey: The pre-shared key (PSK) for dtls session.
-* keyIdentity: The identifier for the PSK.
-
-```bash
-> coaps set psk myPreSharedSecret myIdentifier
-Coap Secure set PSK: Done
-```
-
-### coaps set x509
-
-Set X.509 Certificate with his private key, which is saved in
-src/cli/x509_cert_key.hpp.
-
-```bash
-> coaps set x509
-Coap Secure set own .X509 certificate: Done
-```
-
-### coaps connect \<serverAddress\> \[port\]
-
-Open a dtls session to a CoAP Secure Server.
-
-* serverAddress: IPv6 address of Server
-
-```bash
-> coaps connect 2001:1234::321
-Coap Secure connect: Done
-CoAP Secure connected!
-```
-
-### coaps disconnect
-
-Terminate the dtls session to the Server.
-
-```bash
-> coaps disconnect
-CoAP Secure not connected or disconnected.
-Done
-```
-
-### coaps \<method\> \<address\> \<uri\> \[type\] \[payload\]
-
-* method: CoAP method to be used (GET/PUT/POST/DELETE).
-* address: IPv6 address of the CoAP Secure server to query.
-* uri: URI String of the resource on the CoAP server.
-* type: Switch between confirmable ("con") and non-confirmable (default).
-* payload: In case of PUT/POST/DELETE a payload can be encapsulated.
-
-```bash
-> coaps get 2001:1234::321 secret
-Sending coap secure request: Done
-Received coap secure response
-    CoapSecure RX Header Informations:
-        Type 16 (NON CONF)
-        Code 69 (Coap Code CONTENT)
-    With payload (hex):
-4a756e2031322031353a30373a3336
-> coaps put 2001:1234::321 test non-con hello
-Sending coap secure request: Done
-> coaps post 2001:1234::321 test con
-Sending coap secure request: Done
-Received coap secure response
-    CoapSecure RX Header Informations:
-        Type 32 (NON CONF)
-        Code 69 (Coap Code CONTENT)
-    With payload (hex):
-4a756e2031322031353a30373a3336
-> coaps delete 2001:1234::321 test
-Sending coap secure request: Done
-```
-
-### commissioner start \<provisioningUrl\>
-
-Start the Commissioner role.
-
-* provisioningUrl: Provisioning URL for the Joiner (optional).
-
-This command will cause the device to send LEAD_PET and LEAD_KA messages.
-
-```bash
-> commissioner start
-Done
-```
-
-### commissioner stop
-
-Stop the Commissioner role.
-
-This command will cause the device to send LEAD_KA[Reject] messages.
-
-```bash
-> commissioner stop
-Done
-```
-
-### commissioner joiner add \<eui64\> \<psdk\>
-
-Add a Joiner entry.
-
-* eui64: The IEEE EUI-64 of the Joiner or '*' to match any Joiner.
-* pskd: Pre-Shared Key for the Joiner.
-
-```bash
-> commissioner joiner add d45e64fa83f81cf7 PSK
-Done
-```
-
-### commissioner joiner remove \<eui64\>
-
-Remove a Joiner entry.
-
-* eui64: The IEEE EUI-64 of the Joiner or '*' to match any Joiner.
-
-```bash
-> commissioner joiner remove d45e64fa83f81cf7
-Done
-```
-
-### commissioner provisioningurl \<provisioningUrl\>
-
-Set the Provisioning URL.
-
-```bash
-> commissioner provisioningurl http://github.com/openthread/openthread
-Done
-```
-
-### commissioner energy \<mask\> \<count\> \<period\> \<scanDuration\> \<destination\>
-
-Send a MGMT_ED_SCAN message.
-
-* mask: Bitmask identifying channsl to perform IEEE 802.15.4 ED Scans.
-* count: Number of IEEE 802.15.4 ED Scans per channel.
-* period: Period between successive IEEE 802.15.4 ED Scans (milliseconds).
-* scanDuration: IEEE 802.15.4 ScanDuration to use when performing an IEEE 802.15.4 ED Scan (milliseconds).
-* destination: IPv6 destination for the message (may be multicast).
-
-The contents of MGMT_ED_REPORT messages (i.e. Channel Mask and Energy
-List) are printed as they are received.
-
-```bash
-> commissioner energy 0x00050000 2 32 1000 fdde:ad00:beef:0:0:ff:fe00:c00
-Done
-Energy: 00050000 0 0 0 0
-```
-
-### commissioner panid \<panid\> \<mask\> \<destination\>
-
-Send a MGMT_PANID_QUERY message.
-
-* panid: PAN ID to check for conflicts.
-* mask: Bitmask identifying channels to perform IEEE 802.15.4 Active Scans.
-* destination: IPv6 destination for the message (may be multicast).
-
-The contents of MGMT_PANID_CONFLICT messages (i.e. PAN ID and Channel
-Mask) are printed as they are received.
-
-```bash
-> commissioner panid 0xdead 0x7fff800 fdde:ad00:beef:0:0:ff:fe00:c00
-Done
-Conflict: dead, 00000800
-```
-
-### commissioner sessionid
-
-Get current commissioner session id.
-
-```bash
-> commissioner sessionid
-0
 Done
 ```
 
@@ -555,182 +283,6 @@ Parent Changes: 0
 Done
 ```
 
-### dataset
-Print changes in operational dataset buffer.
-
-```bash
-> dataset activetimestamp 1234
-Done
-> dataset
-Active Timestamp: 1234
-Done
-```
-
-### dataset help
-
-Print meshcop dataset help menu.
-
-```bash
-> dataset help
-help
-active
-activetimestamp
-channel
-channelmask
-clear
-commit
-delay
-extpanid
-masterkey
-meshlocalprefix
-mgmtgetcommand
-mgmtsetcommand
-networkname
-panid
-pending
-pendingtimestamp
-pskc
-securitypolicy
-Done
->
-```
-
-### dataset active
-
-Print meshcop active operational dataset.
-
-```bash
-> dataset active
-Active Timestamp: 0
-Done
-```
-
-### dataset activetimestamp \<activetimestamp\>
-
-Set active timestamp.
-
-```bash
-> dataset activestamp 123456789
-Done
-```
-
-### dataset channel \<channel\>
-
-Set channel.
-
-```bash
-> dataset channel 12
-Done
-```
-
-### dataset channelmask \<channelmask\>
-
-Set channel mask.
-
-```bash
-> dataset channelmask e0ff1f00
-Done
-```
-
-### dataset clear
-
-Reset operational dataset buffer.
-
-```bash
-> dataset clear
-Done
-```
-
-### dataset commit \<dataset\>
-
-Commit operational dataset buffer to active/pending operational dataset.
-
-```bash
-> dataset commit active
-Done
-```
-
-### dataset delay \<delay\>
-
-Set delay timer value.
-
-```bash
-> dataset delay 1000
-Done
-```
-
-### dataset extpanid \<extpanid\>
-
-Set extended panid.
-
-```bash
-> dataset extpanid 000db80123456789
-Done
-```
-
-### dataset masterkey \<masterkey\>
-
-Set master key.
-
-```bash
-> dataset master 1234567890123456
-Done
-```
-
-### dataset meshlocalprefix \<meshlocalprefix\>
-
-Set mesh local prefix.
-
-```bash
-> dataset meshlocalprefix fd00:db8::
-Done
-```
-
-### dataset mgmtgetcommand active \[address \<destination\>\] \[TLVs list\] \[binary\]
-
-Send MGMT_ACTIVE_GET.
-
-```bash
-> dataset mgmtgetcommand active address fdde:ad00:beef:0:558:f56b:d688:799 activetimestamp binary 0c030001ff
-Done
-```
-
-### dataset mgmtsetcommand active \[TLV Types list\] \[binary\]
-
-Send MGMT_ACTIVE_SET.
-
-```bash
-> dataset mgmtsetcommand active activetimestamp 123 binary 0c030001ff
-Done
-```
-
-### dataset mgmtgetcommand pending \[address \<destination\>\] \[TLVs list\] \[binary\]
-
-Send MGMT_PENDING_GET.
-
-```bash
-> dataset mgmtgetcommand pending address fdde:ad00:beef:0:558:f56b:d688:799 activetimestamp binary 0c030001ff
-Done
-```
-
-### dataset mgmtsetcommand pending \[TLV Types list\] \[binary\]
-
-Send MGMT_PENDING_SET.
-
-```bash
-> dataset mgmtsetcommand pending activetimestamp 123 binary 0c030001ff
-Done
-```
-
-### dataset networkname \<networkname\>
-
-Set network name.
-
-```bash
-> dataset networkname openthread
-Done
-```
-
 ### networktime
 
 Get the Thread network time and the time sync parameters.
@@ -752,58 +304,6 @@ Set time sync parameters
 
 ```bash
 > networktime 100 300
-Done
-```
-
-
-### dataset panid \<panid\>
-
-Set panid.
-
-```bash
-> dataset panid 0x1234
-Done
-```
-
-### dataset pending
-
-Print meshcop pending operational dataset.
-
-```bash
-> dataset pending
-Done
-```
-
-### dataset pendingtimestamp \<pendingtimestamp\>
-
-Set pending timestamp.
-
-```bash
-> dataset pendingtimestamp 123456789
-Done
-```
-
-### dataset pskc \<pskc\>
-
-Set pskc with hex format.
-
-```bash
-> dataset pskc 67c0c203aa0b042bfb5381c47aef4d9e
-Done
-```
-
-### dataset securitypolicy \<rotationtime\> \[onrcb\]
-
-Set security policy.
-
-* o: Obtaining the Master Key for out-of-band commissioning is enabled.
-* n: Native Commissioning using PSKc is allowed.
-* r: Thread 1.x Routers are enabled.
-* c: External Commissioner authentication is allowed using PSKc.
-* b: Thread 1.x Beacons are enabled.
-
-```bash
-> dataset securitypolicy 672 onrcb
 Done
 ```
 
@@ -849,7 +349,7 @@ The latter two parameters have following default values:
 
 ```bash
 > dns resolve ipv6.google.com
-> DNS response for ipv6.google.com - [2a00:1450:401b:801:0:0:0:200e] TTL: 300
+> DNS response for ipv6.google.com - 2a00:1450:401b:801:0:0:0:200e TTL: 300
 ```
 
 ### eidcache
@@ -977,6 +477,36 @@ Delete an IPv6 address from the Thread interface.
 Done
 ```
 
+### ipaddr linklocal
+
+Print Thread link-local IPv6 address.
+
+```bash
+> ipaddr linklocal
+fe80:0:0:0:f3d9:2a82:c8d8:fe43
+Done
+```
+
+### ipaddr mleid
+
+Print Thread Mesh Local EID address.
+
+```bash
+> ipaddr mleid
+fdde:ad00:beef:0:558:f56b:d688:799
+Done
+```
+
+### ipaddr rloc
+
+Print Thread Routing Locator (RLOC) address.
+
+```bash
+> ipaddr rloc
+fdde:ad00:beef:0:0:ff:fe00:0
+Done
+```
+
 ### ipmaddr
 
 List all IPv6 multicast addresses subscribed to the Thread interface.
@@ -1032,40 +562,6 @@ Disable multicast promiscuous mode.
 
 ```bash
 > ipmaddr promiscuous disable
-Done
-```
-
-### joiner start \<pskd\> \<provisioningUrl\>
-
-Start the Joiner role.
-
-* pskd: Pre-Shared Key for the Joiner.
-* provisioningUrl: Provisioning URL for the Joiner (optional).
-
-This command will cause the device to perform an MLE Discovery and
-initiate the Thread Commissioning process.
-
-```bash
-> joiner start PSK
-Done
-```
-
-### joiner stop
-
-Stop the Joiner role.
-
-```bash
-> joiner stop
-Done
-```
-
-### joinerid
-
-Get the Joiner ID.
-
-```bash
-> joinerid
-e0b220eb7d8dda7e
 Done
 ```
 
@@ -1188,7 +684,7 @@ Set the link quality on the link to a given extended address.
 Done
 ```
 
-### logfilename FILENAME
+### logfilename \<filename\>
 
 - Note: POSIX Platform Only, ie: `OPENTHREAD_EXAMPLES_POSIX`
 - Requires `OPENTHREAD_CONFIG_LOG_OUTPUT == OPENTHREAD_CONFIG_LOG_OUTPUT_DEBUG_UART`
@@ -1315,7 +811,7 @@ Done
 
 ### networkidtimeout
 
-Get the NETWORK_ID_TIMEOUT parameter used in the Router role.  
+Get the NETWORK_ID_TIMEOUT parameter used in the Router role.
 
 ```bash
 > networkidtimeout
@@ -1325,7 +821,7 @@ Done
 
 ### networkidtimeout \<timeout\>
 
-Set the NETWORK_ID_TIMEOUT parameter used in the Router role.  
+Set the NETWORK_ID_TIMEOUT parameter used in the Router role.
 
 ```bash
 > networkidtimeout 120
@@ -1334,7 +830,7 @@ Done
 
 ### networkname
 
-Get the Thread Network Name.  
+Get the Thread Network Name.
 
 ```bash
 > networkname
@@ -1344,7 +840,7 @@ Done
 
 ### networkname \<name\>
 
-Set the Thread Network Name.  
+Set the Thread Network Name.
 
 ```bash
 > networkname OpenThread
@@ -1818,6 +1314,16 @@ Disable Thread protocol operation and detach from a Thread network.
 Done
 ```
 
+### thread version
+
+Get the Thread Version number.
+
+```bash
+> thread version
+2
+Done
+```
+
 ### txpower
 
 Get the transmit power in dBm.
@@ -2004,8 +1510,8 @@ Done
 
 ### diag
 
-Diagnostics module is enabled only when building OpenThread with --enable-diag option.
-Go [diagnostics module][1] for more information.
+Factory Diagnostics module is enabled only when building OpenThread with `OPENTHREAD_CONFIG_DIAG_ENABLE=1` option.
+Go [diagnostics module][DIAG] for more information.
 
 ### service
 
@@ -2038,4 +1544,4 @@ Remove service from Network Data.
 Done
 ```
 
-[1]:../diag/README.md
+[DIAG]:../../src/core/diags/README.md

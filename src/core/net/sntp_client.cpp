@@ -38,7 +38,7 @@
 #include "net/udp6.hpp"
 #include "thread/thread_netif.hpp"
 
-#if OPENTHREAD_ENABLE_SNTP_CLIENT
+#if OPENTHREAD_CONFIG_SNTP_CLIENT_ENABLE
 
 /**
  * @file
@@ -47,6 +47,49 @@
 
 namespace ot {
 namespace Sntp {
+
+Header::Header(void)
+    : mFlags(kNtpVersion << kVersionOffset | kModeClient << kModeOffset)
+    , mStratum(0)
+    , mPoll(0)
+    , mPrecision(0)
+    , mRootDelay(0)
+    , mRootDispersion(0)
+    , mReferenceId(0)
+    , mReferenceTimestampSeconds(0)
+    , mReferenceTimestampFraction(0)
+    , mOriginateTimestampSeconds(0)
+    , mOriginateTimestampFraction(0)
+    , mReceiveTimestampSeconds(0)
+    , mReceiveTimestampFraction(0)
+    , mTransmitTimestampSeconds(0)
+    , mTransmitTimestampFraction(0)
+{
+}
+
+QueryMetadata::QueryMetadata(void)
+    : mTransmitTimestamp(0)
+    , mResponseHandler(NULL)
+    , mResponseContext(NULL)
+    , mTransmissionTime(0)
+    , mDestinationPort(0)
+    , mRetransmissionCount(0)
+{
+    mSourceAddress.Clear();
+    mDestinationAddress.Clear();
+}
+
+QueryMetadata::QueryMetadata(otSntpResponseHandler aHandler, void *aContext)
+    : mTransmitTimestamp(0)
+    , mResponseHandler(aHandler)
+    , mResponseContext(aContext)
+    , mTransmissionTime(0)
+    , mDestinationPort(0)
+    , mRetransmissionCount(0)
+{
+    mSourceAddress.Clear();
+    mDestinationAddress.Clear();
+}
 
 Client::Client(Ip6::Netif &aNetif)
     : mSocket(aNetif.Get<Ip6::Udp>())
@@ -98,14 +141,14 @@ otError Client::Query(const otSntpQuery *aQuery, otSntpResponseHandler aHandler,
     VerifyOrExit(aQuery->mMessageInfo != NULL, error = OT_ERROR_INVALID_ARGS);
 
     // Originate timestamp is used only as a unique token.
-    header.SetTransmitTimestampSeconds(TimerMilli::GetNow() / 1000 + kTimeAt1970);
+    header.SetTransmitTimestampSeconds(TimerMilli::GetNow().GetValue() / 1000 + kTimeAt1970);
 
     VerifyOrExit((message = NewMessage(header)) != NULL, error = OT_ERROR_NO_BUFS);
 
     messageInfo = static_cast<const Ip6::MessageInfo *>(aQuery->mMessageInfo);
 
     queryMetadata.mTransmitTimestamp   = header.GetTransmitTimestampSeconds();
-    queryMetadata.mTransmissionTime    = TimerMilli::GetNow() + kResponseTimeout;
+    queryMetadata.mTransmissionTime    = TimerMilli::GetNow() + static_cast<uint32_t>(kResponseTimeout);
     queryMetadata.mSourceAddress       = messageInfo->GetSockAddr();
     queryMetadata.mDestinationPort     = messageInfo->GetPeerPort();
     queryMetadata.mDestinationAddress  = messageInfo->GetPeerAddr();
@@ -146,10 +189,10 @@ exit:
 
 Message *Client::CopyAndEnqueueMessage(const Message &aMessage, const QueryMetadata &aQueryMetadata)
 {
-    otError  error       = OT_ERROR_NONE;
-    uint32_t now         = TimerMilli::GetNow();
-    Message *messageCopy = NULL;
-    uint32_t nextTransmissionTime;
+    otError   error       = OT_ERROR_NONE;
+    TimeMilli now         = TimerMilli::GetNow();
+    Message * messageCopy = NULL;
+    TimeMilli nextTransmissionTime;
 
     // Create a message copy for further retransmissions.
     VerifyOrExit((messageCopy = aMessage.Clone()) != NULL, error = OT_ERROR_NO_BUFS);
@@ -234,12 +277,10 @@ Message *Client::FindRelatedQuery(const Header &aResponseHeader, QueryMetadata &
     while (message != NULL)
     {
         // Read originate timestamp.
-        uint16_t count = aQueryMetadata.ReadFrom(*message);
-        assert(count == sizeof(aQueryMetadata));
+        aQueryMetadata.ReadFrom(*message);
 
         if (aQueryMetadata.mTransmitTimestamp == aResponseHeader.GetOriginateTimestampSeconds())
         {
-            aQueryMetadata.ReadFrom(*message);
             ExitNow();
         }
 
@@ -270,8 +311,8 @@ void Client::HandleRetransmissionTimer(Timer &aTimer)
 
 void Client::HandleRetransmissionTimer(void)
 {
-    uint32_t         now       = TimerMilli::GetNow();
-    uint32_t         nextDelta = 0xffffffff;
+    TimeMilli        now       = TimerMilli::GetNow();
+    uint32_t         nextDelta = TimeMilli::kMaxDuration;
     QueryMetadata    queryMetadata;
     Message *        message     = mPendingQueries.GetHead();
     Message *        nextMessage = NULL;
@@ -284,23 +325,29 @@ void Client::HandleRetransmissionTimer(void)
 
         if (queryMetadata.IsLater(now))
         {
+            uint32_t diff = queryMetadata.mTransmissionTime - now;
+
             // Calculate the next delay and choose the lowest.
-            if (queryMetadata.mTransmissionTime - now < nextDelta)
+            if (diff < nextDelta)
             {
-                nextDelta = queryMetadata.mTransmissionTime - now;
+                nextDelta = diff;
             }
         }
         else if (queryMetadata.mRetransmissionCount < kMaxRetransmit)
         {
+            uint32_t diff;
+
             // Increment retransmission counter and timer.
             queryMetadata.mRetransmissionCount++;
             queryMetadata.mTransmissionTime = now + kResponseTimeout;
             queryMetadata.UpdateIn(*message);
 
+            diff = kResponseTimeout;
+
             // Check if retransmission time is lower than current lowest.
-            if (queryMetadata.mTransmissionTime - now < nextDelta)
+            if (diff < nextDelta)
             {
-                nextDelta = queryMetadata.mTransmissionTime - now;
+                nextDelta = diff;
             }
 
             // Retransmit
@@ -319,7 +366,7 @@ void Client::HandleRetransmissionTimer(void)
         message = nextMessage;
     }
 
-    if (nextDelta != 0xffffffff)
+    if (nextDelta != TimeMilli::kMaxDuration)
     {
         mRetransmissionTimer.Start(nextDelta);
     }
@@ -370,7 +417,7 @@ void Client::HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessag
     // Due to NTP protocol limitation, this module stops working correctly after around year 2106, if
     // unix era is not updated. This seems to be a reasonable limitation for now. Era number cannot be
     // obtained using NTP protocol, and client of this module is responsible to set it properly.
-    unixTime = GetUnixEra() * (UINT32_MAX + 1ULL);
+    unixTime = GetUnixEra() * (1ULL << 32);
 
     if (responseHeader.GetTransmitTimestampSeconds() > kTimeAt1970)
     {
@@ -378,8 +425,7 @@ void Client::HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessag
     }
     else
     {
-        unixTime +=
-            static_cast<uint64_t>(responseHeader.GetTransmitTimestampSeconds()) + (UINT32_MAX + 1ULL) - kTimeAt1970;
+        unixTime += static_cast<uint64_t>(responseHeader.GetTransmitTimestampSeconds()) + (1ULL << 32) - kTimeAt1970;
     }
 
     // Return the time since 1970.
@@ -396,4 +442,4 @@ exit:
 } // namespace Sntp
 } // namespace ot
 
-#endif // OPENTHREAD_ENABLE_SNTP_CLIENT
+#endif // OPENTHREAD_CONFIG_SNTP_CLIENT_ENABLE

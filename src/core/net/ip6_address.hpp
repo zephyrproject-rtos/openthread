@@ -36,7 +36,7 @@
 
 #include "openthread-core-config.h"
 
-#include "utils/wrap_stdint.h"
+#include <stdint.h>
 
 #include "common/string.hpp"
 #include "mac/mac_frame.hpp"
@@ -365,7 +365,7 @@ public:
      * @retval FALSE  If the IPv6 addresses do not differ.
      *
      */
-    bool operator!=(const Address &aOther) const;
+    bool operator!=(const Address &aOther) const { return !(*this == aOther); }
 
     /**
      * This method converts an IPv6 address string to binary.
@@ -402,6 +402,7 @@ private:
     enum
     {
         kInterfaceIdentifierOffset = 8, ///< Interface Identifier offset in bytes.
+        kIp4AddressSize            = 4  ///< Size of the IPv4 address.
     };
 } OT_TOOL_PACKED_END;
 

@@ -111,6 +111,19 @@ public:
     void Init(Type aType, Code aCode);
 
     /**
+     * This method initializes the CoAP header with specific Type and Code.
+     *
+     * @param[in]  aType              The Type value.
+     * @param[in]  aCode              The Code value.
+     * @param[in]  aUriPath           A pointer to a NULL-terminated string.
+     *
+     * @retval OT_ERROR_NONE          Successfully appended the option.
+     * @retval OT_ERROR_NO_BUFS       The option length exceeds the buffer size.
+     *
+     */
+    otError Init(Type aType, Code aCode, const char *aUriPath);
+
+    /**
      * This method writes header to the message. This must be called before sending the message.
      *
      */
@@ -175,7 +188,7 @@ public:
      */
     void SetCode(Code aCode) { GetHelpData().mHeader.mCode = static_cast<uint8_t>(aCode); }
 
-#if OPENTHREAD_ENABLE_APPLICATION_COAP
+#if OPENTHREAD_CONFIG_COAP_API_ENABLE
     /**
      * This method returns the CoAP Code as human readable string.
      *
@@ -183,7 +196,7 @@ public:
      *
      */
     const char *CodeToString(void) const;
-#endif // OPENTHREAD_ENABLE_APPLICATION_COAP
+#endif // OPENTHREAD_CONFIG_COAP_API_ENABLE
 
     /**
      * This method returns the Message ID value.
@@ -226,16 +239,22 @@ public:
      * @param[in]  aToken        A pointer to the Token value.
      * @param[in]  aTokenLength  The Length of @p aToken.
      *
+     * @retval OT_ERROR_NONE     Successfully set the token value.
+     * @retval OT_ERROR_NO_BUFS  Insufficient message buffers available to set the token value.
+     *
      */
-    void SetToken(const uint8_t *aToken, uint8_t aTokenLength);
+    otError SetToken(const uint8_t *aToken, uint8_t aTokenLength);
 
     /**
      * This method sets the Token length and randomizes its value.
      *
      * @param[in]  aTokenLength  The Length of a Token to set.
      *
+     * @retval OT_ERROR_NONE     Successfully set the token value.
+     * @retval OT_ERROR_NO_BUFS  Insufficient message buffers available to set the token value.
+     *
      */
-    void SetToken(uint8_t aTokenLength);
+    otError SetToken(uint8_t aTokenLength);
 
     /**
      *  This method checks if Tokens in two CoAP headers are equal.
@@ -414,8 +433,11 @@ public:
      *
      * @param[in]  aRequest  The request message.
      *
+     * @retval OT_ERROR_NONE     Successfully set the default response header.
+     * @retval OT_ERROR_NO_BUFS  Insufficient message buffers available to set the default response header.
+     *
      */
-    void SetDefaultResponseHeader(const Message &aRequest);
+    otError SetDefaultResponseHeader(const Message &aRequest);
 
     /**
      * This method checks if a header is an empty message header.
@@ -424,7 +446,7 @@ public:
      * @retval FALSE  Message is not an empty message header.
      *
      */
-    bool IsEmpty(void) const { return (GetCode() == 0); };
+    bool IsEmpty(void) const { return (GetCode() == 0); }
 
     /**
      * This method checks if a header is a request header.
@@ -433,7 +455,7 @@ public:
      * @retval FALSE  Message is not a request header.
      *
      */
-    bool IsRequest(void) const { return (GetCode() >= OT_COAP_CODE_GET && GetCode() <= OT_COAP_CODE_DELETE); };
+    bool IsRequest(void) const { return (GetCode() >= OT_COAP_CODE_GET && GetCode() <= OT_COAP_CODE_DELETE); }
 
     /**
      * This method checks if a header is a response header.
@@ -442,7 +464,7 @@ public:
      * @retval FALSE  Message is not a response header.
      *
      */
-    bool IsResponse(void) const { return (GetCode() >= OT_COAP_CODE_RESPONSE_MIN); };
+    bool IsResponse(void) const { return (GetCode() >= OT_COAP_CODE_RESPONSE_MIN); }
 
     /**
      * This method checks if a header is a CON message header.
@@ -451,7 +473,7 @@ public:
      * @retval FALSE  Message is not is a CON message header.
      *
      */
-    bool IsConfirmable(void) const { return (GetType() == OT_COAP_TYPE_CONFIRMABLE); };
+    bool IsConfirmable(void) const { return (GetType() == OT_COAP_TYPE_CONFIRMABLE); }
 
     /**
      * This method checks if a header is a NON message header.
@@ -460,7 +482,7 @@ public:
      * @retval FALSE  Message is not is a NON message header.
      *
      */
-    bool IsNonConfirmable(void) const { return (GetType() == OT_COAP_TYPE_NON_CONFIRMABLE); };
+    bool IsNonConfirmable(void) const { return (GetType() == OT_COAP_TYPE_NON_CONFIRMABLE); }
 
     /**
      * This method checks if a header is a ACK message header.
@@ -469,7 +491,7 @@ public:
      * @retval FALSE  Message is not is a ACK message header.
      *
      */
-    bool IsAck(void) const { return (GetType() == OT_COAP_TYPE_ACKNOWLEDGMENT); };
+    bool IsAck(void) const { return (GetType() == OT_COAP_TYPE_ACKNOWLEDGMENT); }
 
     /**
      * This method checks if a header is a RST message header.
@@ -478,7 +500,7 @@ public:
      * @retval FALSE  Message is not is a RST message header.
      *
      */
-    bool IsReset(void) const { return (GetType() == OT_COAP_TYPE_RESET); };
+    bool IsReset(void) const { return (GetType() == OT_COAP_TYPE_RESET); }
 
     /**
      * This method creates a copy of this CoAP message.
@@ -504,7 +526,7 @@ public:
      * @returns A pointer to the message or NULL if insufficient message buffers are available.
      *
      */
-    Message *Clone(void) const { return Clone(GetLength()); };
+    Message *Clone(void) const { return Clone(GetLength()); }
 
     /**
      * This method returns the minimal reserved bytes required for CoAP message.
@@ -567,7 +589,7 @@ private:
         otCoapOption mOption;
         uint16_t     mNextOptionOffset; ///< The byte offset for the next CoAP Option
         uint16_t     mOptionLast;
-        uint16_t     mHeaderOffset;
+        uint16_t     mHeaderOffset; ///< The byte offset for the CoAP Header
         uint16_t     mHeaderLength;
     };
 

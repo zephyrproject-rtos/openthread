@@ -226,6 +226,10 @@ void cbQorvoRadioReceiveDone(otRadioFrame *aPacket, otError aError)
         sLastReceivedPower = aPacket->mInfo.mRxInfo.mRssi;
     }
 
+    // TODO Set this flag only when the packet is really acknowledged with frame pending set.
+    // See https://github.com/openthread/openthread/pull/3785
+    aPacket->mInfo.mRxInfo.mAckedWithFramePending = true;
+
     otPlatRadioReceiveDone(pQorvoInstance, aPacket, aError);
 }
 
@@ -342,6 +346,22 @@ otError otPlatRadioSetTransmitPower(otInstance *aInstance, int8_t aPower)
     // TODO: Create a proper implementation for this driver.
     OT_UNUSED_VARIABLE(aInstance);
     OT_UNUSED_VARIABLE(aPower);
+
+    return OT_ERROR_NOT_IMPLEMENTED;
+}
+
+otError otPlatRadioGetCcaEnergyDetectThreshold(otInstance *aInstance, int8_t *aThreshold)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    OT_UNUSED_VARIABLE(aThreshold);
+
+    return OT_ERROR_NOT_IMPLEMENTED;
+}
+
+otError otPlatRadioSetCcaEnergyDetectThreshold(otInstance *aInstance, int8_t aThreshold)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    OT_UNUSED_VARIABLE(aThreshold);
 
     return OT_ERROR_NOT_IMPLEMENTED;
 }

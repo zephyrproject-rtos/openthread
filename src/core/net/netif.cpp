@@ -80,11 +80,10 @@ const otNetifMulticastAddress Netif::kLinkLocalAllRoutersMulticastAddress = {
     {{{0xff, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02}}},
     &Netif::kRealmLocalAllRoutersMulticastAddress};
 
-Netif::Netif(Instance &aInstance, int8_t aInterfaceId)
+Netif::Netif(Instance &aInstance)
     : InstanceLocator(aInstance)
     , mUnicastAddresses(NULL)
     , mMulticastAddresses(NULL)
-    , mInterfaceId(aInterfaceId)
     , mMulticastPromiscuous(false)
     , mNext(NULL)
     , mAddressCallback(NULL)
@@ -135,7 +134,7 @@ void Netif::SubscribeAllNodesMulticast(void)
         }
     }
 
-    Get<Notifier>().Signal(OT_CHANGED_IP6_MULTICAST_SUBSRCRIBED);
+    Get<Notifier>().Signal(OT_CHANGED_IP6_MULTICAST_SUBSCRIBED);
 }
 
 void Netif::UnsubscribeAllNodesMulticast(void)
@@ -153,7 +152,7 @@ void Netif::UnsubscribeAllNodesMulticast(void)
         }
     }
 
-    Get<Notifier>().Signal(OT_CHANGED_IP6_MULTICAST_UNSUBSRCRIBED);
+    Get<Notifier>().Signal(OT_CHANGED_IP6_MULTICAST_UNSUBSCRIBED);
 }
 
 otError Netif::SubscribeAllRoutersMulticast(void)
@@ -191,7 +190,7 @@ otError Netif::SubscribeAllRoutersMulticast(void)
         }
     }
 
-    Get<Notifier>().Signal(OT_CHANGED_IP6_MULTICAST_SUBSRCRIBED);
+    Get<Notifier>().Signal(OT_CHANGED_IP6_MULTICAST_SUBSCRIBED);
 
 exit:
     return error;
@@ -232,7 +231,7 @@ exit:
             }
         }
 
-        Get<Notifier>().Signal(OT_CHANGED_IP6_MULTICAST_UNSUBSRCRIBED);
+        Get<Notifier>().Signal(OT_CHANGED_IP6_MULTICAST_UNSUBSCRIBED);
     }
 
     return error;
@@ -258,7 +257,7 @@ otError Netif::SubscribeMulticast(NetifMulticastAddress &aAddress)
         mAddressCallback(&aAddress.mAddress, kMulticastPrefixLength, true, mAddressCallbackContext);
     }
 
-    Get<Notifier>().Signal(OT_CHANGED_IP6_MULTICAST_SUBSRCRIBED);
+    Get<Notifier>().Signal(OT_CHANGED_IP6_MULTICAST_SUBSCRIBED);
 
 exit:
     return error;
@@ -296,29 +295,28 @@ exit:
             mAddressCallback(&aAddress.mAddress, kMulticastPrefixLength, false, mAddressCallbackContext);
         }
 
-        Get<Notifier>().Signal(OT_CHANGED_IP6_MULTICAST_UNSUBSRCRIBED);
+        Get<Notifier>().Signal(OT_CHANGED_IP6_MULTICAST_UNSUBSCRIBED);
     }
 
     return error;
 }
 
-otError Netif::GetNextExternalMulticast(uint8_t &aIterator, Address &aAddress)
+otError Netif::GetNextExternalMulticast(uint8_t &aIterator, Address &aAddress) const
 {
-    otError                error = OT_ERROR_NOT_FOUND;
-    size_t                 num   = OT_ARRAY_LENGTH(mExtMulticastAddresses);
-    NetifMulticastAddress *entry;
+    otError error = OT_ERROR_NOT_FOUND;
+    size_t  num   = OT_ARRAY_LENGTH(mExtMulticastAddresses);
 
     VerifyOrExit(aIterator < num);
 
     // Find an available entry in the `mExtMulticastAddresses` array.
     for (uint8_t i = aIterator; i < num; i++)
     {
-        entry = &mExtMulticastAddresses[i];
+        const NetifMulticastAddress &entry = mExtMulticastAddresses[i];
 
         // In an unused/available entry, `mNext` points back to the entry itself.
-        if (entry->mNext != entry)
+        if (entry.mNext != &entry)
         {
-            aAddress  = entry->GetAddress();
+            aAddress  = entry.GetAddress();
             aIterator = i + 1;
             ExitNow(error = OT_ERROR_NONE);
         }
@@ -357,7 +355,7 @@ otError Netif::SubscribeExternalMulticast(const Address &aAddress)
     entry->mAddress     = aAddress;
     entry->mNext        = mMulticastAddresses;
     mMulticastAddresses = entry;
-    Get<Notifier>().Signal(OT_CHANGED_IP6_MULTICAST_SUBSRCRIBED);
+    Get<Notifier>().Signal(OT_CHANGED_IP6_MULTICAST_SUBSCRIBED);
 
 exit:
     return error;
@@ -397,7 +395,7 @@ otError Netif::UnsubscribeExternalMulticast(const Address &aAddress)
     // To mark the address entry as unused/available, set the `mNext` pointer back to the entry itself.
     entry->mNext = entry;
 
-    Get<Notifier>().Signal(OT_CHANGED_IP6_MULTICAST_UNSUBSRCRIBED);
+    Get<Notifier>().Signal(OT_CHANGED_IP6_MULTICAST_UNSUBSCRIBED);
 
 exit:
     return error;

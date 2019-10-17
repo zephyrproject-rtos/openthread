@@ -36,7 +36,7 @@
 
 #include "openthread-core-config.h"
 
-#include "utils/wrap_stdint.h"
+#include <stdint.h>
 
 #include "coap/coap.hpp"
 #include "common/timer.hpp"
@@ -159,7 +159,7 @@ public:
      */
     void UpdateContextsAfterReset(void);
 
-#if OPENTHREAD_ENABLE_SERVICE
+#if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
     /**
      * This method scans network data for given service ID and returns pointer to the respective TLV, if present.
      *
@@ -183,7 +183,7 @@ private:
     otError AddBorderRouter(PrefixTlv &aPrefix, BorderRouterTlv &aBorderRouter);
     otError AddNetworkData(uint8_t *aTlvs, uint8_t aTlvsLength, uint8_t *aOldTlvs, uint8_t aOldTlvsLength);
     otError AddPrefix(PrefixTlv &aPrefix);
-#if OPENTHREAD_ENABLE_SERVICE
+#if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
     otError AddServer(ServiceTlv &aService, ServerTlv &aServer, uint8_t *aOldTlvs, uint8_t aOldTlvsLength);
     otError AddService(ServiceTlv &aService, uint8_t *aOldTlvs, uint8_t aOldTlvsLength);
 #endif
@@ -200,7 +200,7 @@ private:
 
     void RemoveRloc(uint16_t aRloc16, MatchMode aMatchMode);
     void RemoveRloc(PrefixTlv &aPrefix, uint16_t aRloc16, MatchMode aMatchMode);
-#if OPENTHREAD_ENABLE_SERVICE
+#if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
     void RemoveRloc(ServiceTlv &aService, uint16_t aRloc16, MatchMode aMatchMode);
 #endif
     void RemoveRloc(PrefixTlv &aPrefix, HasRouteTlv &aHasRoute, uint16_t aRloc16, MatchMode aMatchMode);
@@ -225,9 +225,8 @@ private:
     void        HandleCommissioningGet(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
 
     void SendCommissioningGetResponse(const Coap::Message &   aRequest,
-                                      const Ip6::MessageInfo &aMessageInfo,
-                                      const uint8_t *         aTlvs,
-                                      uint8_t                 aLength);
+                                      uint16_t                aLength,
+                                      const Ip6::MessageInfo &aMessageInfo);
     void SendCommissioningSetResponse(const Coap::Message &    aRequest,
                                       const Ip6::MessageInfo & aMessageInfo,
                                       MeshCoP::StateTlv::State aState);
@@ -245,7 +244,7 @@ private:
     };
 
     uint16_t   mContextUsed;
-    uint32_t   mContextLastUsed[kNumContextIds];
+    TimeMilli  mContextLastUsed[kNumContextIds];
     uint32_t   mContextIdReuseDelay;
     TimerMilli mTimer;
 

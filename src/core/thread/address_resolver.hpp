@@ -103,13 +103,28 @@ public:
     void Remove(uint8_t aRouterId);
 
     /**
-     * This method updates an existing cache entry for the EID, if one exists.
+     * This method updates an existing cache entry for the EID.
      *
-     * @param[in]  aEid     A reference to the EID.
-     * @param[in]  aRloc16  The RLOC16 corresponding to @p aEid.
+     * @param[in]  aEid               A reference to the EID.
+     * @param[in]  aRloc16            The RLOC16 corresponding to @p aEid.
+     *
+     * @retval OT_ERROR_NONE           Successfully updates an existing cache entry.
+     * @retval OT_ERROR_NOT_FOUND      No cache entry with @p aEid.
      *
      */
-    void UpdateCacheEntry(const Ip6::Address &aEid, Mac::ShortAddress aRloc16);
+    otError UpdateCacheEntry(const Ip6::Address &aEid, Mac::ShortAddress aRloc16);
+
+    /**
+     * This method adds one cache entry for the EID.
+     *
+     * @param[in]  aEid               A reference to the EID.
+     * @param[in]  aRloc16            The RLOC16 corresponding to @p aEid.
+     *
+     * @retval OT_ERROR_NONE           Successfully adds one cache entry.
+     * @retval OT_ERROR_NO_BUFS        Insufficient buffer space available to add one cache entry.
+     *
+     */
+    otError AddCacheEntry(const Ip6::Address &aEid, Mac::ShortAddress aRloc16);
 
     /**
      * This method returns the RLOC16 for a given EID, or initiates an Address Query if the mapping is not known.
@@ -125,10 +140,18 @@ public:
      */
     otError Resolve(const Ip6::Address &aEid, Mac::ShortAddress &aRloc16);
 
+    /**
+     * This method restarts any ongoing address queries.
+     *
+     * Any existing address queries will be restarted as if they are being sent for the first time.
+     *
+     */
+    void RestartAddressQueries(void);
+
 private:
     enum
     {
-        kCacheEntries      = OPENTHREAD_CONFIG_ADDRESS_CACHE_ENTRIES,
+        kCacheEntries      = OPENTHREAD_CONFIG_TMF_ADDRESS_CACHE_ENTRIES,
         kStateUpdatePeriod = 1000u, ///< State update period in milliseconds.
     };
 
@@ -138,9 +161,9 @@ private:
      */
     enum
     {
-        kAddressQueryTimeout           = OPENTHREAD_CONFIG_ADDRESS_QUERY_TIMEOUT,             // in seconds
-        kAddressQueryInitialRetryDelay = OPENTHREAD_CONFIG_ADDRESS_QUERY_INITIAL_RETRY_DELAY, // in seconds
-        kAddressQueryMaxRetryDelay     = OPENTHREAD_CONFIG_ADDRESS_QUERY_MAX_RETRY_DELAY,     // in seconds
+        kAddressQueryTimeout           = OPENTHREAD_CONFIG_TMF_ADDRESS_QUERY_TIMEOUT,             // in seconds
+        kAddressQueryInitialRetryDelay = OPENTHREAD_CONFIG_TMF_ADDRESS_QUERY_INITIAL_RETRY_DELAY, // in seconds
+        kAddressQueryMaxRetryDelay     = OPENTHREAD_CONFIG_TMF_ADDRESS_QUERY_MAX_RETRY_DELAY,     // in seconds
     };
 
     enum

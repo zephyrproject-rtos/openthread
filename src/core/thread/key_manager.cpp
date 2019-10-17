@@ -34,6 +34,7 @@
 #include "key_manager.hpp"
 
 #include "common/code_utils.hpp"
+#include "common/encoding.hpp"
 #include "common/instance.hpp"
 #include "common/locator-getters.hpp"
 #include "common/timer.hpp"
@@ -43,11 +44,11 @@
 
 namespace ot {
 
-static const uint8_t kThreadString[] = {
+const uint8_t KeyManager::kThreadString[] = {
     'T', 'h', 'r', 'e', 'a', 'd',
 };
 
-static const otMasterKey kDefaultMasterKey = {{
+const otMasterKey KeyManager::kDefaultMasterKey = {{
     0x00,
     0x11,
     0x22,
@@ -68,7 +69,6 @@ static const otMasterKey kDefaultMasterKey = {{
 
 KeyManager::KeyManager(Instance &aInstance)
     : InstanceLocator(aInstance)
-    , mMasterKey(kDefaultMasterKey)
     , mKeySequence(0)
     , mMacFrameCounter(0)
     , mMleFrameCounter(0)
@@ -81,9 +81,10 @@ KeyManager::KeyManager(Instance &aInstance)
     , mKeyRotationTimer(aInstance, &KeyManager::HandleKeyRotationTimer, this)
     , mKekFrameCounter(0)
     , mSecurityPolicyFlags(0xff)
-    , mIsPSKcSet(false)
+    , mIsPskcSet(false)
 {
-    memset(&mPSKc, 0, sizeof(mPSKc));
+    mMasterKey = static_cast<const MasterKey &>(kDefaultMasterKey);
+    memset(&mPskc, 0, sizeof(mPskc));
     ComputeKey(mKeySequence, mKey);
 }
 
@@ -99,39 +100,33 @@ void KeyManager::Stop(void)
 }
 
 #if OPENTHREAD_MTD || OPENTHREAD_FTD
-void KeyManager::SetPSKc(const otPSKc &aPSKc)
+void KeyManager::SetPskc(const Pskc &aPskc)
 {
-    VerifyOrExit(memcmp(&mPSKc, &aPSKc, sizeof(mPSKc)) != 0, Get<Notifier>().SignalIfFirst(OT_CHANGED_PSKC));
-    mPSKc = aPSKc;
+    VerifyOrExit(mPskc != aPskc, Get<Notifier>().SignalIfFirst(OT_CHANGED_PSKC));
+    mPskc = aPskc;
     Get<Notifier>().Signal(OT_CHANGED_PSKC);
 
 exit:
-    mIsPSKcSet = true;
+    mIsPskcSet = true;
 }
 #endif // OPENTHREAD_MTD || OPENTHREAD_FTD
 
-const otMasterKey &KeyManager::GetMasterKey(void) const
-{
-    return mMasterKey;
-}
-
-otError KeyManager::SetMasterKey(const otMasterKey &aKey)
+otError KeyManager::SetMasterKey(const MasterKey &aKey)
 {
     otError error = OT_ERROR_NONE;
-    Router *routers;
+    Router *parent;
 
-    VerifyOrExit(memcmp(&mMasterKey, &aKey, sizeof(mMasterKey)) != 0,
-                 Get<Notifier>().SignalIfFirst(OT_CHANGED_MASTER_KEY));
+    VerifyOrExit(mMasterKey != aKey, Get<Notifier>().SignalIfFirst(OT_CHANGED_MASTER_KEY));
 
     mMasterKey   = aKey;
     mKeySequence = 0;
     ComputeKey(mKeySequence, mKey);
 
     // reset parent frame counters
-    routers = Get<Mle::MleRouter>().GetParent();
-    routers->SetKeySequence(0);
-    routers->SetLinkFrameCounter(0);
-    routers->SetMleFrameCounter(0);
+    parent = Get<Mle::MleRouter>().GetParent();
+    parent->SetKeySequence(0);
+    parent->SetLinkFrameCounter(0);
+    parent->SetMleFrameCounter(0);
 
     // reset router frame counters
     for (RouterTable::Iterator iter(GetInstance()); !iter.IsDone(); iter++)
@@ -158,14 +153,11 @@ exit:
 void KeyManager::ComputeKey(uint32_t aKeySequence, uint8_t *aKey)
 {
     Crypto::HmacSha256 hmac;
-    uint8_t            keySequenceBytes[4];
+    uint8_t            keySequenceBytes[sizeof(uint32_t)];
 
     hmac.Start(mMasterKey.m8, sizeof(mMasterKey.m8));
 
-    keySequenceBytes[0] = (aKeySequence >> 24) & 0xff;
-    keySequenceBytes[1] = (aKeySequence >> 16) & 0xff;
-    keySequenceBytes[2] = (aKeySequence >> 8) & 0xff;
-    keySequenceBytes[3] = aKeySequence & 0xff;
+    Encoding::BigEndian::WriteUint32(aKeySequence, keySequenceBytes);
     hmac.Update(keySequenceBytes, sizeof(keySequenceBytes));
     hmac.Update(kThreadString, sizeof(kThreadString));
 
@@ -290,6 +282,20 @@ void KeyManager::HandleKeyRotationTimer(void)
     {
         SetCurrentKeySequence(mKeySequence + 1);
     }
+}
+
+void KeyManager::GenerateNonce(const Mac::ExtAddress &aAddress,
+                               uint32_t               aFrameCounter,
+                               uint8_t                aSecurityLevel,
+                               uint8_t *              aNonce)
+{
+    memcpy(aNonce, aAddress.m8, sizeof(Mac::ExtAddress));
+    aNonce += sizeof(Mac::ExtAddress);
+
+    Encoding::BigEndian::WriteUint32(aFrameCounter, aNonce);
+    aNonce += sizeof(uint32_t);
+
+    aNonce[0] = aSecurityLevel;
 }
 
 } // namespace ot

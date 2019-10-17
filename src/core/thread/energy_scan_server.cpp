@@ -31,11 +31,7 @@
  *   This file implements the Energy Scan Server.
  */
 
-#define WPP_NAME "energy_scan_server.tmh"
-
 #include "energy_scan_server.hpp"
-
-#include <openthread/platform/random.h>
 
 #include "coap/coap_message.hpp"
 #include "common/code_utils.hpp"
@@ -186,10 +182,8 @@ otError EnergyScanServer::SendReport(void)
 
     VerifyOrExit((message = MeshCoP::NewMeshCoPMessage(Get<Coap::Coap>())) != NULL, error = OT_ERROR_NO_BUFS);
 
-    message->Init(OT_COAP_TYPE_CONFIRMABLE, OT_COAP_CODE_POST);
-    message->SetToken(Coap::Message::kDefaultTokenLength);
-    message->AppendUriPathOptions(OT_URI_PATH_ENERGY_REPORT);
-    message->SetPayloadMarker();
+    SuccessOrExit(error = message->Init(OT_COAP_TYPE_CONFIRMABLE, OT_COAP_CODE_POST, OT_URI_PATH_ENERGY_REPORT));
+    SuccessOrExit(error = message->SetPayloadMarker());
 
     channelMask.Init();
     channelMask.SetChannelMask(mChannelMask);

@@ -29,12 +29,13 @@
 #ifndef TEST_LOWPAN_HPP
 #define TEST_LOWPAN_HPP
 
+#include <stdint.h>
+
 #include "common/instance.hpp"
 #include "mac/mac.hpp"
 #include "net/ip6_headers.hpp"
 #include "thread/lowpan.hpp"
 #include "thread/thread_netif.hpp"
-#include "utils/wrap_stdint.h"
 
 namespace ot {
 
@@ -71,7 +72,7 @@ public:
      * @param aAddress Pointer to the long MAC address.
      *
      */
-    void SetMacSource(const uint8_t *aAddress) { mMacSource.SetExtended(aAddress, /* reverse */ false); }
+    void SetMacSource(const uint8_t *aAddress) { mMacSource.SetExtended(aAddress); }
 
     /**
      * This method sets short MAC source address.
@@ -87,7 +88,7 @@ public:
      * @param aAddress Pointer to the long MAC address.
      *
      */
-    void SetMacDestination(const uint8_t *aAddress) { mMacDestination.SetExtended(aAddress, /* reverse */ false); }
+    void SetMacDestination(const uint8_t *aAddress) { mMacDestination.SetExtended(aAddress); }
 
     /**
      * This method sets short MAC destination address.

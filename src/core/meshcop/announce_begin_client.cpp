@@ -31,11 +31,7 @@
  *   This file implements the Announce Begin Client.
  */
 
-#define WPP_NAME "announce_begin_client.tmh"
-
 #include "announce_begin_client.hpp"
-
-#include <openthread/platform/random.h>
 
 #include "coap/coap_message.hpp"
 #include "common/code_utils.hpp"
@@ -48,7 +44,7 @@
 #include "thread/thread_netif.hpp"
 #include "thread/thread_uri_paths.hpp"
 
-#if OPENTHREAD_ENABLE_COMMISSIONER && OPENTHREAD_FTD
+#if OPENTHREAD_CONFIG_COMMISSIONER_ENABLE && OPENTHREAD_FTD
 
 namespace ot {
 
@@ -74,10 +70,10 @@ otError AnnounceBeginClient::SendRequest(uint32_t            aChannelMask,
     VerifyOrExit(Get<MeshCoP::Commissioner>().IsActive(), error = OT_ERROR_INVALID_STATE);
     VerifyOrExit((message = MeshCoP::NewMeshCoPMessage(Get<Coap::Coap>())) != NULL, error = OT_ERROR_NO_BUFS);
 
-    message->Init(aAddress.IsMulticast() ? OT_COAP_TYPE_NON_CONFIRMABLE : OT_COAP_TYPE_CONFIRMABLE, OT_COAP_CODE_POST);
-    message->SetToken(Coap::Message::kDefaultTokenLength);
-    message->AppendUriPathOptions(OT_URI_PATH_ANNOUNCE_BEGIN);
-    message->SetPayloadMarker();
+    SuccessOrExit(error =
+                      message->Init(aAddress.IsMulticast() ? OT_COAP_TYPE_NON_CONFIRMABLE : OT_COAP_TYPE_CONFIRMABLE,
+                                    OT_COAP_CODE_POST, OT_URI_PATH_ANNOUNCE_BEGIN));
+    SuccessOrExit(error = message->SetPayloadMarker());
 
     sessionId.Init();
     sessionId.SetCommissionerSessionId(Get<MeshCoP::Commissioner>().GetSessionId());
@@ -98,7 +94,6 @@ otError AnnounceBeginClient::SendRequest(uint32_t            aChannelMask,
     messageInfo.SetSockAddr(Get<Mle::MleRouter>().GetMeshLocal16());
     messageInfo.SetPeerAddr(aAddress);
     messageInfo.SetPeerPort(kCoapUdpPort);
-    messageInfo.SetInterfaceId(Get<ThreadNetif>().GetInterfaceId());
 
     SuccessOrExit(error = Get<Coap::Coap>().SendMessage(*message, messageInfo));
 
@@ -116,4 +111,4 @@ exit:
 
 } // namespace ot
 
-#endif // OPENTHREAD_ENABLE_COMMISSIONER && OPENTHREAD_FTD
+#endif // OPENTHREAD_CONFIG_COMMISSIONER_ENABLE && OPENTHREAD_FTD

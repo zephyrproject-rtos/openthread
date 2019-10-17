@@ -31,10 +31,10 @@
 #include "cc2650_radio.h"
 #include <assert.h>
 #include <utils/code_utils.h>
+#include <openthread/random_noncrypto.h> /* to seed the CSMA-CA funciton */
 #include <openthread/platform/alarm-milli.h>
 #include <openthread/platform/diag.h>
 #include <openthread/platform/radio.h>
-#include <openthread/platform/random.h> /* to seed the CSMA-CA funciton */
 
 #include <driverlib/chipinfo.h>
 #include <driverlib/osc.h>
@@ -603,7 +603,7 @@ static uint_fast8_t rfCoreSendTransmitCmd(uint8_t *aPsdu, uint8_t aLen)
     sCsmacaBackoffCmd = cCsmacaBackoffCmd;
     /* initialize the random state with a true random seed for the radio core's
      * psudo rng */
-    sCsmacaBackoffCmd.randomState = otPlatRandomGet();
+    sCsmacaBackoffCmd.randomState = otRandomNonCryptoGetUint16();
     sCsmacaBackoffCmd.pNextOp     = (rfc_radioOp_t *)&sTransmitCmd;
 
     sTransmitCmd = cTransmitCmd;
@@ -1170,6 +1170,7 @@ otError otPlatRadioEnable(otInstance *aInstance)
         otEXPECT_ACTION(rfCorePowerOn() == CMDSTA_Done, error = OT_ERROR_FAILED);
         otEXPECT_ACTION(rfCoreSendEnableCmd() == DONE_OK, error = OT_ERROR_FAILED);
         sState = cc2650_stateSleep;
+        error  = OT_ERROR_NONE;
     }
 
 exit:
@@ -1280,6 +1281,28 @@ otError otPlatRadioSetTransmitPower(otInstance *aInstance, int8_t aPower)
     sCurrentOutputPower = powerCfg;
 
     return OT_ERROR_NONE;
+}
+
+/**
+ * Function documented in platform/radio.h
+ */
+otError otPlatRadioGetCcaEnergyDetectThreshold(otInstance *aInstance, int8_t *aThreshold)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    OT_UNUSED_VARIABLE(aThreshold);
+
+    return OT_ERROR_NOT_IMPLEMENTED;
+}
+
+/**
+ * Function documented in platform/radio.h
+ */
+otError otPlatRadioSetCcaEnergyDetectThreshold(otInstance *aInstance, int8_t aThreshold)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    OT_UNUSED_VARIABLE(aThreshold);
+
+    return OT_ERROR_NOT_IMPLEMENTED;
 }
 
 /**
@@ -1783,14 +1806,14 @@ static void cc2650RadioProcessTransmitDone(otInstance *  aInstance,
                                            otRadioFrame *aAckFrame,
                                            otError       aTransmitError)
 {
-#if OPENTHREAD_ENABLE_DIAG
+#if OPENTHREAD_CONFIG_DIAG_ENABLE
 
     if (otPlatDiagModeGet())
     {
         otPlatDiagRadioTransmitDone(aInstance, aTransmitFrame, aTransmitError);
     }
     else
-#endif /* OPENTHREAD_ENABLE_DIAG */
+#endif /* OPENTHREAD_CONFIG_DIAG_ENABLE */
     {
         otPlatRadioTxDone(aInstance, aTransmitFrame, aAckFrame, aTransmitError);
     }
@@ -1798,14 +1821,17 @@ static void cc2650RadioProcessTransmitDone(otInstance *  aInstance,
 
 static void cc2650RadioProcessReceiveDone(otInstance *aInstance, otRadioFrame *aReceiveFrame, otError aReceiveError)
 {
-#if OPENTHREAD_ENABLE_DIAG
+    // TODO Set this flag only when the packet is really acknowledged with frame pending set.
+    // See https://github.com/openthread/openthread/pull/3785
+    aReceiveFrame->mInfo.mRxInfo.mAckedWithFramePending = true;
+#if OPENTHREAD_CONFIG_DIAG_ENABLE
 
     if (otPlatDiagModeGet())
     {
         otPlatDiagRadioReceiveDone(aInstance, aReceiveFrame, aReceiveError);
     }
     else
-#endif /* OPENTHREAD_ENABLE_DIAG */
+#endif /* OPENTHREAD_CONFIG_DIAG_ENABLE */
     {
         otPlatRadioReceiveDone(aInstance, aReceiveFrame, aReceiveError);
     }
@@ -1841,11 +1867,15 @@ static void cc2650RadioProcessReceiveQueue(otInstance *aInstance)
 
             if (crcCorr->status.bCrcErr == 0 && (len - 2) < OT_RADIO_FRAME_MAX_SIZE)
             {
+#if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
+#error Time sync requires the timestamp of SFD rather than that of rx done!
+#else
                 if (otPlatRadioGetPromiscuous(aInstance))
+#endif
                 {
                     // TODO: Propagate CM0 timestamp
-                    receiveFrame.mInfo.mRxInfo.mMsec = otPlatAlarmMilliGetNow();
-                    receiveFrame.mInfo.mRxInfo.mUsec = 0; // Don't support microsecond timer for now.
+                    // The current driver only supports milliseconds resolution.
+                    receiveFrame.mInfo.mRxInfo.mTimestamp = otPlatAlarmMilliGetNow() * 1000;
                 }
 
                 receiveFrame.mLength             = len;

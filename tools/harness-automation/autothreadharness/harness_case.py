@@ -41,6 +41,7 @@ from selenium.webdriver import ActionChains
 from selenium.webdriver.support.ui import Select
 from selenium.common.exceptions import UnexpectedAlertPresentException
 from selenium.common.exceptions import NoSuchElementException
+from functools import reduce
 
 from autothreadharness import settings
 from autothreadharness.exceptions import FailError, FatalError, GoldenDeviceNotEnoughError
@@ -61,6 +62,7 @@ THREAD_CHANNEL_MIN = 11
 DEFAULT_TIMEOUT = 2700
 """Timeout for each test case in seconds"""
 
+
 def wait_until(what, times=-1):
     """Wait until `what` return True
 
@@ -77,7 +79,7 @@ def wait_until(what, times=-1):
         try:
             if what() is True:
                 return True
-        except:
+        except BaseException:
             logger.exception('Wait failed')
         else:
             logger.warning('Trial[%d] failed', times)
@@ -85,6 +87,7 @@ def wait_until(what, times=-1):
         time.sleep(1)
 
     return False
+
 
 class HarnessCase(unittest.TestCase):
     """This is the case class of all automation test cases.
@@ -98,16 +101,16 @@ class HarnessCase(unittest.TestCase):
     Thread channel ranges from 11 to 26.
     """
 
-    ROLE_LEADER         = 1
-    ROLE_ROUTER         = 2
-    ROLE_SED            = 4
-    ROLE_BORDER         = 8
-    ROLE_REED           = 16
-    ROLE_ED             = 32
-    ROLE_COMMISSIONER   = 64
-    ROLE_JOINER         = 128
-    ROLE_FED            = 512
-    ROLE_MED            = 1024
+    ROLE_LEADER = 1
+    ROLE_ROUTER = 2
+    ROLE_SED = 4
+    ROLE_BORDER = 8
+    ROLE_REED = 16
+    ROLE_ED = 32
+    ROLE_COMMISSIONER = 64
+    ROLE_JOINER = 128
+    ROLE_FED = 512
+    ROLE_MED = 1024
 
     role = None
     """int: role id.
@@ -164,6 +167,21 @@ class HarnessCase(unittest.TestCase):
         self.result_dir = '%s\\%s' % (settings.OUTPUT_PATH, self.__class__.__name__)
         self.history = HistoryHelper()
         self.add_all_devices = False
+        self.new_th = False
+
+        harness_info = ConfigParser.ConfigParser()
+        harness_info.read('%s\\info.ini' % settings.HARNESS_HOME)
+        if harness_info.has_option('Thread_Harness_Info', 'Version') and harness_info.has_option(
+            'Thread_Harness_Info', 'Mode'
+        ):
+            harness_version = harness_info.get('Thread_Harness_Info', 'Version').rsplit(' ', 1)[1]
+            harness_mode = harness_info.get('Thread_Harness_Info', 'Mode')
+
+            if harness_mode == 'External' and harness_version > '1.4.0':
+                self.new_th = True
+
+            if harness_mode == 'Internal' and harness_version > '49.4':
+                self.new_th = True
 
         super(HarnessCase, self).__init__(*args, **kwargs)
 
@@ -183,7 +201,7 @@ class HarnessCase(unittest.TestCase):
                     with OpenThreadController(port) as otc:
                         logger.info('Resetting %s', port)
                         otc.reset()
-                except:
+                except BaseException:
                     logger.exception('Failed to reset device %s', port)
                     self.history.mark_bad_golden_device(device)
 
@@ -225,13 +243,15 @@ class HarnessCase(unittest.TestCase):
 
         harness_config = ConfigParser.ConfigParser()
         harness_config.read('%s\\Config\\Configuration.ini' % settings.HARNESS_HOME)
-        if harness_config.has_option('THREAD_HARNESS_CONFIG', 'BrowserAutoNavigate') and \
-                harness_config.getboolean('THREAD_HARNESS_CONFIG', 'BrowserAutoNavigate'):
+        if harness_config.has_option('THREAD_HARNESS_CONFIG', 'BrowserAutoNavigate') and harness_config.getboolean(
+            'THREAD_HARNESS_CONFIG', 'BrowserAutoNavigate'
+        ):
             logger.error('BrowserAutoNavigate in Configuration.ini should be False')
             raise FailError('BrowserAutoNavigate in Configuration.ini should be False')
         if settings.MIXED_DEVICE_TYPE:
-            if harness_config.has_option('THREAD_HARNESS_CONFIG', 'EnableDeviceSelection') and \
-                    not harness_config.getboolean('THREAD_HARNESS_CONFIG', 'EnableDeviceSelection'):
+            if harness_config.has_option(
+                'THREAD_HARNESS_CONFIG', 'EnableDeviceSelection'
+            ) and not harness_config.getboolean('THREAD_HARNESS_CONFIG', 'EnableDeviceSelection'):
                 logger.error('EnableDeviceSelection in Configuration.ini should be True')
                 raise FailError('EnableDeviceSelection in Configuration.ini should be True')
 
@@ -267,34 +287,39 @@ class HarnessCase(unittest.TestCase):
         2. ignore certificate errors and
         3. always allow notifications.
         """
-        chrome_options = webdriver.ChromeOptions()
-        chrome_options.add_argument('--disable-extensions')
-        chrome_options.add_argument('--disable-infobars')
-        chrome_options.add_argument('--ignore-certificate-errors')
-        chrome_options.add_experimental_option('prefs', {
-            'profile.managed_default_content_settings.notifications': 1
-        })
+        try:
+            chrome_options = webdriver.ChromeOptions()
+            chrome_options.add_argument('--disable-extensions')
+            chrome_options.add_argument('--disable-infobars')
+            chrome_options.add_argument('--ignore-certificate-errors')
+            chrome_options.add_experimental_option(
+                'prefs', {'profile.managed_default_content_settings.notifications': 1}
+            )
 
-        browser = webdriver.Chrome(chrome_options=chrome_options)
-        browser.set_page_load_timeout(10)
-        browser.implicitly_wait(1)
-        browser.maximize_window()
-        browser.get(settings.HARNESS_URL)
-        self._browser = browser
-        if not wait_until(lambda: 'Thread' in browser.title, 30):
-            self.assertIn('Thread', browser.title)
+            browser = webdriver.Chrome(chrome_options=chrome_options)
+            browser.set_page_load_timeout(20)
+            browser.implicitly_wait(1)
+            browser.maximize_window()
+            browser.get(settings.HARNESS_URL)
+            self._browser = browser
+            if not wait_until(lambda: 'Thread' in browser.title, 30):
+                self.assertIn('Thread', browser.title)
+            return True
+        except Exception as e:
+            logger.info('Init chrome error: {0}'.format(type(e).__name__))
+            return False
 
     def _destroy_browser(self):
         """Close the browser.
         """
-        self._browser.close()
+        if self._browser:
+            self._browser.close()
         self._browser = None
 
     def _init_rf_shield(self):
         if getattr(settings, 'SHIELD_CONTROLLER_TYPE', None) and getattr(settings, 'SHIELD_CONTROLLER_PARAMS', None):
             self.rf_shield = get_rf_shield_controller(
-                shield_type=settings.SHIELD_CONTROLLER_TYPE,
-                params=settings.SHIELD_CONTROLLER_PARAMS
+                shield_type=settings.SHIELD_CONTROLLER_TYPE, params=settings.SHIELD_CONTROLLER_PARAMS
             )
         else:
             self.rf_shield = None
@@ -312,16 +337,19 @@ class HarnessCase(unittest.TestCase):
 
         logger.info('Setting up')
         # clear files
-        logger.info('Deleting all .pdf')
-        os.system('del /q "%HOMEDRIVE%%HOMEPATH%\\Downloads\\NewPdf_*.pdf"')
-        logger.info('Deleting all .xlsx')
-        os.system('del /q "%HOMEDRIVE%%HOMEPATH%\\Downloads\\ExcelReport*.xlsx"')
+
         logger.info('Deleting all .pcapng')
         os.system('del /q "%s\\Captures\\*.pcapng"' % settings.HARNESS_HOME)
+        logger.info('Empty files in Logs')
+        os.system('del /q "%s\\Logs\\*.*"' % settings.HARNESS_HOME)
 
         # using temp files to fix excel downloading fail
-        logger.info('Empty files in temps')
-        os.system('del /q "%s\\Thread_Harness\\temp\\*.*"' % settings.HARNESS_HOME)
+        if self.new_th:
+            logger.info('Empty files in Reports')
+            os.system('del /q "%s\\Reports\\*.*"' % settings.HARNESS_HOME)
+        else:
+            logger.info('Empty files in temps')
+            os.system('del /q "%s\\Thread_Harness\\temp\\*.*"' % settings.HARNESS_HOME)
 
         # create directory
         os.system('mkdir %s' % self.result_dir)
@@ -350,14 +378,14 @@ class HarnessCase(unittest.TestCase):
         if not self.started:
             self.started = time.time()
 
-        if time.time() - self.started > 5*len(settings.GOLDEN_DEVICES):
+        if time.time() - self.started > 5 * len(settings.GOLDEN_DEVICES):
             self._browser.refresh()
             return
 
         # Detect Sniffer
         try:
             dialog = self._browser.find_element_by_id('capture-Setup-modal')
-        except:
+        except BaseException:
             logger.exception('Failed to get dialog.')
         else:
             if dialog and dialog.get_attribute('aria-hidden') == 'false':
@@ -391,12 +419,12 @@ class HarnessCase(unittest.TestCase):
             if skip_button.is_enabled():
                 skip_button.click()
                 time.sleep(1)
-        except:
+        except BaseException:
             logger.info('Still detecting sniffers')
 
         try:
             next_button = self._browser.find_element_by_id('nextButton')
-        except:
+        except BaseException:
             logger.exception('Failed to finish setup')
             return
 
@@ -430,7 +458,7 @@ class HarnessCase(unittest.TestCase):
                 button.click()
                 time.sleep(1)
 
-        except:
+        except BaseException:
             logger.info('general setup exception')
             logger.exception('Failed to do general setup')
             return
@@ -478,28 +506,30 @@ class HarnessCase(unittest.TestCase):
         selected_hw_num = len(selected_hw_set)
 
         while selected_hw_num:
-            remove_button = selected_hw_set[selected_hw_num - 1].find_element_by_class_name(
-                'removeSelectedDevice')
+            remove_button = selected_hw_set[selected_hw_num - 1].find_element_by_class_name('removeSelectedDevice')
             remove_button.click()
             selected_hw_num = selected_hw_num - 1
 
-        devices = [device for device in settings.GOLDEN_DEVICES
-                   if not self.history.is_bad_golden_device(device[0]) and \
-                   not (settings.DUT_DEVICE and device[0] == settings.DUT_DEVICE[0])]
+        devices = [
+            device
+            for device in settings.GOLDEN_DEVICES
+            if not self.history.is_bad_golden_device(device[0])
+            and not (settings.DUT_DEVICE and device[0] == settings.DUT_DEVICE[0])
+        ]
         logger.info('Available golden devices: %s', json.dumps(devices, indent=2))
         golden_devices_required = self.golden_devices_required
 
         # for test bed with mixed devices
         if settings.MIXED_DEVICE_TYPE:
-            topo_file = settings.HARNESS_HOME+"\\Thread_Harness\\TestScripts\\TopologyConfig.txt"
+            topo_file = settings.HARNESS_HOME + "\\Thread_Harness\\TestScripts\\TopologyConfig.txt"
             try:
                 f_topo = open(topo_file, 'r')
-            except IOError as e:
+            except IOError:
                 logger.info('%s can NOT be found', topo_file)
                 raise GoldenDeviceNotEnoughError()
             topo_mixed_devices = []
             try:
-                while 1:
+                while True:
                     topo_line = f_topo.readline().strip()
                     if re.match(r'#.*', topo_line):
                         continue
@@ -581,8 +611,10 @@ class HarnessCase(unittest.TestCase):
             try:
                 self._connect_devices()
                 button_next = browser.find_element_by_id('nextBtn')
-                if not wait_until(lambda: 'disabled' not in button_next.get_attribute('class'),
-                                  times=(30 + 4 * number_of_devices_to_add)):
+                if not wait_until(
+                    lambda: 'disabled' not in button_next.get_attribute('class'),
+                    times=(30 + 4 * number_of_devices_to_add),
+                ):
                     bad_ones = []
                     selected_hw_set = test_bed.find_elements_by_class_name('selected-hw')
                     for selected_hw in selected_hw_set:
@@ -597,7 +629,8 @@ class HarnessCase(unittest.TestCase):
                         port = form_port.get_attribute('value').encode('utf8')
                         if settings.DUT_DEVICE and port == settings.DUT_DEVICE[0]:
                             if settings.PDU_CONTROLLER_TYPE is None:
-                                # connection error cannot recover without power cycling
+                                # connection error cannot recover without power
+                                # cycling
                                 raise FatalError('Failed to connect to DUT')
                             else:
                                 raise FailError('Failed to connect to DUT')
@@ -634,7 +667,7 @@ class HarnessCase(unittest.TestCase):
                     raise Exception('Failed to load TestExecution page')
             except FailError:
                 raise
-            except:
+            except BaseException:
                 logger.exception('Unexpected error')
             else:
                 break
@@ -678,55 +711,15 @@ class HarnessCase(unittest.TestCase):
     def _collect_result(self):
         """Collect test result.
 
-        Generate PDF, excel and pcap file
+        Copy PDF and pcap file to result directory
         """
-        # generate pdf
-        self._browser.find_element_by_class_name('save-pdf').click()
-        time.sleep(1)
-        try:
-            dialog = self._browser.find_element_by_id('Testinfo')
-        except:
-            logger.exception('Failed to get test info dialog.')
+
+        if self.new_th:
+            os.system('copy "%s\\Reports\\*.*" "%s"' % (settings.HARNESS_HOME, self.result_dir))
         else:
-            if dialog.get_attribute('aria-hidden') != 'false':
-                raise Exception('Test information dialog not ready')
+            os.system('copy "%s\\Thread_Harness\\temp\\*.*" "%s"' % (settings.HARNESS_HOME, self.result_dir))
 
-            version = self.auto_dut and settings.DUT_VERSION or self.dut.version
-            dialog.find_element_by_id('inp_dut_manufacturer').send_keys(settings.DUT_MANUFACTURER)
-            dialog.find_element_by_id('inp_dut_firmware_version').send_keys(version)
-            dialog.find_element_by_id('inp_tester_name').send_keys(settings.TESTER_NAME)
-            dialog.find_element_by_id('inp_remarks').send_keys(settings.TESTER_REMARKS)
-            dialog.find_element_by_id('generatePdf').click()
-
-        time.sleep(1)
-        main_window = self._browser.current_window_handle
-
-        # generate excel
-        self._browser.find_element_by_class_name('save-excel').click()
-        time.sleep(1)
-        for window_handle in self._browser.window_handles:
-            if window_handle != main_window:
-                self._browser.switch_to.window(window_handle)
-                self._browser.close()
-        self._browser.switch_to.window(main_window)
-
-        # save pcap
-        self._browser.find_element_by_class_name('save-wireshark').click()
-        time.sleep(1)
-        for window_handle in self._browser.window_handles:
-            if window_handle != main_window:
-                self._browser.switch_to.window(window_handle)
-                self._browser.close()
-        self._browser.switch_to.window(main_window)
-
-        os.system('copy "%%HOMEPATH%%\\Downloads\\NewPdf_*.pdf" %s\\'
-                  % self.result_dir)
-        os.system('copy "%%HOMEPATH%%\\Downloads\\ExcelReport_*.xlsx" %s\\'
-                  % self.result_dir)
-        os.system('copy "%s\\Captures\\*.pcapng" %s\\'
-                  % (settings.HARNESS_HOME, self.result_dir))
-        os.system('copy "%s\\Thread_Harness\\temp\\*.*" "%s"'
-                  % (settings.HARNESS_HOME, self.result_dir))
+        os.system('copy "%s\\Captures\\*.pcapng" %s\\' % (settings.HARNESS_HOME, self.result_dir))
 
     def _wait_dialog(self):
         """Wait for dialogs and handle them until done.
@@ -735,11 +728,11 @@ class HarnessCase(unittest.TestCase):
         done = False
         error = False
 
-        logger.info("self timeout %d",self.timeout)
+        logger.info('self timeout %d', self.timeout)
         while not done and self.timeout:
             try:
                 dialog = self._browser.find_element_by_id('RemoteConfirm')
-            except:
+            except BaseException:
                 logger.exception('Failed to get dialog.')
             else:
                 if dialog and dialog.get_attribute('aria-hidden') == 'false':
@@ -749,7 +742,7 @@ class HarnessCase(unittest.TestCase):
 
                     try:
                         done = self._handle_dialog(dialog, title)
-                    except:
+                    except BaseException:
                         logger.exception('Error handling dialog: %s', title)
                         error = True
 
@@ -779,8 +772,9 @@ class HarnessCase(unittest.TestCase):
                 if 'SUCCESS: The process "dumpcap.exe" with PID ' in lines:
                     logger.info('Tshark should be ended now, lets wait at most 30 seconds.')
                     if not wait_until(lambda: 'tshark.exe' not in subprocess.check_output('tasklist'), 30):
-                        res = subprocess.check_output('taskkill /t /f /im tshark.exe',
-                                                      stderr=subprocess.STDOUT, shell=True)
+                        res = subprocess.check_output(
+                            'taskkill /t /f /im tshark.exe', stderr=subprocess.STDOUT, shell=True
+                        )
                         logger.info(res)
 
         # Wait until case really stopped
@@ -821,8 +815,7 @@ class HarnessCase(unittest.TestCase):
             self.dut.extpanid = settings.THREAD_EXTPANID
             self.dut.start()
 
-        elif (title.startswith('MAC Address Required')
-              or title.startswith('DUT Random Extended MAC Address Required')):
+        elif title.startswith('MAC Address Required') or title.startswith('DUT Random Extended MAC Address Required'):
             mac = self.dut.mac
             inp = dialog.find_element_by_id('cnfrmInpText')
             inp.clear()
@@ -883,10 +876,9 @@ class HarnessCase(unittest.TestCase):
                 with self.rf_shield:
                     self.rf_shield.shield()
             elif self.dut and settings.SHIELD_SIMULATION:
-                self.dut.channel = (self.channel == THREAD_CHANNEL_MAX
-                                    and THREAD_CHANNEL_MIN) or (self.channel + 1)
+                self.dut.channel = (self.channel == THREAD_CHANNEL_MAX and THREAD_CHANNEL_MIN) or (self.channel + 1)
             else:
-                raw_input('Shield DUT and press enter to continue..')
+                input('Shield DUT and press enter to continue..')
 
         elif title.startswith('Unshield Devices') or title.startswith('Bring DUT Back to network'):
             if self.rf_shield:
@@ -896,13 +888,16 @@ class HarnessCase(unittest.TestCase):
             elif self.dut and settings.SHIELD_SIMULATION:
                 self.dut.channel = self.channel
             else:
-                raw_input('Bring DUT and press enter to continue..')
+                input('Bring DUT and press enter to continue..')
 
         elif title.startswith('Configure Prefix on DUT'):
             body = dialog.find_element_by_id('cnfrmMsg').text
             body = body.split(': ')[1]
-            params = reduce(lambda params, param: params.update(((param[0].strip(' '), param[1]),)) or params,
-                            [it.split('=') for it in body.split(', ')], {})
+            params = reduce(
+                lambda params, param: params.update(((param[0].strip(' '), param[1]),)) or params,
+                [it.split('=') for it in body.split(', ')],
+                {},
+            )
             prefix = params['P_Prefix'].strip('\0\r\n\t ')
             flags = []
             if params.get('P_slaac_preferred', 0) == '1':
@@ -924,8 +919,18 @@ class HarnessCase(unittest.TestCase):
             return
 
         logger.info('Testing role[%d] case[%s]', self.role, self.case)
+
+        init_browser_times = 5
+        while True:
+            if self._init_browser():
+                break
+            elif init_browser_times > 0:
+                init_browser_times -= 1
+                self._destroy_browser()
+            else:
+                raise SystemExit()
+
         try:
-            self._init_browser()
             # prepare test case
             while True:
                 url = self._browser.current_url
@@ -946,17 +951,17 @@ class HarnessCase(unittest.TestCase):
         except FailError:
             logger.exception('Test failed')
             raise
-        except:
+        except BaseException:
             logger.exception('Something wrong')
 
         self._select_case(self.role, self.case)
 
-        logger.info("start to wait test process end")
+        logger.info('start to wait test process end')
         self._wait_dialog()
 
         try:
             self._collect_result()
-        except:
+        except BaseException:
             logger.exception('Failed to collect results')
             raise
 

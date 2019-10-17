@@ -31,11 +31,7 @@
  *   This file implements common methods for manipulating Thread Network Data.
  */
 
-#define WPP_NAME "network_data.tmh"
-
 #include "network_data.hpp"
-
-#include <openthread/platform/random.h>
 
 #include "coap/coap_message.hpp"
 #include "common/code_utils.hpp"
@@ -236,7 +232,7 @@ exit:
     return error;
 }
 
-#if OPENTHREAD_ENABLE_SERVICE
+#if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
 otError NetworkData::GetNextService(otNetworkDataIterator *aIterator, otServiceConfig *aConfig)
 {
     return GetNextService(aIterator, Mac::kShortAddrBroadcast, aConfig);
@@ -440,7 +436,7 @@ exit:
     return rval;
 }
 
-#if OPENTHREAD_ENABLE_SERVICE
+#if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
 bool NetworkData::ContainsServices(NetworkData &aCompare, uint16_t aRloc16)
 {
     otNetworkDataIterator outerIterator = OT_NETWORK_DATA_ITERATOR_INIT;
@@ -534,7 +530,7 @@ void NetworkData::RemoveTemporaryData(uint8_t *aData, uint8_t &aDataLength)
     NetworkDataTlv *cur = reinterpret_cast<NetworkDataTlv *>(aData);
     NetworkDataTlv *end;
     PrefixTlv *     prefix;
-#if OPENTHREAD_ENABLE_SERVICE
+#if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
     ServiceTlv *service;
 #endif
     uint8_t  length;
@@ -571,7 +567,7 @@ void NetworkData::RemoveTemporaryData(uint8_t *aData, uint8_t &aDataLength)
             break;
         }
 
-#if OPENTHREAD_ENABLE_SERVICE
+#if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
 
         case NetworkDataTlv::kTypeService:
         {
@@ -709,7 +705,7 @@ void NetworkData::RemoveTemporaryData(uint8_t *aData, uint8_t &aDataLength, Pref
     }
 }
 
-#if OPENTHREAD_ENABLE_SERVICE
+#if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
 void NetworkData::RemoveTemporaryData(uint8_t *aData, uint8_t &aDataLength, ServiceTlv &aService)
 {
     NetworkDataTlv *cur = aService.GetSubTlvs();
@@ -936,7 +932,7 @@ int8_t NetworkData::PrefixMatch(const uint8_t *a, const uint8_t *b, uint8_t aLen
     return (rval >= aLength) ? rval : -1;
 }
 
-#if OPENTHREAD_ENABLE_SERVICE
+#if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
 ServiceTlv *NetworkData::FindService(uint32_t       aEnterpriseNumber,
                                      const uint8_t *aServiceData,
                                      uint8_t        aServiceDataLength)
@@ -1000,15 +996,13 @@ otError NetworkData::SendServerDataNotification(uint16_t aRloc16)
     Coap::Message *  message = NULL;
     Ip6::MessageInfo messageInfo;
 
-    VerifyOrExit(!mLastAttemptWait || static_cast<int32_t>(TimerMilli::GetNow() - mLastAttempt) < kDataResubmitDelay,
+    VerifyOrExit(!mLastAttemptWait || (TimerMilli::GetNow() - mLastAttempt < kDataResubmitDelay),
                  error = OT_ERROR_ALREADY);
 
     VerifyOrExit((message = Get<Coap::Coap>().NewMessage()) != NULL, error = OT_ERROR_NO_BUFS);
 
-    message->Init(OT_COAP_TYPE_CONFIRMABLE, OT_COAP_CODE_POST);
-    message->SetToken(Coap::Message::kDefaultTokenLength);
-    message->AppendUriPathOptions(OT_URI_PATH_SERVER_DATA);
-    message->SetPayloadMarker();
+    SuccessOrExit(error = message->Init(OT_COAP_TYPE_CONFIRMABLE, OT_COAP_CODE_POST, OT_URI_PATH_SERVER_DATA));
+    SuccessOrExit(error = message->SetPayloadMarker());
 
     if (mType == kTypeLocal)
     {

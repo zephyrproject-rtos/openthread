@@ -31,11 +31,7 @@
  *   This file implements Thread's Network Diagnostic processing.
  */
 
-#define WPP_NAME "network_diagnostic.tmh"
-
 #include "network_diagnostic.hpp"
-
-#include <openthread/platform/random.h>
 
 #include "coap/coap_message.hpp"
 #include "common/code_utils.hpp"
@@ -53,7 +49,7 @@
 #include "thread/thread_tlvs.hpp"
 #include "thread/thread_uri_paths.hpp"
 
-#if OPENTHREAD_FTD || OPENTHREAD_ENABLE_MTD_NETWORK_DIAGNOSTIC
+#if OPENTHREAD_FTD || OPENTHREAD_CONFIG_TMF_NETWORK_DIAG_MTD_ENABLE
 
 namespace ot {
 
@@ -94,21 +90,19 @@ otError NetworkDiagnostic::SendDiagnosticGet(const Ip6::Address &aDestination,
 
     if (aDestination.IsMulticast())
     {
-        message->Init(OT_COAP_TYPE_NON_CONFIRMABLE, OT_COAP_CODE_POST);
-        message->SetToken(Coap::Message::kDefaultTokenLength);
-        message->AppendUriPathOptions(OT_URI_PATH_DIAGNOSTIC_GET_QUERY);
+        SuccessOrExit(
+            error = message->Init(OT_COAP_TYPE_NON_CONFIRMABLE, OT_COAP_CODE_POST, OT_URI_PATH_DIAGNOSTIC_GET_QUERY));
     }
     else
     {
         handler = &NetworkDiagnostic::HandleDiagnosticGetResponse;
-        message->Init(OT_COAP_TYPE_CONFIRMABLE, OT_COAP_CODE_POST);
-        message->SetToken(Coap::Message::kDefaultTokenLength);
-        message->AppendUriPathOptions(OT_URI_PATH_DIAGNOSTIC_GET_REQUEST);
+        SuccessOrExit(
+            error = message->Init(OT_COAP_TYPE_CONFIRMABLE, OT_COAP_CODE_POST, OT_URI_PATH_DIAGNOSTIC_GET_REQUEST));
     }
 
     if (aCount > 0)
     {
-        message->SetPayloadMarker();
+        SuccessOrExit(error = message->SetPayloadMarker());
     }
 
     if (aCount > 0)
@@ -121,10 +115,17 @@ otError NetworkDiagnostic::SendDiagnosticGet(const Ip6::Address &aDestination,
         SuccessOrExit(error = message->Append(aTlvTypes, aCount));
     }
 
-    messageInfo.SetSockAddr(Get<Mle::MleRouter>().GetMeshLocal16());
+    if (aDestination.IsLinkLocal() || aDestination.IsLinkLocalMulticast())
+    {
+        messageInfo.SetSockAddr(Get<Mle::MleRouter>().GetLinkLocalAddress());
+    }
+    else
+    {
+        messageInfo.SetSockAddr(Get<Mle::MleRouter>().GetMeshLocal16());
+    }
+
     messageInfo.SetPeerAddr(aDestination);
     messageInfo.SetPeerPort(kCoapUdpPort);
-    messageInfo.SetInterfaceId(Get<ThreadNetif>().GetInterfaceId());
 
     SuccessOrExit(error = Get<Coap::Coap>().SendMessage(*message, messageInfo, handler, this));
 
@@ -223,7 +224,7 @@ exit:
 otError NetworkDiagnostic::AppendChildTable(Message &aMessage)
 {
     otError         error   = OT_ERROR_NONE;
-    uint8_t         count   = 0;
+    uint16_t        count   = 0;
     uint8_t         timeout = 0;
     ChildTableTlv   tlv;
     ChildTableEntry entry;
@@ -231,12 +232,24 @@ otError NetworkDiagnostic::AppendChildTable(Message &aMessage)
     tlv.Init();
 
     count = Get<ChildTable>().GetNumChildren(ChildTable::kInStateValid);
-    tlv.SetLength(count * sizeof(ChildTableEntry));
+
+    // The length of the Child Table TLV may exceed the outgoing link's MTU (1280B).
+    // As a workaround we limit the number of entries in the Child Table TLV,
+    // also to avoid using extended TLV format. The issue is processed by the
+    // Thread Group (SPEC-894).
+    if (count > (Tlv::kBaseTlvMaxLength / sizeof(ChildTableEntry)))
+    {
+        count = Tlv::kBaseTlvMaxLength / sizeof(ChildTableEntry);
+    }
+
+    tlv.SetLength(static_cast<uint8_t>(count * sizeof(ChildTableEntry)));
 
     SuccessOrExit(error = aMessage.Append(&tlv, sizeof(ChildTableTlv)));
 
     for (ChildTable::Iterator iter(GetInstance(), ChildTable::kInStateValid); !iter.IsDone(); iter++)
     {
+        VerifyOrExit(count--);
+
         Child &child = *iter.GetChild();
 
         timeout = 0;
@@ -329,7 +342,7 @@ otError NetworkDiagnostic::FillRequestedTlvs(Message &             aRequest,
             {
                 TimeoutTlv tlv;
                 tlv.Init();
-                tlv.SetTimeout(TimerMilli::MsecToSec(Get<DataPollManager>().GetKeepAlivePollPeriod()));
+                tlv.SetTimeout(Get<Mle::MleRouter>().GetTimeout());
                 SuccessOrExit(error = aResponse.AppendTlv(tlv));
             }
 
@@ -421,7 +434,7 @@ otError NetworkDiagnostic::FillRequestedTlvs(Message &             aRequest,
         case NetworkDiagnosticTlv::kChannelPages:
         {
             uint8_t         length   = 0;
-            uint8_t         pageMask = Phy::kSupportedChannelPages;
+            uint8_t         pageMask = Radio::kSupportedChannelPages;
             ChannelPagesTlv tlv;
 
             tlv.Init();
@@ -487,8 +500,6 @@ void NetworkDiagnostic::HandleDiagnosticGetQuery(Coap::Message &aMessage, const 
 
     VerifyOrExit(networkDiagnosticTlv.GetType() == NetworkDiagnosticTlv::kTypeList, error = OT_ERROR_PARSE);
 
-    VerifyOrExit((static_cast<TypeListTlv *>(&networkDiagnosticTlv)->IsValid()), error = OT_ERROR_PARSE);
-
     // DIAG_GET.qry may be sent as a confirmable message.
     if (aMessage.GetType() == OT_COAP_TYPE_CONFIRMABLE)
     {
@@ -500,19 +511,25 @@ void NetworkDiagnostic::HandleDiagnosticGetQuery(Coap::Message &aMessage, const 
 
     VerifyOrExit((message = Get<Coap::Coap>().NewMessage()) != NULL, error = OT_ERROR_NO_BUFS);
 
-    message->Init(OT_COAP_TYPE_CONFIRMABLE, OT_COAP_CODE_POST);
-    message->SetToken(Coap::Message::kDefaultTokenLength);
-    message->AppendUriPathOptions(OT_URI_PATH_DIAGNOSTIC_GET_ANSWER);
+    SuccessOrExit(error =
+                      message->Init(OT_COAP_TYPE_CONFIRMABLE, OT_COAP_CODE_POST, OT_URI_PATH_DIAGNOSTIC_GET_ANSWER));
 
     if (networkDiagnosticTlv.GetLength() > 0)
     {
-        message->SetPayloadMarker();
+        SuccessOrExit(error = message->SetPayloadMarker());
     }
 
-    messageInfo.SetSockAddr(Get<Mle::MleRouter>().GetMeshLocal16());
+    if (aMessageInfo.GetSockAddr().IsLinkLocal() || aMessageInfo.GetSockAddr().IsLinkLocalMulticast())
+    {
+        messageInfo.SetSockAddr(Get<Mle::MleRouter>().GetLinkLocalAddress());
+    }
+    else
+    {
+        messageInfo.SetSockAddr(Get<Mle::MleRouter>().GetMeshLocal16());
+    }
+
     messageInfo.SetPeerAddr(aMessageInfo.GetPeerAddr());
     messageInfo.SetPeerPort(kCoapUdpPort);
-    messageInfo.SetInterfaceId(Get<ThreadNetif>().GetInterfaceId());
 
     SuccessOrExit(error = FillRequestedTlvs(aMessage, *message, networkDiagnosticTlv));
 
@@ -560,12 +577,10 @@ void NetworkDiagnostic::HandleDiagnosticGetRequest(Coap::Message &aMessage, cons
 
     VerifyOrExit(networkDiagnosticTlv.GetType() == NetworkDiagnosticTlv::kTypeList, error = OT_ERROR_PARSE);
 
-    VerifyOrExit((static_cast<TypeListTlv *>(&networkDiagnosticTlv)->IsValid()), error = OT_ERROR_PARSE);
-
     VerifyOrExit((message = Get<Coap::Coap>().NewMessage()) != NULL, error = OT_ERROR_NO_BUFS);
 
-    message->SetDefaultResponseHeader(aMessage);
-    message->SetPayloadMarker();
+    SuccessOrExit(error = message->SetDefaultResponseHeader(aMessage));
+    SuccessOrExit(error = message->SetPayloadMarker());
 
     SuccessOrExit(error = FillRequestedTlvs(aMessage, *message, networkDiagnosticTlv));
 
@@ -597,13 +612,11 @@ otError NetworkDiagnostic::SendDiagnosticReset(const Ip6::Address &aDestination,
 
     VerifyOrExit((message = Get<Coap::Coap>().NewMessage()) != NULL, error = OT_ERROR_NO_BUFS);
 
-    message->Init(OT_COAP_TYPE_CONFIRMABLE, OT_COAP_CODE_POST);
-    message->SetToken(Coap::Message::kDefaultTokenLength);
-    message->AppendUriPathOptions(OT_URI_PATH_DIAGNOSTIC_RESET);
+    SuccessOrExit(error = message->Init(OT_COAP_TYPE_CONFIRMABLE, OT_COAP_CODE_POST, OT_URI_PATH_DIAGNOSTIC_RESET));
 
     if (aCount > 0)
     {
-        message->SetPayloadMarker();
+        SuccessOrExit(error = message->SetPayloadMarker());
     }
 
     if (aCount > 0)
@@ -616,10 +629,17 @@ otError NetworkDiagnostic::SendDiagnosticReset(const Ip6::Address &aDestination,
         SuccessOrExit(error = message->Append(aTlvTypes, aCount));
     }
 
-    messageInfo.SetSockAddr(Get<Mle::MleRouter>().GetMeshLocal16());
+    if (aDestination.IsLinkLocal() || aDestination.IsLinkLocalMulticast())
+    {
+        messageInfo.SetSockAddr(Get<Mle::MleRouter>().GetLinkLocalAddress());
+    }
+    else
+    {
+        messageInfo.SetSockAddr(Get<Mle::MleRouter>().GetMeshLocal16());
+    }
+
     messageInfo.SetPeerAddr(aDestination);
     messageInfo.SetPeerPort(kCoapUdpPort);
-    messageInfo.SetInterfaceId(Get<ThreadNetif>().GetInterfaceId());
 
     SuccessOrExit(error = Get<Coap::Coap>().SendMessage(*message, messageInfo));
 
@@ -656,8 +676,6 @@ void NetworkDiagnostic::HandleDiagnosticReset(Coap::Message &aMessage, const Ip6
 
     VerifyOrExit(networkDiagnosticTlv.GetType() == NetworkDiagnosticTlv::kTypeList);
 
-    VerifyOrExit((static_cast<TypeListTlv *>(&networkDiagnosticTlv)->IsValid()));
-
     offset = aMessage.GetOffset() + sizeof(NetworkDiagnosticTlv);
 
     for (uint8_t i = 0; i < networkDiagnosticTlv.GetLength(); i++)
@@ -689,4 +707,4 @@ exit:
 
 } // namespace ot
 
-#endif // OPENTHREAD_FTD || OPENTHREAD_ENABLE_MTD_NETWORK_DIAGNOSTIC
+#endif // OPENTHREAD_FTD || OPENTHREAD_CONFIG_TMF_NETWORK_DIAG_MTD_ENABLE

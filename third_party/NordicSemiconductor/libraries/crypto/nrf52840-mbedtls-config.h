@@ -26,11 +26,21 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifndef NRF52840_MBEDTLS_CONFIG_H_
+#define NRF52840_MBEDTLS_CONFIG_H_
+
+#include <openthread/config.h>
+
 #ifndef DISABLE_CC310
 #define MBEDTLS_AES_ALT
 #define MBEDTLS_ECP_ALT
 #define MBEDTLS_SHA256_ALT
 #endif // DISABLE_CC310
+
+#ifdef MBEDTLS_THREADING
+#define MBEDTLS_THREADING_C
+#define MBEDTLS_THREADING_ALT
+#endif // MBEDTLS_THREADING
 
 #if defined(__ICCARM__)
     _Pragma("diag_suppress=Pe550")
@@ -40,3 +50,5 @@
     _Pragma("diag_suppress=550")
     _Pragma("diag_suppress=68")
 #endif
+
+#endif // NRF52840_MBEDTLS_CONFIG_H_

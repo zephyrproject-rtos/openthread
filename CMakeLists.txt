@@ -69,30 +69,6 @@ set(commoncflags "-DOPENTHREAD_CONFIG_LOG_LEVEL=${CONFIG_OPENTHREAD_LOG_LEVEL}")
 set(commoncflags "${commoncflags} -DOPENTHREAD_PROJECT_CORE_CONFIG_FILE=\\\"openthread-core-zephyr-config.h\\\"")
 set(commoncflags "${commoncflags} -I${ot_port_path}/platform")
 
-if(CONFIG_OPENTHREAD_COMMISSIONER)
-  set(commoncflags "${commoncflags} -DOPENTHREAD_CONFIG_COMMISSIONER_ENABLE=1")
-endif()
-
-if(CONFIG_OPENTHREAD_JAM_DETECTION)
-  set(commoncflags "${commoncflags} -DOPENTHREAD_CONFIG_JAM_DETECTION_ENABLE=1")
-endif()
-
-if(CONFIG_OPENTHREAD_JOINER)
-  set(commoncflags "${commoncflags} -DOPENTHREAD_CONFIG_JOINER_ENABLE=1")
-endif()
-
-if(CONFIG_OPENTHREAD_DHCP6_CLIENT)
-  set(commoncflags "${commoncflags} -DOPENTHREAD_CONFIG_DHCP6_CLIENT_ENABLE=1")
-endif()
-
-if(CONFIG_OPENTHREAD_DHCP6_SERVER)
-  set(commoncflags "${commoncflags} -DOPENTHREAD_CONFIG_DHCP6_SERVER_ENABLE=1")
-endif()
-
-if(CONFIG_OPENTHREAD_DIAG)
-  set(commoncflags "${commoncflags} -DOPENTHREAD_CONFIG_DIAG_ENABLE=1")
-endif()
-
 get_property(RULE_LAUNCH_COMPILE GLOBAL PROPERTY RULE_LAUNCH_COMPILE)
 
 set(configure_flags
@@ -140,9 +116,45 @@ elseif(CONFIG_OPENTHREAD_MTD)
     )
 endif()
 
+if(CONFIG_OPENTHREAD_COMMISSIONER)
+  list(APPEND configure_flags
+    --enable-commissioner
+    )
+endif()
+
+if(CONFIG_OPENTHREAD_JAM_DETECTION)
+  list(APPEND configure_flags
+    --enable-jam-detection
+    )
+endif()
+
+if(CONFIG_OPENTHREAD_JOINER)
+  list(APPEND configure_flags
+    --enable-joiner
+    )
+endif()
+
+if(CONFIG_OPENTHREAD_DHCP6_CLIENT)
+  list(APPEND configure_flags
+    --enable-dhcp6-client
+    )
+endif()
+
+if(CONFIG_OPENTHREAD_DHCP6_SERVER)
+  list(APPEND configure_flags
+    --enable-dhcp6-server
+    )
+endif()
+
 if(CONFIG_OPENTHREAD_SHELL)
   list(APPEND configure_flags
     --enable-cli
+    )
+endif()
+
+if(CONFIG_OPENTHREAD_DIAG)
+  list(APPEND configure_flags
+    --enable-diag
     )
 endif()
 

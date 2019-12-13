@@ -296,6 +296,23 @@ NcpBase *NcpBase::GetNcpInstance(void)
     return sNcpInstance;
 }
 
+void NcpBase::ResetCounters(void)
+{
+    mFramingErrorCounter          = 0;
+    mRxSpinelFrameCounter         = 0;
+    mRxSpinelOutOfOrderTidCounter = 0;
+    mTxSpinelFrameCounter         = 0;
+
+#if OPENTHREAD_MTD || OPENTHREAD_FTD
+    mInboundSecureIpFrameCounter    = 0;
+    mInboundInsecureIpFrameCounter  = 0;
+    mOutboundSecureIpFrameCounter   = 0;
+    mOutboundInsecureIpFrameCounter = 0;
+    mDroppedOutboundIpFrameCounter  = 0;
+    mDroppedInboundIpFrameCounter   = 0;
+#endif
+}
+
 // ----------------------------------------------------------------------------
 // MARK: Serial Traffic Glue
 // ----------------------------------------------------------------------------
@@ -919,6 +936,9 @@ bool NcpBase::HandlePropertySetForSpecialProperties(uint8_t aHeader, spinel_prop
 #endif
 
 #if OPENTHREAD_FTD && OPENTHREAD_CONFIG_COMMISSIONER_ENABLE
+    case SPINEL_PROP_MESHCOP_COMMISSIONER_GENERATE_PSKC:
+        ExitNow(aError = HandlePropertySet_SPINEL_PROP_MESHCOP_COMMISSIONER_GENERATE_PSKC(aHeader));
+
     case SPINEL_PROP_THREAD_COMMISSIONER_ENABLED:
         ExitNow(aError = HandlePropertySet_SPINEL_PROP_THREAD_COMMISSIONER_ENABLED(aHeader));
 #endif

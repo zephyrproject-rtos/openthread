@@ -168,6 +168,9 @@ NcpBase::PropertyHandler NcpBase::FindGetPropertyHandler(spinel_prop_key_t aKey)
     case SPINEL_PROP_MAC_CCA_FAILURE_RATE:
         handler = &NcpBase::HandlePropertyGet<SPINEL_PROP_MAC_CCA_FAILURE_RATE>;
         break;
+    case SPINEL_PROP_MAC_MAX_RETRY_NUMBER_DIRECT:
+        handler = &NcpBase::HandlePropertyGet<SPINEL_PROP_MAC_MAX_RETRY_NUMBER_DIRECT>;
+        break;
 #if OPENTHREAD_CONFIG_MAC_FILTER_ENABLE
     case SPINEL_PROP_MAC_BLACKLIST:
         handler = &NcpBase::HandlePropertyGet<SPINEL_PROP_MAC_BLACKLIST>;
@@ -510,6 +513,9 @@ NcpBase::PropertyHandler NcpBase::FindGetPropertyHandler(spinel_prop_key_t aKey)
     case SPINEL_PROP_CNTR_IP_RX_FAILURE:
         handler = &NcpBase::HandlePropertyGet<SPINEL_PROP_CNTR_IP_RX_FAILURE>;
         break;
+    case SPINEL_PROP_CNTR_ALL_IP_COUNTERS:
+        handler = &NcpBase::HandlePropertyGet<SPINEL_PROP_CNTR_ALL_IP_COUNTERS>;
+        break;
 #if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
     case SPINEL_PROP_THREAD_NETWORK_TIME:
         handler = &NcpBase::HandlePropertyGet<SPINEL_PROP_THREAD_NETWORK_TIME>;
@@ -537,16 +543,19 @@ NcpBase::PropertyHandler NcpBase::FindGetPropertyHandler(spinel_prop_key_t aKey)
     case SPINEL_PROP_SERVER_SERVICES:
         handler = &NcpBase::HandlePropertyGet<SPINEL_PROP_SERVER_SERVICES>;
         break;
+#endif
     case SPINEL_PROP_SERVER_LEADER_SERVICES:
         handler = &NcpBase::HandlePropertyGet<SPINEL_PROP_SERVER_LEADER_SERVICES>;
         break;
-#endif
 #endif // OPENTHREAD_MTD || OPENTHREAD_FTD
 
         // --------------------------------------------------------------------------
         // FTD Only Properties (Get Handler)
 
 #if OPENTHREAD_FTD
+    case SPINEL_PROP_MAC_MAX_RETRY_NUMBER_INDIRECT:
+        handler = &NcpBase::HandlePropertyGet<SPINEL_PROP_MAC_MAX_RETRY_NUMBER_INDIRECT>;
+        break;
     case SPINEL_PROP_NET_PSKC:
         handler = &NcpBase::HandlePropertyGet<SPINEL_PROP_NET_PSKC>;
         break;
@@ -745,6 +754,9 @@ NcpBase::PropertyHandler NcpBase::FindSetPropertyHandler(spinel_prop_key_t aKey)
     case SPINEL_PROP_MAC_DATA_POLL_PERIOD:
         handler = &NcpBase::HandlePropertySet<SPINEL_PROP_MAC_DATA_POLL_PERIOD>;
         break;
+    case SPINEL_PROP_MAC_MAX_RETRY_NUMBER_DIRECT:
+        handler = &NcpBase::HandlePropertySet<SPINEL_PROP_MAC_MAX_RETRY_NUMBER_DIRECT>;
+        break;
     case SPINEL_PROP_NET_IF_UP:
         handler = &NcpBase::HandlePropertySet<SPINEL_PROP_NET_IF_UP>;
         break;
@@ -882,6 +894,15 @@ NcpBase::PropertyHandler NcpBase::FindSetPropertyHandler(spinel_prop_key_t aKey)
     case SPINEL_PROP_CNTR_RESET:
         handler = &NcpBase::HandlePropertySet<SPINEL_PROP_CNTR_RESET>;
         break;
+    case SPINEL_PROP_CNTR_ALL_MAC_COUNTERS:
+        handler = &NcpBase::HandlePropertySet<SPINEL_PROP_CNTR_ALL_MAC_COUNTERS>;
+        break;
+    case SPINEL_PROP_CNTR_MLE_COUNTERS:
+        handler = &NcpBase::HandlePropertySet<SPINEL_PROP_CNTR_MLE_COUNTERS>;
+        break;
+    case SPINEL_PROP_CNTR_ALL_IP_COUNTERS:
+        handler = &NcpBase::HandlePropertySet<SPINEL_PROP_CNTR_ALL_IP_COUNTERS>;
+        break;
 #if OPENTHREAD_CONFIG_CHILD_SUPERVISION_ENABLE
     case SPINEL_PROP_CHILD_SUPERVISION_CHECK_TIMEOUT:
         handler = &NcpBase::HandlePropertySet<SPINEL_PROP_CHILD_SUPERVISION_CHECK_TIMEOUT>;
@@ -903,6 +924,9 @@ NcpBase::PropertyHandler NcpBase::FindSetPropertyHandler(spinel_prop_key_t aKey)
         // FTD Only Properties (Set Handler)
 
 #if OPENTHREAD_FTD
+    case SPINEL_PROP_MAC_MAX_RETRY_NUMBER_INDIRECT:
+        handler = &NcpBase::HandlePropertySet<SPINEL_PROP_MAC_MAX_RETRY_NUMBER_INDIRECT>;
+        break;
     case SPINEL_PROP_NET_PSKC:
         handler = &NcpBase::HandlePropertySet<SPINEL_PROP_NET_PSKC>;
         break;

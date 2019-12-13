@@ -199,10 +199,13 @@ void DataPollSender::HandlePollSent(Mac::TxFrame &aFrame, otError aError)
 
     VerifyOrExit(mEnabled);
 
-    aFrame.GetDstAddr(macDest);
-    Get<MeshForwarder>().UpdateNeighborOnSentFrame(aFrame, aError, macDest);
+    if (!aFrame.IsEmpty())
+    {
+        aFrame.GetDstAddr(macDest);
+        Get<MeshForwarder>().UpdateNeighborOnSentFrame(aFrame, aError, macDest);
+    }
 
-    if (Get<Mle::MleRouter>().GetParentCandidate()->GetState() == Neighbor::kStateInvalid)
+    if (Get<Mle::MleRouter>().GetParentCandidate()->IsStateInvalid())
     {
         StopPolling();
         Get<Mle::MleRouter>().BecomeDetached();
@@ -427,11 +430,11 @@ void DataPollSender::ScheduleNextPoll(PollPeriodSelector aPollPeriodSelector)
     }
 }
 
-void DataPollSender::UpdateIfLarger(uint32_t &aPreiod, uint32_t aNewPeriod)
+void DataPollSender::UpdateIfLarger(uint32_t &aPeriod, uint32_t aNewPeriod)
 {
-    if (aPreiod > aNewPeriod)
+    if (aPeriod > aNewPeriod)
     {
-        aPreiod = aNewPeriod;
+        aPeriod = aNewPeriod;
     }
 }
 

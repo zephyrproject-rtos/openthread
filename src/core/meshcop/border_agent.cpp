@@ -118,7 +118,10 @@ public:
             aMessage.Init(OT_COAP_TYPE_ACKNOWLEDGMENT, aCode);
         }
 
-        aMessage.SetMessageId(mSeparate ? 0 : mMessageId);
+        if (!mSeparate)
+        {
+            aMessage.SetMessageId(mMessageId);
+        }
 
         return aMessage.SetToken(mToken, mTokenLength);
     }
@@ -199,7 +202,11 @@ static void SendErrorMessage(Coap::CoapSecure &   aCoapSecure,
         message->Init(OT_COAP_TYPE_ACKNOWLEDGMENT, CoapCodeFromError(aError));
     }
 
-    message->SetMessageId(aSeparate ? 0 : aRequest.GetMessageId());
+    if (!aSeparate)
+    {
+        message->SetMessageId(aRequest.GetMessageId());
+    }
+
     SuccessOrExit(error = message->SetToken(aRequest.GetToken(), aRequest.GetTokenLength()));
 
     SuccessOrExit(error = aCoapSecure.SendMessage(*message, aCoapSecure.GetPeerAddress()));
@@ -348,6 +355,7 @@ BorderAgent::BorderAgent(Instance &aInstance)
     , mTimer(aInstance, HandleTimeout, this)
     , mState(OT_BORDER_AGENT_STATE_STOPPED)
 {
+    mCommissionerAloc.Clear();
     mCommissionerAloc.mPrefixLength       = 64;
     mCommissionerAloc.mPreferred          = true;
     mCommissionerAloc.mValid              = true;

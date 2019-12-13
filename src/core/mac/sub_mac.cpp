@@ -61,7 +61,7 @@ SubMac::SubMac(Instance &aInstance)
     , mPcapCallbackContext(NULL)
     , mTimer(aInstance, &SubMac::HandleTimer, this)
 {
-    memset(mExtAddress.m8, 0, sizeof(mExtAddress));
+    mExtAddress.Clear();
 }
 
 otRadioCaps SubMac::GetCaps(void) const
@@ -557,13 +557,6 @@ bool SubMac::ShouldHandleEnergyScan(void) const
 exit:
     return swEnergyScan;
 }
-
-#if OPENTHREAD_CONFIG_MAC_HEADER_IE_SUPPORT
-void SubMac::HandleFrameUpdated(TxFrame &aFrame)
-{
-    mCallbacks.FrameUpdated(aFrame);
-}
-#endif
 
 void SubMac::SetState(State aState)
 {

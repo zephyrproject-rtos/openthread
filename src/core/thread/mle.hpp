@@ -440,28 +440,6 @@ public:
      */
     const Ip6::Address &GetDestination(void) const { return mDestination; }
 
-    /**
-     * This method checks if the message shall be sent before the given time.
-     *
-     * @param[in]  aTime  A time to compare.
-     *
-     * @retval TRUE   If the message shall be sent before the given time.
-     * @retval FALSE  Otherwise.
-     *
-     */
-    bool IsEarlier(TimeMilli aTime) { return aTime > mSendTime; }
-
-    /**
-     * This method checks if the message shall be sent after the given time.
-     *
-     * @param[in]  aTime  A time to compare.
-     *
-     * @retval TRUE   If the message shall be sent after the given time.
-     * @retval FALSE  Otherwise.
-     *
-     */
-    bool IsLater(TimeMilli aTime) { return aTime < mSendTime; }
-
 private:
     Ip6::Address mDestination; ///< IPv6 address of the message destination.
     TimeMilli    mSendTime;    ///< Time when the message shall be sent.
@@ -886,7 +864,6 @@ public:
         return GetAlocAddress(aAddress, GetCommissionerAloc16FromId(aSessionId));
     }
 
-#if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
     /**
      * This method retrieves the Service ALOC for given Service ID.
      *
@@ -898,7 +875,6 @@ public:
      *
      */
     otError GetServiceAloc(uint8_t aServiceId, Ip6::Address &aAddress) const;
-#endif
 
     /**
      * This method adds Leader's ALOC to its Thread interface.
@@ -1706,11 +1682,19 @@ private:
     void        HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
     void        ScheduleMessageTransmissionTimer(void);
 
-    otError HandleAdvertisement(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
-    otError HandleChildIdResponse(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
-    otError HandleChildUpdateRequest(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
-    otError HandleChildUpdateResponse(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
-    otError HandleDataResponse(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
+    otError HandleAdvertisement(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo, Neighbor *aNeighbor);
+    otError HandleChildIdResponse(const Message &         aMessage,
+                                  const Ip6::MessageInfo &aMessageInfo,
+                                  const Neighbor *        aNeighbor);
+    otError HandleChildUpdateRequest(const Message &         aMessage,
+                                     const Ip6::MessageInfo &aMessageInfo,
+                                     Neighbor *              aNeighbor);
+    otError HandleChildUpdateResponse(const Message &         aMessage,
+                                      const Ip6::MessageInfo &aMessageInfo,
+                                      const Neighbor *        aNeighbor);
+    otError HandleDataResponse(const Message &         aMessage,
+                               const Ip6::MessageInfo &aMessageInfo,
+                               const Neighbor *        aNeighbor);
     otError HandleParentResponse(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo, uint32_t aKeySequence);
     otError HandleAnnounce(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
     otError HandleDiscoveryResponse(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
@@ -1727,6 +1711,7 @@ private:
     uint32_t Reattach(void);
 
     bool IsBetterParent(uint16_t aRloc16, uint8_t aLinkQuality, uint8_t aLinkMargin, ConnectivityTlv &aConnectivityTlv);
+    bool IsNetworkDataNewer(const LeaderDataTlv &aLeaderData);
     void ResetParentCandidate(void);
 
     otError GetAlocAddress(Ip6::Address &aAddress, uint16_t aAloc16) const;

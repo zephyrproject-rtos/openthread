@@ -213,6 +213,23 @@ template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_MAC_EXTENDED_ADDR>(vo
     return mEncoder.WriteEui64(*otLinkGetExtendedAddress(mInstance));
 }
 
+template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_MAC_MAX_RETRY_NUMBER_DIRECT>(void)
+{
+    return mEncoder.WriteUint8(otLinkGetMaxFrameRetriesDirect(mInstance));
+}
+
+template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_MAC_MAX_RETRY_NUMBER_DIRECT>(void)
+{
+    uint8_t maxFrameRetriesDirect;
+    otError error = OT_ERROR_NONE;
+
+    SuccessOrExit(error = mDecoder.ReadUint8(maxFrameRetriesDirect));
+    otLinkSetMaxFrameRetriesDirect(mInstance, maxFrameRetriesDirect);
+
+exit:
+    return error;
+}
+
 template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_PHY_FREQ>(void)
 {
     uint32_t      freq_khz(0);
@@ -933,6 +950,7 @@ template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_SERVER_SERVICES>(void
 exit:
     return error;
 }
+#endif // OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
 
 template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_SERVER_LEADER_SERVICES>(void)
 {
@@ -940,7 +958,7 @@ template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_SERVER_LEADER_SERVICE
     otNetworkDataIterator iterator = OT_NETWORK_DATA_ITERATOR_INIT;
     otServiceConfig       cfg;
 
-    while (otServerGetNextLeaderService(mInstance, &iterator, &cfg) == OT_ERROR_NONE)
+    while (otNetDataGetNextService(mInstance, &iterator, &cfg) == OT_ERROR_NONE)
     {
         SuccessOrExit(error = mEncoder.OpenStruct());
 
@@ -957,8 +975,6 @@ template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_SERVER_LEADER_SERVICE
 exit:
     return error;
 }
-
-#endif // OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
 
 template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_THREAD_DISCOVERY_SCAN_JOINER_FLAG>(void)
 {
@@ -2431,11 +2447,7 @@ template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_CNTR_ALL_MAC_COUNTERS
     otError              error    = OT_ERROR_NONE;
     const otMacCounters *counters = otLinkGetCounters(mInstance);
 
-    if (counters == NULL)
-    {
-        error = mEncoder.OverwriteWithLastStatusError(SPINEL_STATUS_INVALID_COMMAND_FOR_PROP);
-        ExitNow();
-    }
+    assert(counters != NULL);
 
     // Encode Tx related counters
     SuccessOrExit(error = mEncoder.OpenStruct());
@@ -2481,16 +2493,19 @@ exit:
     return error;
 }
 
+template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_CNTR_ALL_MAC_COUNTERS>(void)
+{
+    otLinkResetCounters(mInstance);
+
+    return OT_ERROR_NONE;
+}
+
 template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_CNTR_MLE_COUNTERS>(void)
 {
     otError              error    = OT_ERROR_NONE;
     const otMleCounters *counters = otThreadGetMleCounters(mInstance);
 
-    if (counters == NULL)
-    {
-        error = mEncoder.OverwriteWithLastStatusError(SPINEL_STATUS_INVALID_COMMAND_FOR_PROP);
-        ExitNow();
-    }
+    assert(counters != NULL);
 
     SuccessOrExit(error = mEncoder.WriteUint16(counters->mDisabledRole));
     SuccessOrExit(error = mEncoder.WriteUint16(counters->mDetachedRole));
@@ -2504,6 +2519,43 @@ template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_CNTR_MLE_COUNTERS>(vo
 
 exit:
     return error;
+}
+
+template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_CNTR_MLE_COUNTERS>(void)
+{
+    otThreadResetMleCounters(mInstance);
+
+    return OT_ERROR_NONE;
+}
+
+template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_CNTR_ALL_IP_COUNTERS>(void)
+{
+    otError             error    = OT_ERROR_NONE;
+    const otIpCounters *counters = otThreadGetIp6Counters(mInstance);
+
+    assert(counters != NULL);
+
+    // Encode Tx related counters
+    SuccessOrExit(error = mEncoder.OpenStruct());
+    SuccessOrExit(error = mEncoder.WriteUint32(counters->mTxSuccess));
+    SuccessOrExit(error = mEncoder.WriteUint32(counters->mTxFailure));
+    SuccessOrExit(error = mEncoder.CloseStruct());
+
+    // Encode Rx related counters
+    SuccessOrExit(error = mEncoder.OpenStruct());
+    SuccessOrExit(error = mEncoder.WriteUint32(counters->mRxSuccess));
+    SuccessOrExit(error = mEncoder.WriteUint32(counters->mRxFailure));
+    SuccessOrExit(error = mEncoder.CloseStruct());
+
+exit:
+    return error;
+}
+
+template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_CNTR_ALL_IP_COUNTERS>(void)
+{
+    otThreadResetIp6Counters(mInstance);
+
+    return OT_ERROR_NONE;
 }
 
 #if OPENTHREAD_CONFIG_MAC_FILTER_ENABLE
@@ -2868,18 +2920,12 @@ exit:
 
 template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_CNTR_RESET>(void)
 {
-    uint8_t value = 0;
-    otError error = OT_ERROR_NONE;
+    otLinkResetCounters(mInstance);
+    otThreadResetIp6Counters(mInstance);
+    otThreadResetMleCounters(mInstance);
+    ResetCounters();
 
-    SuccessOrExit(error = mDecoder.ReadUint8(value));
-
-    VerifyOrExit(value == 1, error = OT_ERROR_INVALID_ARGS);
-
-    // TODO: Implement counter reset!
-    error = OT_ERROR_NOT_IMPLEMENTED;
-
-exit:
-    return error;
+    return OT_ERROR_NONE;
 }
 
 template <> otError NcpBase::HandlePropertyInsert<SPINEL_PROP_THREAD_ASSISTING_PORTS>(void)

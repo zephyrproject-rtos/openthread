@@ -42,7 +42,7 @@
 #include "common/instance.hpp"
 #include "common/locator-getters.hpp"
 #include "common/logging.hpp"
-#include "mac/mac_frame.hpp"
+#include "mac/mac_types.hpp"
 #include "thread/mesh_forwarder.hpp"
 #include "thread/mle_router.hpp"
 #include "thread/thread_netif.hpp"
@@ -115,6 +115,20 @@ void AddressResolver::Remove(uint16_t aRloc16)
     }
 }
 
+void AddressResolver::Remove(const Ip6::Address &aEid)
+{
+    for (int i = 0; i < kCacheEntries; i++)
+    {
+        if (mCache[i].mState == Cache::kStateInvalid || mCache[i].mTarget != aEid)
+        {
+            continue;
+        }
+
+        InvalidateCacheEntry(mCache[i], kReasonRemovingEid);
+        break;
+    }
+}
+
 AddressResolver::Cache *AddressResolver::NewCacheEntry(void)
 {
     Cache *rval = NULL;
@@ -173,6 +187,10 @@ const char *AddressResolver::ConvertInvalidationReasonToString(InvalidationReaso
 
     case kReasonEvictingForNewEntry:
         str = "evicting for new entry";
+        break;
+
+    case kReasonRemovingEid:
+        str = "removing eid";
         break;
     }
 
@@ -598,7 +616,7 @@ void AddressResolver::HandleAddressError(Coap::Message &aMessage, const Ip6::Mes
 
             if (child.RemoveIp6Address(GetInstance(), targetTlv.GetTarget()) == OT_ERROR_NONE)
             {
-                memset(&destination, 0, sizeof(destination));
+                destination.Clear();
                 destination.mFields.m16[0] = HostSwap16(0xfe80);
                 destination.SetIid(child.GetExtAddress());
 

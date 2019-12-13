@@ -322,7 +322,7 @@ otError otThreadGetParentInfo(otInstance *aInstance, otRouterInfo *aParentInfo)
     aParentInfo->mLinkQualityOut = parent->GetLinkQualityOut();
     aParentInfo->mAge            = static_cast<uint8_t>(Time::MsecToSec(TimerMilli::GetNow() - parent->GetLastHeard()));
     aParentInfo->mAllocated      = true;
-    aParentInfo->mLinkEstablished = parent->GetState() == Neighbor::kStateValid;
+    aParentInfo->mLinkEstablished = parent->IsStateValid();
 
 #if !OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
 exit:
@@ -452,6 +452,13 @@ const otIpCounters *otThreadGetIp6Counters(otInstance *aInstance)
     Instance &instance = *static_cast<Instance *>(aInstance);
 
     return &instance.Get<MeshForwarder>().GetCounters();
+}
+
+void otThreadResetIp6Counters(otInstance *aInstance)
+{
+    Instance &instance = *static_cast<Instance *>(aInstance);
+
+    instance.Get<MeshForwarder>().ResetCounters();
 }
 
 const otMleCounters *otThreadGetMleCounters(otInstance *aInstance)

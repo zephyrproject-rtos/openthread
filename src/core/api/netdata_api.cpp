@@ -58,7 +58,7 @@ otError otNetDataGetNextOnMeshPrefix(otInstance *           aInstance,
 
     VerifyOrExit(aIterator && aConfig, error = OT_ERROR_INVALID_ARGS);
 
-    error = instance.Get<NetworkData::Leader>().GetNextOnMeshPrefix(aIterator, aConfig);
+    error = instance.Get<NetworkData::Leader>().GetNextOnMeshPrefix(*aIterator, *aConfig);
 
 exit:
     return error;
@@ -71,7 +71,20 @@ otError otNetDataGetNextRoute(otInstance *aInstance, otNetworkDataIterator *aIte
 
     VerifyOrExit(aIterator && aConfig, error = OT_ERROR_INVALID_ARGS);
 
-    error = instance.Get<NetworkData::Leader>().GetNextExternalRoute(aIterator, aConfig);
+    error = instance.Get<NetworkData::Leader>().GetNextExternalRoute(*aIterator, *aConfig);
+
+exit:
+    return error;
+}
+
+otError otNetDataGetNextService(otInstance *aInstance, otNetworkDataIterator *aIterator, otServiceConfig *aConfig)
+{
+    otError   error    = OT_ERROR_NONE;
+    Instance &instance = *static_cast<Instance *>(aInstance);
+
+    VerifyOrExit(aIterator && aConfig, error = OT_ERROR_INVALID_ARGS);
+
+    error = instance.Get<NetworkData::Leader>().GetNextService(*aIterator, *aConfig);
 
 exit:
     return error;

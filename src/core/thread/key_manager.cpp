@@ -84,7 +84,7 @@ KeyManager::KeyManager(Instance &aInstance)
     , mIsPskcSet(false)
 {
     mMasterKey = static_cast<const MasterKey &>(kDefaultMasterKey);
-    memset(&mPskc, 0, sizeof(mPskc));
+    mPskc.Clear();
     ComputeKey(mKeySequence, mKey);
 }
 
@@ -102,11 +102,7 @@ void KeyManager::Stop(void)
 #if OPENTHREAD_MTD || OPENTHREAD_FTD
 void KeyManager::SetPskc(const Pskc &aPskc)
 {
-    VerifyOrExit(mPskc != aPskc, Get<Notifier>().SignalIfFirst(OT_CHANGED_PSKC));
-    mPskc = aPskc;
-    Get<Notifier>().Signal(OT_CHANGED_PSKC);
-
-exit:
+    Get<Notifier>().Update(mPskc, aPskc, OT_CHANGED_PSKC);
     mIsPskcSet = true;
 }
 #endif // OPENTHREAD_MTD || OPENTHREAD_FTD
@@ -116,9 +112,9 @@ otError KeyManager::SetMasterKey(const MasterKey &aKey)
     otError error = OT_ERROR_NONE;
     Router *parent;
 
-    VerifyOrExit(mMasterKey != aKey, Get<Notifier>().SignalIfFirst(OT_CHANGED_MASTER_KEY));
+    SuccessOrExit(
+        Get<Notifier>().Update(mMasterKey, aKey, OT_CHANGED_MASTER_KEY | OT_CHANGED_THREAD_KEY_SEQUENCE_COUNTER));
 
-    mMasterKey   = aKey;
     mKeySequence = 0;
     ComputeKey(mKeySequence, mKey);
 
@@ -144,8 +140,6 @@ otError KeyManager::SetMasterKey(const MasterKey &aKey)
         iter.GetChild()->SetMleFrameCounter(0);
     }
 
-    Get<Notifier>().Signal(OT_CHANGED_THREAD_KEY_SEQUENCE_COUNTER | OT_CHANGED_MASTER_KEY);
-
 exit:
     return error;
 }
@@ -168,11 +162,16 @@ void KeyManager::SetCurrentKeySequence(uint32_t aKeySequence)
 {
     VerifyOrExit(aKeySequence != mKeySequence, Get<Notifier>().SignalIfFirst(OT_CHANGED_THREAD_KEY_SEQUENCE_COUNTER));
 
-    // Check if the guard timer has expired if key rotation is requested.
-    if ((aKeySequence == (mKeySequence + 1)) && (mKeySwitchGuardTime != 0) && mKeyRotationTimer.IsRunning() &&
-        mKeySwitchGuardEnabled)
+    if ((aKeySequence == (mKeySequence + 1)) && mKeyRotationTimer.IsRunning())
     {
-        VerifyOrExit(mHoursSinceKeyRotation >= mKeySwitchGuardTime);
+        if (mKeySwitchGuardEnabled)
+        {
+            // Check if the guard timer has expired if key rotation is requested.
+            VerifyOrExit(mHoursSinceKeyRotation >= mKeySwitchGuardTime);
+            StartKeyRotationTimer();
+        }
+
+        mKeySwitchGuardEnabled = true;
     }
 
     mKeySequence = aKeySequence;
@@ -180,12 +179,6 @@ void KeyManager::SetCurrentKeySequence(uint32_t aKeySequence)
 
     mMacFrameCounter = 0;
     mMleFrameCounter = 0;
-
-    if (mKeyRotationTimer.IsRunning())
-    {
-        mKeySwitchGuardEnabled = true;
-        StartKeyRotationTimer();
-    }
 
     Get<Notifier>().Signal(OT_CHANGED_THREAD_KEY_SEQUENCE_COUNTER);
 
@@ -245,13 +238,7 @@ exit:
 
 void KeyManager::SetSecurityPolicyFlags(uint8_t aSecurityPolicyFlags)
 {
-    Notifier &notifier = Get<Notifier>();
-
-    if (!notifier.HasSignaled(OT_CHANGED_SECURITY_POLICY) || (mSecurityPolicyFlags != aSecurityPolicyFlags))
-    {
-        mSecurityPolicyFlags = aSecurityPolicyFlags;
-        notifier.Signal(OT_CHANGED_SECURITY_POLICY);
-    }
+    Get<Notifier>().Update(mSecurityPolicyFlags, aSecurityPolicyFlags, OT_CHANGED_SECURITY_POLICY);
 }
 
 void KeyManager::StartKeyRotationTimer(void)

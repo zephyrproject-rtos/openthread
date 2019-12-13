@@ -39,7 +39,6 @@
 #include "common/code_utils.hpp"
 #include "common/encoding.hpp"
 #include "common/instance.hpp"
-#include "mac/mac_frame.hpp"
 
 using ot::Encoding::BigEndian::HostSwap16;
 using ot::Encoding::BigEndian::HostSwap32;
@@ -269,7 +268,7 @@ otError Address::FromString(const char *aBuf)
     char        ch;
     uint8_t     d;
 
-    memset(mFields.m8, 0, 16);
+    Clear();
 
     dst--;
 

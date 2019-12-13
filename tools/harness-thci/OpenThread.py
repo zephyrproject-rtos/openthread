@@ -69,6 +69,8 @@ class OpenThread(IThci):
     # officially released.
     firmwarePrefix = 'OPENTHREAD/'
 
+    _update_router_status = False
+
     # def __init__(self, SerialPort=COMPortName, EUI=MAC_Address):
     def __init__(self, **kwargs):
         """initialize the serial port and default network parameters
@@ -254,6 +256,18 @@ class OpenThread(IThci):
         except Exception as e:
             ModuleHelper.WriteIntoDebugLogger('sendCommand() Error: ' + str(e))
             raise
+
+    def __disableRouterEligible(self):
+        """disable router role
+        """
+        print('call __disableRouterEligible')
+        try:
+            cmd = 'routereligible disable'
+            self.__sendCommand(cmd)
+        except Exception as e:
+            ModuleHelper.WriteIntoDebugLogger(
+                '__disableRouterEligible() Error: ' + str(e)
+            )
 
     def __setDeviceMode(self, mode):
         """set thread device mode:
@@ -489,7 +503,7 @@ class OpenThread(IThci):
             IPv6 address dotted-quad format
         """
         prefix1 = strIp6Prefix.rstrip('L')
-        prefix2 = prefix1.lstrip('0x')
+        prefix2 = self.__lstrip0x(prefix1)
         hexPrefix = str(prefix2).ljust(16, '0')
         hexIter = iter(hexPrefix)
         finalMac = ':'.join(
@@ -1068,11 +1082,10 @@ class OpenThread(IThci):
                 # set ROUTER_UPGRADE_THRESHOLD
                 self.__setRouterUpgradeThreshold(0)
             elif eRoleId == Thread_Device_Role.EndDevice_FED:
-                # always remain an ED, never request to be a router
                 print('join as FED')
                 mode = 'rsdn'
-                # set ROUTER_UPGRADE_THRESHOLD
-                self.__setRouterUpgradeThreshold(0)
+                # always remain an ED, never request to be a router
+                self.__disableRouterEligible()
             elif eRoleId == Thread_Device_Role.EndDevice_MED:
                 print('join as MED')
                 mode = 'rsn'
@@ -1081,11 +1094,15 @@ class OpenThread(IThci):
 
             # set Thread device mode with a given role
             self.__setDeviceMode(mode)
-            self.__setKeySwitchGuardTime(0)
 
             # start OpenThread
             self.__startOpenThread()
             time.sleep(3)
+
+            if self._update_router_status and eRoleId == Thread_Device_Role.Router:
+                self.__updateRouterStatus()
+
+            time.sleep(5)  # increase delay temporally (+5s) to remedy TH's delay updates
 
             return True
         except Exception as e:
@@ -1187,7 +1204,7 @@ class OpenThread(IThci):
             self._sendline(cmd)
             self._expect(cmd)
             # wait echo reply
-            time.sleep(1)
+            time.sleep(6)  # increase delay temporally (+5s) to remedy TH's delay updates
         except Exception as e:
             ModuleHelper.WriteIntoDebugLogger('ping() Error: ' + str(e))
 
@@ -1415,7 +1432,7 @@ class OpenThread(IThci):
             euiStr = euiStr.rstrip('L')
             address64 = ''
             if '0x' in euiStr:
-                address64 = euiStr.lstrip('0x')
+                address64 = self.__lstrip0x(euiStr)
                 # prepend 0 at the beginning
                 if len(address64) < 16:
                     address64 = address64.zfill(16)
@@ -1648,6 +1665,9 @@ class OpenThread(IThci):
         print('%s call setKeySequenceCounter' % self.port)
         print(iKeySequenceValue)
         try:
+            # avoid key switch guard timer protection for reference device
+            self.__setKeySwitchGuardTime(0)
+
             cmd = 'keysequence counter %s' % str(iKeySequenceValue)
             if self.__sendCommand(cmd)[-1] == 'Done':
                 time.sleep(1)
@@ -1680,6 +1700,8 @@ class OpenThread(IThci):
         print(iIncrementValue)
         currentKeySeq = ''
         try:
+            # avoid key switch guard timer protection for reference device
+            self.__setKeySwitchGuardTime(0)
             currentKeySeq = self.getKeySequenceCounter()
             keySequence = int(currentKeySeq, 10) + iIncrementValue
             print(keySequence)
@@ -2388,7 +2410,7 @@ class OpenThread(IThci):
                 cmd += Addr
 
             if len(TLVs) != 0:
-                tlvs = ''.join(hex(tlv).lstrip('0x').zfill(2) for tlv in TLVs)
+                tlvs = ''.join('%02x' % tlv for tlv in TLVs)
                 cmd += ' binary '
                 cmd += tlvs
 
@@ -2487,7 +2509,7 @@ class OpenThread(IThci):
                     ModuleHelper.Default_XpanId,
                     ModuleHelper.Default_NwkName,
                 )
-                pskc = hex(stretchedPskc).rstrip('L').lstrip('0x')
+                pskc = '%x' % stretchedPskc
 
                 if len(pskc) < 32:
                     pskc = pskc.zfill(32)
@@ -2583,7 +2605,7 @@ class OpenThread(IThci):
                 cmd += Addr
 
             if len(TLVs) != 0:
-                tlvs = ''.join(hex(tlv).lstrip('0x').zfill(2) for tlv in TLVs)
+                tlvs = ''.join('%02x' % tlv for tlv in TLVs)
                 cmd += ' binary '
                 cmd += tlvs
 
@@ -2685,7 +2707,7 @@ class OpenThread(IThci):
             cmd = 'commissioner mgmtget'
 
             if len(TLVs) != 0:
-                tlvs = ''.join(hex(tlv).lstrip('0x').zfill(2) for tlv in TLVs)
+                tlvs = ''.join('%02x' % tlv for tlv in TLVs)
                 cmd += ' binary '
                 cmd += tlvs
 
@@ -2739,7 +2761,7 @@ class OpenThread(IThci):
 
             if xChannelTlv is not None:
                 cmd += ' binary '
-                cmd += '000300' + hex(xChannelTlv).lstrip('0x').zfill(4)
+                cmd += '000300' + '%04x' % xChannelTlv
 
             print(cmd)
 
@@ -2813,6 +2835,9 @@ class OpenThread(IThci):
 
     def updateRouterStatus(self):
         """force update to router as if there is child id request"""
+        self._update_router_status = True
+
+    def __updateRouterStatus(self):
         print('%s call updateRouterStatus' % self.port)
         cmd = 'state'
         while True:
@@ -2844,3 +2869,18 @@ class OpenThread(IThci):
             return True
         else:
             return False
+
+    @staticmethod
+    def __lstrip0x(s):
+        """strip 0x at the beginning of a hex string if it exists
+
+        Args:
+            s: hex string
+
+        Returns:
+            hex string with leading 0x stripped
+        """
+        if s.startswith('0x'):
+            s = s[2:]
+
+        return s

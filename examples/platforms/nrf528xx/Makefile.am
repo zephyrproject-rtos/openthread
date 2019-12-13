@@ -35,18 +35,23 @@ if OPENTHREAD_EXAMPLES_NRF52811
 include nrf52811/Makefile.am
 endif
 
+if OPENTHREAD_EXAMPLES_NRF52833
+include nrf52833/Makefile.am
+endif
+
 if OPENTHREAD_EXAMPLES_NRF52840
 include nrf52840/Makefile.am
 endif
 
 include $(abs_top_nlbuild_autotools_dir)/automake/pre.am
 
-PRETTY_FILES              = \
-    src/*.c                 \
-    src/platform-fem.h      \
-    src/platform-nrf5.h     \
-    nrf52840/*.h            \
-    nrf52811/*.h            \
+PRETTY_FILES                  = \
+    src/platform-fem.h          \
+    src/platform-nrf5.h         \
+    $(wildcard src/*.c)         \
+    $(wildcard nrf52811/*.h)    \
+    $(wildcard nrf52833/*.h)    \
+    $(wildcard nrf52840/*.h)    \
     $(NULL)
 
 include $(abs_top_nlbuild_autotools_dir)/automake/post.am

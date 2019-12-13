@@ -44,7 +44,7 @@
 #include "coap/coap_message.hpp"
 #include "common/timer.hpp"
 #include "common/trickle_timer.hpp"
-#include "mac/mac_frame.hpp"
+#include "mac/mac_types.hpp"
 #include "meshcop/meshcop_tlvs.hpp"
 #include "net/icmp6.hpp"
 #include "net/udp6.hpp"
@@ -86,24 +86,27 @@ public:
     explicit MleRouter(Instance &aInstance);
 
     /**
-     * This method indicates whether or not the Router Role is enabled.
+     * This method indicates whether or not the device is router-eligible.
      *
-     * @retval true   If the Router Role is enabled.
-     * @retval false  If the Router Role is not enabled.
+     * @retval true   If device is router-eligible.
+     * @retval false  If device is not router-eligible.
      *
      */
-    bool IsRouterRoleEnabled(void) const;
+    bool IsRouterEligible(void) const;
 
     /**
-     * This method sets whether or not the Router Role is enabled.
+     * This method sets whether or not the device is router-eligible.
      *
-     * If @p aEnable is false and the device is currently operating as a router, this call will cause the device to
+     * If @p aEligible is false and the device is currently operating as a router, this call will cause the device to
      * detach and attempt to reattach as a child.
      *
-     * @param[in]  aEnabled  TRUE to enable the Router Role, FALSE otherwise.
+     * @param[in]  aEligible  TRUE to configure device router-eligible, FALSE otherwise.
+     *
+     * @retval OT_ERROR_NONE         Successfully set the router-eligible configuration.
+     * @retval OT_ERROR_NOT_CAPABLE  The device is not capable of becoming a router.
      *
      */
-    void SetRouterRoleEnabled(bool aEnabled);
+    otError SetRouterEligible(bool aEligible);
 
     /**
      * This method indicates whether a node is the only router on the network.
@@ -674,16 +677,21 @@ private:
     otError RefreshStoredChildren(void);
     void    HandleDetachStart(void);
     otError HandleChildStart(AttachMode aMode);
-    otError HandleLinkRequest(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
-    otError HandleLinkAccept(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo, uint32_t aKeySequence);
+    otError HandleLinkRequest(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo, Neighbor *aNeighbor);
     otError HandleLinkAccept(const Message &         aMessage,
                              const Ip6::MessageInfo &aMessageInfo,
                              uint32_t                aKeySequence,
+                             Neighbor *              aNeighbor);
+    otError HandleLinkAccept(const Message &         aMessage,
+                             const Ip6::MessageInfo &aMessageInfo,
+                             uint32_t                aKeySequence,
+                             Neighbor *              aNeighbor,
                              bool                    aRequest);
     otError HandleLinkAcceptAndRequest(const Message &         aMessage,
                                        const Ip6::MessageInfo &aMessageInfo,
-                                       uint32_t                aKeySequence);
-    otError HandleAdvertisement(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
+                                       uint32_t                aKeySequence,
+                                       Neighbor *              aNeighbor);
+    otError HandleAdvertisement(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo, Neighbor *);
     otError HandleParentRequest(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
     otError HandleChildIdRequest(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo, uint32_t aKeySequence);
     otError HandleChildUpdateRequest(const Message &         aMessage,
@@ -691,12 +699,13 @@ private:
                                      uint32_t                aKeySequence);
     otError HandleChildUpdateResponse(const Message &         aMessage,
                                       const Ip6::MessageInfo &aMessageInfo,
-                                      uint32_t                aKeySequence);
-    otError HandleDataRequest(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
+                                      uint32_t                aKeySequence,
+                                      Neighbor *              aNeighbor);
+    otError HandleDataRequest(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo, const Neighbor *aNeighbor);
     void    HandleNetworkDataUpdateRouter(void);
     otError HandleDiscoveryRequest(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
 #if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
-    void HandleTimeSync(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
+    void HandleTimeSync(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo, const Neighbor *aNeighbor);
 #endif
 
     otError ProcessRouteTlv(const RouteTlv &aRoute);
@@ -718,7 +727,7 @@ private:
                                     const Ip6::MessageInfo &aMessageInfo,
                                     const uint8_t *         aTlvs,
                                     uint8_t                 aTlvsLength,
-                                    const ChallengeTlv *    aChallenge);
+                                    const ChallengeTlv &    aChallenge);
     otError SendDataResponse(const Ip6::Address &aDestination,
                              const uint8_t *     aTlvs,
                              uint8_t             aTlvsLength,
@@ -778,7 +787,7 @@ private:
     uint8_t  mRouterDowngradeThreshold;
     uint8_t  mLeaderWeight;
     uint32_t mFixedLeaderPartitionId; ///< only for certification testing
-    bool     mRouterRoleEnabled : 1;
+    bool     mRouterEligible : 1;
     bool     mAddressSolicitPending : 1;
 
     uint8_t mRouterId;

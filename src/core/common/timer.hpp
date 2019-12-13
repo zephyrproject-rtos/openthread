@@ -43,6 +43,7 @@
 #include <openthread/platform/alarm-milli.h>
 
 #include "common/debug.hpp"
+#include "common/linked_list.hpp"
 #include "common/locator.hpp"
 #include "common/tasklet.hpp"
 #include "common/time.hpp"
@@ -65,9 +66,10 @@ class TimerMilliScheduler;
  * This class implements a timer.
  *
  */
-class Timer : public InstanceLocator, public OwnerLocator
+class Timer : public InstanceLocator, public OwnerLocator, public LinkedListEntry<Timer>
 {
     friend class TimerScheduler;
+    friend class LinkedListEntry<Timer>;
 
 public:
     /**
@@ -176,6 +178,23 @@ public:
     void StartAt(TimeMilli sStartTime, uint32_t aDelay);
 
     /**
+     * This method schedules the timer to fire at a given fire time.
+     *
+     * @param[in]  aFireTime  The fire time.
+     *
+     */
+    void FireAt(TimeMilli aFireTime);
+
+    /**
+     * This method (re-)schedules the timer with a given a fire time only if the timer is not running or the new given
+     * fire time is earlier than the current fire time.
+     *
+     * @param[in]  aFireTime  The fire time.
+     *
+     */
+    void FireAtIfEarlier(TimeMilli aFireTime);
+
+    /**
      * This method stops the timer.
      *
      */
@@ -256,7 +275,7 @@ protected:
      */
     explicit TimerScheduler(Instance &aInstance)
         : InstanceLocator(aInstance)
-        , mHead(NULL)
+        , mTimerList()
     {
     }
 
@@ -294,7 +313,7 @@ protected:
      */
     void SetAlarm(const AlarmApi &aAlarmApi);
 
-    Timer *mHead;
+    LinkedList<Timer> mTimerList;
 };
 
 /**
@@ -380,6 +399,14 @@ public:
      *
      */
     void StartAt(TimeMicro aStartTime, uint32_t aDelay);
+
+    /**
+     * This method schedules the timer to fire at a given fire time.
+     *
+     * @param[in]  aFireTime  The fire time.
+     *
+     */
+    void FireAt(TimeMicro aFireTime);
 
     /**
      * This method stops the timer.

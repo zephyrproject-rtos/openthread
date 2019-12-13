@@ -165,7 +165,7 @@ exit:
 
 void IndirectSender::HandleChildModeChange(Child &aChild, Mle::DeviceMode aOldMode)
 {
-    if (!aChild.IsRxOnWhenIdle() && (aChild.GetState() == Neighbor::kStateValid))
+    if (!aChild.IsRxOnWhenIdle() && (aChild.IsStateValid()))
     {
         SetChildUseShortAddress(aChild, true);
     }
@@ -515,8 +515,11 @@ void IndirectSender::HandleSentFrameToChild(const Mac::TxFrame &aFrame,
         }
 #endif
 
-        aFrame.GetDstAddr(macDest);
-        Get<MeshForwarder>().LogMessage(MeshForwarder::kMessageTransmit, *message, &macDest, txError);
+        if (!aFrame.IsEmpty())
+        {
+            aFrame.GetDstAddr(macDest);
+            Get<MeshForwarder>().LogMessage(MeshForwarder::kMessageTransmit, *message, &macDest, txError);
+        }
 
         if (message->GetType() == Message::kTypeIp6)
         {

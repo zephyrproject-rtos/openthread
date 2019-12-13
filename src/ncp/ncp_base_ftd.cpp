@@ -294,17 +294,34 @@ exit:
 
 template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_THREAD_ROUTER_ROLE_ENABLED>(void)
 {
-    return mEncoder.WriteBool(otThreadIsRouterRoleEnabled(mInstance));
+    return mEncoder.WriteBool(otThreadIsRouterEligible(mInstance));
 }
 
 template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_THREAD_ROUTER_ROLE_ENABLED>(void)
 {
-    bool    enabled;
+    bool    eligible;
     otError error = OT_ERROR_NONE;
 
-    SuccessOrExit(error = mDecoder.ReadBool(enabled));
+    SuccessOrExit(error = mDecoder.ReadBool(eligible));
 
-    otThreadSetRouterRoleEnabled(mInstance, enabled);
+    error = otThreadSetRouterEligible(mInstance, eligible);
+
+exit:
+    return error;
+}
+
+template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_MAC_MAX_RETRY_NUMBER_INDIRECT>(void)
+{
+    return mEncoder.WriteUint8(otLinkGetMaxFrameRetriesIndirect(mInstance));
+}
+
+template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_MAC_MAX_RETRY_NUMBER_INDIRECT>(void)
+{
+    uint8_t maxFrameRetriesIndirect;
+    otError error = OT_ERROR_NONE;
+
+    SuccessOrExit(error = mDecoder.ReadUint8(maxFrameRetriesIndirect));
+    otLinkSetMaxFrameRetriesIndirect(mInstance, maxFrameRetriesIndirect);
 
 exit:
     return error;
@@ -737,6 +754,32 @@ template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_MESHCOP_COMMISSIONER_
 
     memset(&dataset, 0, sizeof(otCommissioningDataset));
     error = otCommissionerSendMgmtSet(mInstance, &dataset, tlvs, static_cast<uint8_t>(length));
+
+exit:
+    return error;
+}
+
+otError NcpBase::HandlePropertySet_SPINEL_PROP_MESHCOP_COMMISSIONER_GENERATE_PSKC(uint8_t aHeader)
+{
+    otError        error = OT_ERROR_NONE;
+    const char *   passPhrase;
+    const char *   networkName;
+    const uint8_t *extPanIdData;
+    uint16_t       length;
+    otPskc         pskc;
+
+    SuccessOrExit(error = mDecoder.ReadUtf8(passPhrase));
+    SuccessOrExit(error = mDecoder.ReadUtf8(networkName));
+    SuccessOrExit(error = mDecoder.ReadDataWithLen(extPanIdData, length));
+    VerifyOrExit(length == sizeof(spinel_net_xpanid_t), error = OT_ERROR_PARSE);
+
+    SuccessOrExit(error = otCommissionerGeneratePskc(passPhrase, networkName,
+                                                     reinterpret_cast<const otExtendedPanId *>(extPanIdData), &pskc));
+
+    SuccessOrExit(
+        error = mEncoder.BeginFrame(aHeader, SPINEL_CMD_PROP_VALUE_IS, SPINEL_PROP_MESHCOP_COMMISSIONER_GENERATE_PSKC));
+    SuccessOrExit(error = mEncoder.WriteData(pskc.m8, sizeof(pskc)));
+    SuccessOrExit(error = mEncoder.EndFrame());
 
 exit:
     return error;

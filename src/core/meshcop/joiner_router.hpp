@@ -42,7 +42,7 @@
 #include "common/message.hpp"
 #include "common/notifier.hpp"
 #include "common/timer.hpp"
-#include "mac/mac_frame.hpp"
+#include "mac/mac_types.hpp"
 #include "meshcop/meshcop_tlvs.hpp"
 #include "net/udp6.hpp"
 #include "thread/key_manager.hpp"
@@ -202,26 +202,6 @@ public:
      *
      */
     const uint8_t *GetKek(void) const { return mKek; }
-
-    /**
-     * This method checks if the message shall be sent before the given time.
-     *
-     * @param[in]  aTime  A time to compare.
-     *
-     * @retval TRUE   If the message shall be sent before the given time.
-     * @retval FALSE  Otherwise.
-     */
-    bool IsEarlier(TimeMilli aTime) const { return aTime > mSendTime; }
-
-    /**
-     * This method checks if the message shall be sent after the given time.
-     *
-     * @param[in]  aTime  A time to compare.
-     *
-     * @retval TRUE   If the message shall be sent after the given time.
-     * @retval FALSE  Otherwise.
-     */
-    bool IsLater(TimeMilli aTime) const { return aTime < mSendTime; }
 
 private:
     Ip6::MessageInfo mMessageInfo;                    ///< Message info of the message to send.

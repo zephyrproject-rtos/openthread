@@ -45,6 +45,7 @@
 #include "mac/channel_mask.hpp"
 #include "mac/mac_filter.hpp"
 #include "mac/mac_frame.hpp"
+#include "mac/mac_types.hpp"
 #include "mac/sub_mac.hpp"
 #include "thread/key_manager.hpp"
 #include "thread/link_quality.hpp"
@@ -81,10 +82,11 @@ enum
     kMaxCsmaBackoffsIndirect =
         OPENTHREAD_CONFIG_MAC_MAX_CSMA_BACKOFFS_INDIRECT, ///< macMaxCsmaBackoffs for indirect transmissions
 
-    kMaxFrameRetriesDirect =
-        OPENTHREAD_CONFIG_MAC_MAX_FRAME_RETRIES_DIRECT, ///< macMaxFrameRetries for direct transmissions
-    kMaxFrameRetriesIndirect =
-        OPENTHREAD_CONFIG_MAC_MAX_FRAME_RETRIES_INDIRECT, ///< macMaxFrameRetries for indirect transmissions
+    kDefaultMaxFrameRetriesDirect =
+        OPENTHREAD_CONFIG_MAC_DEFAULT_MAX_FRAME_RETRIES_DIRECT, ///< macDefaultMaxFrameRetries for direct transmissions
+    kDefaultMaxFrameRetriesIndirect =
+        OPENTHREAD_CONFIG_MAC_DEFAULT_MAX_FRAME_RETRIES_INDIRECT, ///< macDefaultMaxFrameRetries for indirect
+                                                                  ///< transmissions
 
     kTxNumBcast = OPENTHREAD_CONFIG_MAC_TX_NUM_BCAST ///< Number of times each broadcast frame is transmitted
 };
@@ -306,46 +308,26 @@ public:
     otError SetPanChannel(uint8_t aChannel);
 
     /**
-     * This method returns the IEEE 802.15.4 Radio Channel.
+     * This method sets the temporary IEEE 802.15.4 radio channel.
      *
-     * @returns The IEEE 802.15.4 Radio Channel.
+     * This method allows user to temporarily change the radio channel and use a different channel (during receive)
+     * instead of the PAN channel (from `SetPanChannel()`). A call to `ClearTemporaryChannel()` would clear the
+     * temporary channel and adopt the PAN channel again. The `SetTemporaryChannel()` can be used multiple times in row
+     * (before a call to `ClearTemporaryChannel()`) to change the temporary channel.
      *
-     */
-    uint8_t GetRadioChannel(void) const { return mRadioChannel; }
-
-    /**
-     * This method sets the IEEE 802.15.4 Radio Channel. It can only be called after successfully calling
-     * `AcquireRadioChannel()`.
+     * @param[in]  aChannel            A IEEE 802.15.4 channel.
      *
-     * @param[in]  aChannel  The IEEE 802.15.4 Radio Channel.
-     *
-     * @retval OT_ERROR_NONE           Successfully set the IEEE 802.15.4 Radio Channel.
+     * @retval OT_ERROR_NONE           Successfully set the temporary channel
      * @retval OT_ERROR_INVALID_ARGS   The @p aChannel is not in the supported channel mask.
-     * @retval OT_ERROR_INVALID_STATE  The acquisition ID is incorrect.
      *
      */
-    otError SetRadioChannel(uint16_t aAcquisitionId, uint8_t aChannel);
+    otError SetTemporaryChannel(uint8_t aChannel);
 
     /**
-     * This method acquires external ownership of the Radio channel so that future calls to `SetRadioChannel)()` will
-     * succeed.
-     *
-     * @param[out]  aAcquisitionId  The AcquisitionId that the caller should use when calling `SetRadioChannel()`.
-     *
-     * @retval OT_ERROR_NONE           Successfully acquired permission to Set the Radio Channel.
-     * @retval OT_ERROR_INVALID_STATE  Failed to acquire permission as the radio Channel has already been acquired.
+     * This method clears the use of a previously set temporary channel and adopts the PAN channel.
      *
      */
-    otError AcquireRadioChannel(uint16_t *aAcquisitionId);
-
-    /**
-     * This method releases external ownership of the radio Channel that was acquired with `AcquireRadioChannel()`. The
-     * channel will re-adopt the PAN Channel when this API is called.
-     *
-     * @retval OT_ERROR_NONE  Successfully released the IEEE 802.15.4 Radio Channel.
-     *
-     */
-    otError ReleaseRadioChannel(void);
+    void ClearTemporaryChannel(void);
 
     /**
      * This method returns the supported channel mask.
@@ -424,6 +406,43 @@ public:
      *
      */
     void SetExtendedPanId(const ExtendedPanId &aExtendedPanId);
+
+    /**
+     * This method returns the maximum number of frame retries during direct transmission.
+     *
+     * @returns The maximum number of retries during direct transmission.
+     *
+     */
+    uint8_t GetMaxFrameRetriesDirect(void) const { return mMaxFrameRetriesDirect; }
+
+    /**
+     * This method sets the maximum number of frame retries during direct transmission.
+     *
+     * @param[in]  aMaxFrameRetriesDirect  The maximum number of retries during direct transmission.
+     *
+     */
+    void SetMaxFrameRetriesDirect(uint8_t aMaxFrameRetriesDirect) { mMaxFrameRetriesDirect = aMaxFrameRetriesDirect; }
+
+#if OPENTHREAD_FTD
+    /**
+     * This method returns the maximum number of frame retries during indirect transmission.
+     *
+     * @returns The maximum number of retries during indirect transmission.
+     *
+     */
+    uint8_t GetMaxFrameRetriesIndirect(void) const { return mMaxFrameRetriesIndirect; }
+
+    /**
+     * This method sets the maximum number of frame retries during indirect transmission.
+     *
+     * @param[in]  aMaxFrameRetriesIndirect  The maximum number of retries during indirect transmission.
+     *
+     */
+    void SetMaxFrameRetriesIndirect(uint8_t aMaxFrameRetriesIndirect)
+    {
+        mMaxFrameRetriesIndirect = aMaxFrameRetriesIndirect;
+    }
+#endif
 
     /**
      * This method is called to handle a received frame.
@@ -548,7 +567,7 @@ public:
      * This method resets mac counters
      *
      */
-    void ResetCounters(void);
+    void ResetCounters(void) { memset(&mCounters, 0, sizeof(mCounters)); }
 
     /**
      * This method returns the MAC counter.
@@ -593,16 +612,6 @@ public:
      *
      */
     bool IsEnabled(void) const { return mEnabled; }
-
-    /**
-     * This method performs AES CCM on the frame which is going to be sent.
-     *
-     * @param[in]  aFrame       A reference to the MAC frame buffer that is going to be sent.
-     * @param[in]  aExtAddress  A pointer to the extended address, which will be used to generate nonce
-     *                          for AES CCM computation.
-     *
-     */
-    static void ProcessTransmitAesCcm(TxFrame &aFrame, const ExtAddress *aExtAddress);
 
 private:
     enum
@@ -652,7 +661,6 @@ private:
     bool    IsJoinable(void) const;
     void    BeginTransmit(void);
     bool    HandleMacCommand(RxFrame &aFrame);
-    Frame * GetOperationFrame(void);
 
     static void HandleTimer(Timer &aTimer);
     void        HandleTimer(void);
@@ -694,6 +702,7 @@ private:
     bool mRxOnWhenIdle : 1;
     bool mPromiscuous : 1;
     bool mBeaconsEnabled : 1;
+    bool mUsingTemporaryChannel : 1;
 #if OPENTHREAD_CONFIG_MAC_STAY_AWAKE_BETWEEN_FRAGMENTS
     bool mShouldDelaySleep : 1;
     bool mDelayingSleep : 1;
@@ -706,13 +715,16 @@ private:
     PanId         mPanId;
     uint8_t       mPanChannel;
     uint8_t       mRadioChannel;
-    uint16_t      mRadioChannelAcquisitionId;
     ChannelMask   mSupportedChannelMask;
     ExtendedPanId mExtendedPanId;
     NetworkName   mNetworkName;
     uint8_t       mScanChannel;
     uint16_t      mScanDuration;
     ChannelMask   mScanChannelMask;
+    uint8_t       mMaxFrameRetriesDirect;
+#if OPENTHREAD_FTD
+    uint8_t mMaxFrameRetriesIndirect;
+#endif
     union
     {
         ActiveScanHandler mActiveScanHandler;

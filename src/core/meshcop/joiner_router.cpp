@@ -222,23 +222,7 @@ void JoinerRouter::HandleRelayTransmit(Coap::Message &aMessage, const Ip6::Messa
 
     VerifyOrExit((message = mSocket.NewMessage(0, &settings)) != NULL, error = OT_ERROR_NO_BUFS);
 
-    while (length)
-    {
-        uint16_t copyLength = length;
-        uint8_t  tmp[16];
-
-        if (copyLength >= sizeof(tmp))
-        {
-            copyLength = sizeof(tmp);
-        }
-
-        aMessage.Read(offset, copyLength, tmp);
-        SuccessOrExit(error = message->Append(tmp, copyLength));
-
-        offset += copyLength;
-        length -= copyLength;
-    }
-
+    SuccessOrExit(error = message->SetLength(length));
     aMessage.CopyTo(offset, 0, length, *message);
 
     messageInfo.mPeerAddr.mFields.m16[0] = HostSwap16(0xfe80);
@@ -387,7 +371,6 @@ void JoinerRouter::SendDelayedJoinerEntrust(void)
 {
     DelayedJoinEntHeader delayedJoinEnt;
     Coap::Message *      message = static_cast<Coap::Message *>(mDelayedJoinEnts.GetHead());
-    TimeMilli            now     = TimerMilli::GetNow();
     Ip6::MessageInfo     messageInfo;
 
     VerifyOrExit(message != NULL);
@@ -399,9 +382,9 @@ void JoinerRouter::SendDelayedJoinerEntrust(void)
     VerifyOrExit(!mExpectJoinEntRsp ||
                  memcmp(Get<KeyManager>().GetKek(), delayedJoinEnt.GetKek(), KeyManager::kMaxKeyLength) == 0);
 
-    if (delayedJoinEnt.IsLater(now))
+    if (TimerMilli::GetNow() < delayedJoinEnt.GetSendTime())
     {
-        mTimer.Start(delayedJoinEnt.GetSendTime() - now);
+        mTimer.FireAt(delayedJoinEnt.GetSendTime());
     }
     else
     {

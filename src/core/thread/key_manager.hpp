@@ -44,7 +44,7 @@
 #include "common/random.hpp"
 #include "common/timer.hpp"
 #include "crypto/hmac_sha256.hpp"
-#include "mac/mac_frame.hpp"
+#include "mac/mac_types.hpp"
 
 namespace ot {
 
@@ -97,6 +97,12 @@ OT_TOOL_PACKED_BEGIN
 class Pskc : public otPskc
 {
 public:
+    /**
+     * This method clears the PSKc (sets all bytes to zero).
+     *
+     */
+    void Clear(void) { memset(this, 0, sizeof(*this)); }
+
     /**
      * This method evaluates whether or not the Thread PSKc values match.
      *

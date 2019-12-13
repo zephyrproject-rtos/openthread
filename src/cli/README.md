@@ -39,6 +39,7 @@ OpenThread test scripts use the CLI to execute test cases.
 * [leaderweight](#leaderweight)
 * [linkquality](#linkquality-extaddr)
 * [logfilename](#logfilename-filename)
+* [mac](#mac-retries-direct)
 * [macfilter](#macfilter)
 * [masterkey](#masterkey)
 * [mode](#mode)
@@ -52,7 +53,7 @@ OpenThread test scripts use the CLI to execute test cases.
 * [panid](#panid)
 * [parent](#parent)
 * [parentpriority](#parentpriority)
-* [ping](#ping-ipaddr-size-count-interval)
+* [ping](#ping-ipaddr-size-count-interval-hoplimit)
 * [pollperiod](#pollperiod-pollperiod)
 * [prefix](#prefix-add-prefix-pvdcsr-prf)
 * [promiscuous](#promiscuous)
@@ -62,7 +63,7 @@ OpenThread test scripts use the CLI to execute test cases.
 * [route](#route-add-prefix-s-prf)
 * [router](#router-list)
 * [routerdowngradethreshold](#routerdowngradethreshold)
-* [routerrole](#routerrole)
+* [routereligible](#routereligible)
 * [routerselectionjitter](#routerselectionjitter)
 * [routerupgradethreshold](#routerupgradethreshold)
 * [scan](#scan-channel)
@@ -110,6 +111,26 @@ Set the IEEE 802.15.4 Channel value.
 
 ```bash
 > channel 11
+Done
+```
+
+### channel preferred
+
+Get preferred channel mask.
+
+```bash
+> channel preferred
+0x7fff800
+Done
+```
+
+### channel supported
+
+Get supported channel mask.
+
+```bash
+> channel supported
+0x7fff800
 Done
 ```
 
@@ -226,7 +247,7 @@ Done
 Get the supported counter names.
 
 ```bash
->counters
+> counters
 mac
 mle
 Done
@@ -280,6 +301,17 @@ Attach Attempts: 1
 Partition Id Changes: 1
 Better Partition Attach Attempts: 0
 Parent Changes: 0
+Done
+```
+
+### counters \<countername\> reset
+
+Reset the counter value.
+
+```bash
+> counters mac reset
+Done
+> counters mle reset
 Done
 ```
 
@@ -905,17 +937,20 @@ Set the assigned parent priority value: 1, 0, -1 or -2.
 Done
 ```
 
-### ping \<ipaddr\> [size] [count] [interval]
+### ping \<ipaddr\> [size] [count] [interval] [hoplimit]
 
 Send an ICMPv6 Echo Request.
 
 * size: The number of data bytes to be sent.
 * count: The number of ICMPv6 Echo Requests to be sent.
 * interval: The interval between two consecutive ICMPv6 Echo Requests in seconds. The value may have fractional form, for example `0.5`.
+* hoplimit: The hoplimit of ICMPv6 Echo Request to be sent.
 
 ```bash
 > ping fdde:ad00:beef:0:558:f56b:d688:799
 16 bytes from fdde:ad00:beef:0:558:f56b:d688:799: icmp_seq=1 hlim=64 time=28ms
+
+> ping ff05::1 100 1 1 1
 ```
 
 ### ping stop
@@ -1143,31 +1178,31 @@ Set the ROUTER_DOWNGRADE_THRESHOLD value.
 Done
 ```
 
-### routerrole
+### routereligible
 
 Indicates whether the router role is enabled or disabled.
 
 ```bash
-> routerrole
+> routereligible
 Enabled
 Done
 ```
 
-### routerrole enable
+### routereligible enable
 
 Enable the router role.
 
 ```bash
-> routerrole enable
+> routereligible enable
 Done
 ```
 
-### routerrole disable
+### routereligible disable
 
 Disable the router role.
 
 ```bash
-> routerrole disable
+> routereligible disable
 Done
 ```
 
@@ -1353,6 +1388,44 @@ OPENTHREAD/gf4f2f04; Jul  1 2016 17:00:09
 Done
 ```
 
+### mac retries direct
+
+Get the number of direct TX retries on the MAC layer.
+
+```bash
+> mac retries direct
+3
+Done
+```
+
+### mac retries direct \<number\>
+
+Set the number of direct TX retries on the MAC layer.
+
+```bash
+> mac retries direct 5
+Done
+```
+
+### mac retries indirect
+
+Get the number of indirect TX retries on the MAC layer.
+
+```bash
+> mac retries indirect
+3
+Done
+```
+
+### mac retries indirect \<number\>
+
+Set the number of indirect TX retries on the MAC layer.
+
+```bash
+> mac retries indirect 5
+Done
+```
+
 ### macfilter
 
 List the macfilter status, including address and received signal strength filter settings.
@@ -1526,6 +1599,8 @@ Add service to the Network Data.
 ```bash
 > service add 44970 foo bar
 Done
+> netdataregister
+Done
 > ipaddr
 fdde:ad00:beef:0:0:ff:fe00:fc10
 fdde:ad00:beef:0:0:ff:fe00:fc00
@@ -1541,6 +1616,14 @@ Remove service from Network Data.
 
 ```bash
 > service remove 44970 foo
+Done
+> netdataregister
+Done
+> ipaddr
+fdde:ad00:beef:0:0:ff:fe00:fc00
+fdde:ad00:beef:0:0:ff:fe00:7c00
+fe80:0:0:0:1486:2f57:3c:6e10
+fdde:ad00:beef:0:8ca4:19ed:217a:eff9
 Done
 ```
 

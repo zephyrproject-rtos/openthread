@@ -90,6 +90,12 @@ void nrf5AlarmProcess(otInstance *aInstance);
 uint64_t nrf5AlarmGetCurrentTime(void);
 
 /**
+ * Function for getting raw counter value in RTC ticks.
+ *
+ */
+uint64_t nrf5AlarmGetRawCounter(void);
+
+/**
  * Initialization of Random Number Generator.
  *
  */
@@ -159,6 +165,12 @@ void nrf5RadioDeinit(void);
  *
  */
 void nrf5RadioProcess(otInstance *aInstance);
+
+/**
+ * Function for clearing Radio driver pending events.
+ *
+ */
+void nrf5RadioClearPendingEvents(void);
 
 /**
  * Initialization of hardware crypto engine.

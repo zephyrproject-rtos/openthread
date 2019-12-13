@@ -76,8 +76,21 @@ void TimerMilli::Start(uint32_t aDelay)
 void TimerMilli::StartAt(TimeMilli aStartTime, uint32_t aDelay)
 {
     assert(aDelay <= kMaxDelay);
-    mFireTime = aStartTime + aDelay;
+    FireAt(aStartTime + aDelay);
+}
+
+void TimerMilli::FireAt(TimeMilli aFireTime)
+{
+    mFireTime = aFireTime;
     Get<TimerMilliScheduler>().Add(*this);
+}
+
+void TimerMilli::FireAtIfEarlier(TimeMilli aFireTime)
+{
+    if (!IsRunning() || (mFireTime > aFireTime))
+    {
+        FireAt(aFireTime);
+    }
 }
 
 void TimerMilli::Stop(void)
@@ -87,73 +100,45 @@ void TimerMilli::Stop(void)
 
 void TimerScheduler::Add(Timer &aTimer, const AlarmApi &aAlarmApi)
 {
+    Timer *prev = NULL;
+    Time   now(aAlarmApi.AlarmGetNow());
+
     Remove(aTimer, aAlarmApi);
 
-    if (mHead == NULL)
+    for (Timer *cur = mTimerList.GetHead(); cur; prev = cur, cur = cur->GetNext())
     {
-        mHead        = &aTimer;
-        aTimer.mNext = NULL;
+        if (aTimer.DoesFireBefore(*cur, now))
+        {
+            break;
+        }
+    }
+
+    if (prev == NULL)
+    {
+        mTimerList.Push(aTimer);
         SetAlarm(aAlarmApi);
     }
     else
     {
-        Timer *prev = NULL;
-        Timer *cur;
-
-        for (cur = mHead; cur; cur = cur->mNext)
-        {
-            Time now(aAlarmApi.AlarmGetNow());
-
-            if (aTimer.DoesFireBefore(*cur, now))
-            {
-                if (prev)
-                {
-                    aTimer.mNext = cur;
-                    prev->mNext  = &aTimer;
-                }
-                else
-                {
-                    aTimer.mNext = mHead;
-                    mHead        = &aTimer;
-                    SetAlarm(aAlarmApi);
-                }
-
-                break;
-            }
-
-            prev = cur;
-        }
-
-        if (cur == NULL)
-        {
-            prev->mNext  = &aTimer;
-            aTimer.mNext = NULL;
-        }
+        mTimerList.PushAfter(aTimer, *prev);
     }
 }
 
 void TimerScheduler::Remove(Timer &aTimer, const AlarmApi &aAlarmApi)
 {
-    VerifyOrExit(aTimer.mNext != &aTimer);
+    VerifyOrExit(aTimer.IsRunning());
 
-    if (mHead == &aTimer)
+    if (mTimerList.GetHead() == &aTimer)
     {
-        mHead = aTimer.mNext;
+        mTimerList.Pop();
         SetAlarm(aAlarmApi);
     }
     else
     {
-        for (Timer *cur = mHead; cur; cur = cur->mNext)
-        {
-            if (cur->mNext == &aTimer)
-            {
-                cur->mNext = aTimer.mNext;
-                break;
-            }
-        }
+        mTimerList.Remove(aTimer);
     }
 
-    aTimer.mNext = &aTimer;
+    aTimer.SetNext(&aTimer);
 
 exit:
     return;
@@ -161,16 +146,17 @@ exit:
 
 void TimerScheduler::SetAlarm(const AlarmApi &aAlarmApi)
 {
-    if (mHead == NULL)
+    if (mTimerList.IsEmpty())
     {
         aAlarmApi.AlarmStop(&GetInstance());
     }
     else
     {
+        Timer *  timer = mTimerList.GetHead();
         Time     now(aAlarmApi.AlarmGetNow());
         uint32_t remaining;
 
-        remaining = (now < mHead->mFireTime) ? (mHead->mFireTime - now) : 0;
+        remaining = (now < timer->mFireTime) ? (timer->mFireTime - now) : 0;
 
         aAlarmApi.AlarmStartAt(&GetInstance(), now.GetValue(), remaining);
     }
@@ -178,7 +164,7 @@ void TimerScheduler::SetAlarm(const AlarmApi &aAlarmApi)
 
 void TimerScheduler::ProcessTimers(const AlarmApi &aAlarmApi)
 {
-    Timer *timer = mHead;
+    Timer *timer = mTimerList.GetHead();
 
     if (timer)
     {
@@ -220,7 +206,12 @@ void                           TimerMicro::Start(uint32_t aDelay)
 void TimerMicro::StartAt(TimeMicro aStartTime, uint32_t aDelay)
 {
     assert(aDelay <= kMaxDelay);
-    mFireTime = aStartTime + aDelay;
+    FireAt(aStartTime + aDelay);
+}
+
+void TimerMicro::FireAt(TimeMicro aFireTime)
+{
+    mFireTime = aFireTime;
     Get<TimerMicroScheduler>().Add(*this);
 }
 

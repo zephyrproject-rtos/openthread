@@ -78,4 +78,31 @@ add_definitions(
 # Need to specify build directory as well
 add_subdirectory(.. build)
 
+# Include OpenThread headers
+zephyr_system_include_directories(../include)
+zephyr_system_include_directories(../examples/platforms)
+
+# Determine which libs should be linked in
+set(ot_libs "")
+
+if(CONFIG_OPENTHREAD_FTD)
+set(cli_lib openthread-cli-ftd)
+elseif(CONFIG_OPENTHREAD_MTD)
+set(cli_lib openthread-cli-mtd)
+endif()
+
+if(CONFIG_OPENTHREAD_SHELL)
+list(APPEND ot_libs ${cli_lib})
+endif()
+
+if(CONFIG_OPENTHREAD_FTD)
+list(APPEND ot_libs openthread-ftd)
+elseif(CONFIG_OPENTHREAD_MTD)
+list(APPEND ot_libs openthread-mtd)
+endif()
+
+list(APPEND ot_libs openthread-platform-utils-static)
+
+zephyr_link_libraries(${ot_libs})
+
 endif()

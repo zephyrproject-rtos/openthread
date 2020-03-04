@@ -17,6 +17,10 @@ if(CONFIG_OPENTHREAD_JOINER)
   set(OT_JOINER ON CACHE BOOL "Enable Joiner")
 endif()
 
+if(CONFIG_OPENTHREAD_SLAAC)
+  set(OT_SLAAC ON CACHE BOOL "Enable SLAAC")
+endif()
+
 if(CONFIG_OPENTHREAD_DHCP6_CLIENT)
   set(OT_DHCP6_CLIENT ON CACHE BOOL "Enable DHCPv6 Client")
 endif()
@@ -28,6 +32,35 @@ endif()
 if(CONFIG_OPENTHREAD_DIAG)
   set(OT_DIAGNOSTIC ON CACHE BOOL "Enable Diagnostics")
 endif()
+
+if(CONFIG_OPENTHREAD_RAW)
+  set(OT_LINK_RAW ON CACHE BOOL "Enable Link Raw")
+endif()
+
+if(CONFIG_OPENTHREAD_ENABLE_SERVICE)
+  set(OT_SERVICE ON CACHE BOOL "Enable Service entries in Thread Network Data")
+endif()
+
+if(CONFIG_OPENTHREAD_BORDER_AGENT)
+  set(OT_BORDER_AGENT ON CACHE BOOL "Enable Border Agent")
+endif()
+
+if(CONFIG_OPENTHREAD_BORDER_ROUTER)
+  set(OT_BORDER_ROUTER ON CACHE BOOL "Enable Border Router")
+endif()
+
+if(CONFIG_OPENTHREAD_NCP)
+  set(OT_NCP ON CACHE BOOL "Enable Network Co-Processor NCP")
+endif()
+
+if(CONFIG_OPENTHREAD_RCP)
+  set(OT_RCP ON CACHE BOOL "Enable Network Co-Processor RCP")
+endif()
+
+if(CONFIG_OPENTHREAD_UDP_FORWARD)
+  set(OT_UDP_FORWARD ON CACHE BOOL "Enable UDP Forward")
+endif()
+
 
 # Zephyr libc capabilies
 set(HAVE_STRLCPY OFF CACHE BOOL "Zephyr's minimal libc does not provide strlcpy")
@@ -92,6 +125,14 @@ endif()
 
 if(CONFIG_OPENTHREAD_SHELL)
 list(APPEND ot_libs ${cli_lib})
+endif()
+
+if(CONFIG_OPENTHREAD_NCP)
+if(CONFIG_OPENTHREAD_FTD)
+list(APPEND ot_libs openthread-ncp-ftd)
+elseif(CONFIG_OPENTHREAD_MTD)
+list(APPEND ot_libs openthread-ncp-mtd)
+endif()
 endif()
 
 if(CONFIG_OPENTHREAD_FTD)

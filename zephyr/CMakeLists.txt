@@ -42,11 +42,10 @@ set(cxx_options "${cxx_options} -fno-builtin")
 
 zephyr_get_include_directories_for_lang_as_string(       C includes)
 zephyr_get_system_include_directories_for_lang_as_string(C system_includes)
-zephyr_get_compile_definitions_for_lang_as_string(       C definitions)
 
-set(CMAKE_C_FLAGS   "${definitions} ${c_options} ${includes} ${system_includes}")
-set(CMAKE_CXX_FLAGS "${definitions} ${cxx_options} ${includes} ${system_includes}")
-set(CMAKE_ASM_FLAGS "${definitions} ${c_options} ${includes} ${system_includes}")
+set(CMAKE_C_FLAGS   "${c_options} ${includes} ${system_includes}")
+set(CMAKE_CXX_FLAGS "${cxx_options} ${includes} ${system_includes}")
+set(CMAKE_ASM_FLAGS "${c_options} ${includes} ${system_includes}")
 
 # Other options
 add_definitions(

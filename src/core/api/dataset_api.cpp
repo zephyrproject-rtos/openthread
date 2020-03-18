@@ -44,19 +44,23 @@ using namespace ot;
 bool otDatasetIsCommissioned(otInstance *aInstance)
 {
     otOperationalDataset dataset;
+    bool                 rval = false;
 
-    otDatasetGetActive(aInstance, &dataset);
+    SuccessOrExit(otDatasetGetActive(aInstance, &dataset));
 
-    return ((dataset.mComponents.mIsMasterKeyPresent) && (dataset.mComponents.mIsNetworkNamePresent) &&
+    rval = ((dataset.mComponents.mIsMasterKeyPresent) && (dataset.mComponents.mIsNetworkNamePresent) &&
             (dataset.mComponents.mIsExtendedPanIdPresent) && (dataset.mComponents.mIsPanIdPresent) &&
             (dataset.mComponents.mIsChannelPresent));
+
+exit:
+    return rval;
 }
 
 otError otDatasetGetActive(otInstance *aInstance, otOperationalDataset *aDataset)
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    assert(aDataset != NULL);
+    OT_ASSERT(aDataset != NULL);
 
     return instance.Get<MeshCoP::ActiveDataset>().Read(*aDataset);
 }
@@ -65,7 +69,7 @@ otError otDatasetSetActive(otInstance *aInstance, const otOperationalDataset *aD
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    assert(aDataset != NULL);
+    OT_ASSERT(aDataset != NULL);
 
     return instance.Get<MeshCoP::ActiveDataset>().Save(*aDataset);
 }
@@ -74,7 +78,7 @@ otError otDatasetGetPending(otInstance *aInstance, otOperationalDataset *aDatase
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    assert(aDataset != NULL);
+    OT_ASSERT(aDataset != NULL);
 
     return instance.Get<MeshCoP::PendingDataset>().Read(*aDataset);
 }
@@ -83,7 +87,7 @@ otError otDatasetSetPending(otInstance *aInstance, const otOperationalDataset *a
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    assert(aDataset != NULL);
+    OT_ASSERT(aDataset != NULL);
 
     return instance.Get<MeshCoP::PendingDataset>().Save(*aDataset);
 }

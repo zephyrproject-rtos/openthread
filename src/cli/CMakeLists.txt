@@ -29,6 +29,13 @@
 add_library(openthread-cli-ftd)
 add_library(openthread-cli-mtd)
 
+set_target_properties(
+    openthread-cli-ftd openthread-cli-mtd
+    PROPERTIES
+        C_STANDARD 99
+        CXX_STANDARD 98
+)
+
 target_compile_definitions(openthread-cli-ftd PRIVATE
     ${OT_PRIVATE_DEFINES}
     OPENTHREAD_FTD=1
@@ -37,6 +44,14 @@ target_compile_definitions(openthread-cli-ftd PRIVATE
 target_compile_definitions(openthread-cli-mtd PRIVATE
     ${OT_PRIVATE_DEFINES}
     OPENTHREAD_MTD=1
+)
+
+target_compile_options(openthread-cli-ftd PRIVATE
+    ${OT_CFLAGS}
+)
+
+target_compile_options(openthread-cli-mtd PRIVATE
+    ${OT_CFLAGS}
 )
 
 set(COMMON_INCLUDES
@@ -63,3 +78,13 @@ target_include_directories(openthread-cli-mtd PUBLIC ${OT_PUBLIC_INCLUDES} PRIVA
 
 target_sources(openthread-cli-ftd PRIVATE ${COMMON_SOURCES})
 target_sources(openthread-cli-mtd PRIVATE ${COMMON_SOURCES})
+
+target_link_libraries(openthread-cli-ftd
+    PUBLIC
+        openthread-ftd
+)
+
+target_link_libraries(openthread-cli-mtd
+    PUBLIC
+        openthread-mtd
+)

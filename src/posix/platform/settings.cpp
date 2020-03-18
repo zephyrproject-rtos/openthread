@@ -32,7 +32,7 @@
  *
  */
 
-#include "openthread-core-config.h"
+#include "openthread-posix-config.h"
 #include "platform-posix.h"
 
 #include <assert.h>
@@ -390,6 +390,10 @@ void otPlatSettingsWipe(otInstance *aInstance)
     OT_UNUSED_VARIABLE(aInstance);
     VerifyOrDie(0 == ftruncate(sSettingsFd, 0), OT_EXIT_ERROR_ERRNO);
 }
+
+#ifndef SELF_TEST
+#define SELF_TEST 0
+#endif
 
 #if SELF_TEST
 

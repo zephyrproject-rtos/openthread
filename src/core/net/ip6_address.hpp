@@ -40,6 +40,7 @@
 
 #include "common/string.hpp"
 #include "mac/mac_types.hpp"
+#include "thread/mle_types.hpp"
 
 namespace ot {
 namespace Ip6 {
@@ -77,8 +78,6 @@ public:
     {
         kInterfaceIdentifierSize = 8,  ///< Interface Identifier size in bytes.
         kIp6AddressStringSize    = 40, ///< Max buffer size in bytes to store an IPv6 address in string format.
-        kMeshLocalPrefixLength   = 64, ///< Length of Thread mesh local prefix.
-        kMeshLocalPrefixSize     = 8,  ///< Mesh local prefix size in bytes.
     };
 
     /**
@@ -127,15 +126,6 @@ public:
     bool IsLoopback(void) const;
 
     /**
-     * This method indicates whether or not the IPv6 address scope is Interface-Local.
-     *
-     * @retval TRUE   If the IPv6 address scope is Interface-Local.
-     * @retval FALSE  If the IPv6 address scope is not Interface-Local.
-     *
-     */
-    bool IsInterfaceLocal(void) const;
-
-    /**
      * This method indicates whether or not the IPv6 address scope is Link-Local.
      *
      * @retval TRUE   If the IPv6 address scope is Link-Local.
@@ -151,7 +141,7 @@ public:
      * @retval FALSE  If the IPv6 address scope is not a multicast address.
      *
      */
-    bool IsMulticast(void) const;
+    bool IsMulticast(void) const { return mFields.m8[0] == 0xff; }
 
     /**
      * This method indicates whether or not the IPv6 address is a link-local multicast address.
@@ -280,12 +270,27 @@ public:
     bool IsIidReserved(void) const;
 
     /**
-     * This method returns a pointer to the Interface Identifier.
+     * This method sets the IPv6 address prefix.
      *
-     * @returns A pointer to the Interface Identifier.
+     * This method only changes the first @p aPrefixLength bits of the address and keeps the rest of the bits in the
+     * address as before.
+     *
+     * @param[in]  aPrefix         A buffer containing the prefix
+     * @param[in]  aPrefixLength   The prefix length (in bits).
      *
      */
-    const uint8_t *GetIid(void) const;
+    void SetPrefix(const uint8_t *aPrefix, uint8_t aPrefixLength);
+
+    /**
+     * This method sets the IPv6 address prefix to the given Mesh Local Prefix.
+     *
+     * @param[in]  aMeshLocalPrefix   A Mesh Local Prefix.
+     *
+     */
+    void SetPrefix(const Mle::MeshLocalPrefix &aMeshLocalPrefix)
+    {
+        SetPrefix(aMeshLocalPrefix.m8, Mle::MeshLocalPrefix::kLength);
+    }
 
     /**
      * This method returns a pointer to the Interface Identifier.
@@ -293,7 +298,15 @@ public:
      * @returns A pointer to the Interface Identifier.
      *
      */
-    uint8_t *GetIid(void);
+    const uint8_t *GetIid(void) const { return mFields.m8 + kInterfaceIdentifierOffset; }
+
+    /**
+     * This method returns a pointer to the Interface Identifier.
+     *
+     * @returns A pointer to the Interface Identifier.
+     *
+     */
+    uint8_t *GetIid(void) { return mFields.m8 + kInterfaceIdentifierOffset; }
 
     /**
      * This method sets the Interface Identifier.

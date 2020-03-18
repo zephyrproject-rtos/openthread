@@ -209,7 +209,7 @@ NcpBase::NcpBase(Instance *aInstance)
     , mThreadChangedFlags(0)
     , mChangedPropsSet()
     , mHostPowerState(SPINEL_HOST_POWER_STATE_ONLINE)
-    , mHostPowerReplyFrameTag(NcpFrameBuffer::kInvalidTag)
+    , mHostPowerReplyFrameTag(Spinel::Buffer::kInvalidTag)
     , mHostPowerStateHeader(0)
 #if OPENTHREAD_CONFIG_NCP_ENABLE_PEEK_POKE
     , mAllowPeekDelegate(NULL)
@@ -248,8 +248,9 @@ NcpBase::NcpBase(Instance *aInstance)
     , mRxSpinelOutOfOrderTidCounter(0)
     , mTxSpinelFrameCounter(0)
     , mDidInitialUpdates(false)
+    , mLogTimestampBase(0)
 {
-    assert(mInstance != NULL);
+    OT_ASSERT(mInstance != NULL);
 
     sNcpInstance = this;
 
@@ -317,7 +318,7 @@ void NcpBase::ResetCounters(void)
 // MARK: Serial Traffic Glue
 // ----------------------------------------------------------------------------
 
-NcpFrameBuffer::FrameTag NcpBase::GetLastOutboundFrameTag(void)
+Spinel::Buffer::FrameTag NcpBase::GetLastOutboundFrameTag(void)
 {
     return mTxFrameBuffer.InFrameGetLastTag();
 }
@@ -386,9 +387,9 @@ exit:
 }
 
 void NcpBase::HandleFrameRemovedFromNcpBuffer(void *                   aContext,
-                                              NcpFrameBuffer::FrameTag aFrameTag,
-                                              NcpFrameBuffer::Priority aPriority,
-                                              NcpFrameBuffer *         aNcpBuffer)
+                                              Spinel::Buffer::FrameTag aFrameTag,
+                                              Spinel::Buffer::Priority aPriority,
+                                              Spinel::Buffer *         aNcpBuffer)
 {
     OT_UNUSED_VARIABLE(aNcpBuffer);
     OT_UNUSED_VARIABLE(aPriority);
@@ -396,7 +397,7 @@ void NcpBase::HandleFrameRemovedFromNcpBuffer(void *                   aContext,
     static_cast<NcpBase *>(aContext)->HandleFrameRemovedFromNcpBuffer(aFrameTag);
 }
 
-void NcpBase::HandleFrameRemovedFromNcpBuffer(NcpFrameBuffer::FrameTag aFrameTag)
+void NcpBase::HandleFrameRemovedFromNcpBuffer(Spinel::Buffer::FrameTag aFrameTag)
 {
     if (mHostPowerStateInProgress)
     {
@@ -630,6 +631,7 @@ void NcpBase::Log(otLogLevel aLogLevel, otLogRegion aLogRegion, const char *aLog
     SuccessOrExit(error = mEncoder.WriteUtf8(aLogString));
     SuccessOrExit(error = mEncoder.WriteUint8(ConvertLogLevel(aLogLevel)));
     SuccessOrExit(error = mEncoder.WriteUintPacked(ConvertLogRegion(aLogRegion)));
+    SuccessOrExit(error = mEncoder.WriteUint64(mLogTimestampBase + otPlatAlarmMilliGetNow()));
     SuccessOrExit(error = mEncoder.EndFrame());
 
 exit:
@@ -882,15 +884,12 @@ otError NcpBase::HandleCommand(uint8_t aHeader)
 
 #if OPENTHREAD_MTD || OPENTHREAD_FTD
     case SPINEL_CMD_NET_SAVE:
-        error = CommandHandler_NET_SAVE(aHeader);
+    case SPINEL_CMD_NET_RECALL:
+        error = OT_ERROR_NOT_IMPLEMENTED;
         break;
 
     case SPINEL_CMD_NET_CLEAR:
         error = CommandHandler_NET_CLEAR(aHeader);
-        break;
-
-    case SPINEL_CMD_NET_RECALL:
-        error = CommandHandler_NET_RECALL(aHeader);
         break;
 #endif // OPENTHREAD_MTD || OPENTHREAD_FTD
 
@@ -1031,7 +1030,7 @@ otError NcpBase::HandleCommandPropertyInsertRemove(uint8_t aHeader, spinel_prop_
         break;
 
     default:
-        assert(false);
+        OT_ASSERT(false);
         break;
     }
 
@@ -1772,8 +1771,8 @@ template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_CAPS>(void)
     SuccessOrExit(error = mEncoder.WriteUintPacked(SPINEL_CAP_MAC_RAW));
 #endif
 
-#if OPENTHREAD_PLATFORM_POSIX_APP
-    SuccessOrExit(error = mEncoder.WriteUintPacked(SPINEL_CAP_POSIX_APP));
+#if OPENTHREAD_PLATFORM_POSIX
+    SuccessOrExit(error = mEncoder.WriteUintPacked(SPINEL_CAP_POSIX));
 #endif
 
 #if (OPENTHREAD_CONFIG_LOG_OUTPUT == OPENTHREAD_CONFIG_LOG_OUTPUT_NCP_SPINEL)
@@ -1809,9 +1808,7 @@ template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_CAPS>(void)
     SuccessOrExit(error = mEncoder.WriteUintPacked(SPINEL_CAP_TIME_SYNC));
 #endif
 
-#if OPENTHREAD_CONFIG_ENABLE_TX_ERROR_RATE_TRACKING
     SuccessOrExit(error = mEncoder.WriteUintPacked(SPINEL_CAP_ERROR_RATE_TRACKING));
-#endif
 
 #if OPENTHREAD_CONFIG_MLE_STEERING_DATA_SET_OOB_ENABLE
     SuccessOrExit(error = mEncoder.WriteUintPacked(SPINEL_CAP_OOB_STEERING_DATA));
@@ -1823,6 +1820,10 @@ template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_CAPS>(void)
 
 #if OPENTHREAD_CONFIG_PLATFORM_RADIO_COEX_ENABLE
     SuccessOrExit(error = mEncoder.WriteUintPacked(SPINEL_CAP_RADIO_COEX));
+#endif
+
+#if OPENTHREAD_CONFIG_MAC_RETRY_SUCCESS_HISTOGRAM_ENABLE
+    SuccessOrExit(error = mEncoder.WriteUintPacked(SPINEL_CAP_MAC_RETRY_HISTOGRAM));
 #endif
 
 #if OPENTHREAD_CONFIG_NCP_ENABLE_PEEK_POKE
@@ -2039,7 +2040,7 @@ otError NcpBase::HandlePropertySet_SPINEL_PROP_HOST_POWER_STATE(uint8_t aHeader)
             }
             else
             {
-                mHostPowerReplyFrameTag = NcpFrameBuffer::kInvalidTag;
+                mHostPowerReplyFrameTag = Spinel::Buffer::kInvalidTag;
             }
 
             mHostPowerStateInProgress = true;
@@ -2092,6 +2093,27 @@ template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_PHY_RSSI>(void)
 template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_PHY_RX_SENSITIVITY>(void)
 {
     return mEncoder.WriteInt8(otPlatRadioGetReceiveSensitivity(mInstance));
+}
+
+template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_PHY_FREQ>(void)
+{
+    uint32_t      freq_khz(0);
+    const uint8_t chan(otLinkGetChannel(mInstance));
+
+    if (chan == 0)
+    {
+        freq_khz = 868300;
+    }
+    else if (chan < 11)
+    {
+        freq_khz = 906000 - (2000 * 1) + 2000 * (chan);
+    }
+    else if (chan < 26)
+    {
+        freq_khz = 2405000 - (5000 * 11) + 5000 * (chan);
+    }
+
+    return mEncoder.WriteUint32(freq_khz);
 }
 
 template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_PHY_CCA_THRESHOLD>(void)
@@ -2159,10 +2181,10 @@ exit:
 template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_DEBUG_TEST_ASSERT>(void)
 {
 #ifndef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
-    assert(false);
+    OT_ASSERT(false);
 #endif
 
-    // We only get to this point if `assert(false)`
+    // We only get to this point if `OT_ASSERT(false)`
     // does not cause an NCP reset on the platform.
     // In such a case we return `false` as the
     // property value to indicate this.
@@ -2185,7 +2207,7 @@ template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_DEBUG_NCP_LOG_LEVEL>(
     return mEncoder.WriteUint8(ConvertLogLevel(otLoggingGetLevel()));
 }
 
-#if OPENTHREAD_CONFIG_ENABLE_DYNAMIC_LOG_LEVEL
+#if OPENTHREAD_CONFIG_LOG_LEVEL_DYNAMIC_ENABLE
 template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_DEBUG_NCP_LOG_LEVEL>(void)
 {
     otError    error;
@@ -2232,7 +2254,27 @@ template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_DEBUG_NCP_LOG_LEVEL>(
 exit:
     return error;
 }
-#endif // OPENTHREAD_CONFIG_ENABLE_DYNAMIC_LOG_LEVEL
+#endif // OPENTHREAD_CONFIG_LOG_LEVEL_DYNAMIC_ENABLE
+
+template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_DEBUG_LOG_TIMESTAMP_BASE>(void)
+{
+    uint64_t timestampBase = 0;
+    otError  error         = OT_ERROR_NONE;
+    uint32_t currentTime   = otPlatAlarmMilliGetNow();
+
+    SuccessOrExit(error = mDecoder.ReadUint64(timestampBase));
+    VerifyOrExit(timestampBase >= currentTime, error = OT_ERROR_INVALID_ARGS);
+
+    mLogTimestampBase = timestampBase - currentTime;
+
+exit:
+    return error;
+}
+
+template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_DEBUG_LOG_TIMESTAMP_BASE>(void)
+{
+    return mEncoder.WriteUint64(mLogTimestampBase);
+}
 
 template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_PHY_CHAN_SUPPORTED>(void)
 {

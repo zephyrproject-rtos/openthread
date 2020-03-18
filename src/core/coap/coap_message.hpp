@@ -36,8 +36,6 @@
 
 #include "openthread-core-config.h"
 
-#include "utils/wrap_string.h"
-
 #include <openthread/coap.h>
 
 #include "common/code_utils.hpp"
@@ -67,12 +65,16 @@ using ot::Encoding::BigEndian::HostSwap16;
  *
  */
 
+class OptionIterator;
+
 /**
  * This class implements CoAP message generation and parsing.
  *
  */
 class Message : public ot::Message
 {
+    friend class OptionIterator;
+
 public:
     enum
     {
@@ -94,6 +96,21 @@ public:
      *
      */
     typedef otCoapCode Code;
+
+    /**
+     * CoAP Block1/Block2 Types
+     *
+     */
+    enum BlockType
+    {
+        kBlockType1 = 1,
+        kBlockType2 = 2,
+    };
+
+    enum
+    {
+        kBlockSzxBase = 4,
+    };
 
     /**
      * This method initializes the CoAP header.
@@ -334,6 +351,21 @@ public:
     otError AppendUriPathOptions(const char *aUriPath);
 
     /**
+     * This method appends a Block option
+     *
+     * @param[in]  aType              Type of block option, 1 or 2.
+     * @param[in]  aNum               Current block number.
+     * @param[in]  aMore              Boolean to indicate more blocks are to be sent.
+     * @param[in]  aSize              Maximum block size.
+     *
+     * @retval OT_ERROR_NONE          Successfully appended the option.
+     * @retval OT_ERROR_INVALID_ARGS  The option type is not equal or greater than the last option type.
+     * @retval OT_ERROR_NO_BUFS       The option length exceeds the buffer size.
+     *
+     */
+    otError AppendBlockOption(BlockType aType, uint32_t aNum, bool aMore, otCoapBlockSize aSize);
+
+    /**
      * This method appends a Proxy-Uri option.
      *
      * @param[in]  aProxyUri          A pointer to a NULL-terminated string.
@@ -378,27 +410,6 @@ public:
      * @retval OT_ERROR_NO_BUFS       The option length exceeds the buffer size.
      */
     otError AppendUriQueryOption(const char *aUriQuery);
-
-    /**
-     * This method returns a pointer to the first option.
-     *
-     */
-    const otCoapOption *GetFirstOption(void);
-
-    /**
-     * This method returns a pointer to the next option.
-     *
-     */
-    const otCoapOption *GetNextOption(void);
-
-    /**
-     * This function fills current option value into @p aValue.
-     *
-     * @retval  OT_ERROR_NONE       Successfully filled value.
-     * @retval  OT_ERROR_NOT_FOUND  No more options, aIterator->mNextOptionOffset is set to offset of payload.
-     *
-     */
-    otError GetOptionValue(void *aValue) const;
 
     /**
      * This method adds Payload Marker indicating beginning of the payload to the CoAP header.
@@ -566,6 +577,18 @@ private:
         kHelpDataAlignment = sizeof(uint16_t), ///< Alignment of help data.
     };
 
+    enum
+    {
+        kBlockSzxOffset = 0,
+        kBlockMOffset   = 3,
+        kBlockNumOffset = 4,
+    };
+
+    enum
+    {
+        kBlockNumMax = 0xFFFFF,
+    };
+
     /**
      * This structure represents a CoAP header excluding CoAP options.
      *
@@ -586,14 +609,11 @@ private:
     struct HelpData
     {
         void Clear(void) { memset(this, 0, sizeof(*this)); }
-        void ClearOption(void) { memset(&mOption, 0, sizeof(mOption)); }
 
-        Header       mHeader;
-        otCoapOption mOption;
-        uint16_t     mNextOptionOffset; ///< The byte offset for the next CoAP Option
-        uint16_t     mOptionLast;
-        uint16_t     mHeaderOffset; ///< The byte offset for the CoAP Header
-        uint16_t     mHeaderLength;
+        Header   mHeader;
+        uint16_t mOptionLast;
+        uint16_t mHeaderOffset; ///< The byte offset for the CoAP Header
+        uint16_t mHeaderLength;
     };
 
     const HelpData &GetHelpData(void) const
@@ -605,6 +625,87 @@ private:
     }
 
     HelpData &GetHelpData(void) { return const_cast<HelpData &>(static_cast<const Message *>(this)->GetHelpData()); }
+};
+
+class OptionIterator : public ::otCoapOptionIterator
+{
+public:
+    /**
+     * Initialise the state of the iterator to iterate over the given message.
+     *
+     * @retval  OT_ERROR_NONE   Successfully initialised
+     * @retval  OT_ERROR_PARSE  Message state is inconsistent
+     *
+     */
+    otError Init(const Message *aMessage);
+
+    /**
+     * This method returns a pointer to the first option matching the given option number.
+     *
+     * The internal option pointer is advanced until matching option is seen, if no matching
+     * option is seen, the iterator will advance to the end of the options block.
+     *
+     * @param[in]   aOption         Option number to look for.
+     *
+     * @returns A pointer to the first matching option. If no option matching @p aOption is seen, NULL pointer is
+     *          returned.
+     */
+    const otCoapOption *GetFirstOptionMatching(uint16_t aOption);
+
+    /**
+     * This method returns a pointer to the first option.
+     *
+     * @returns A pointer to the first option. If no option is present NULL pointer is returned.
+     */
+    const otCoapOption *GetFirstOption(void);
+
+    /**
+     * This method returns a pointer to the next option matching the given option number.
+     *
+     * The internal option pointer is advanced until matching option is seen, if no matching
+     * option is seen, the iterator will advance to the end of the options block.
+     *
+     * @param[in]   aOption         Option number to look for.
+     *
+     * @returns A pointer to the next matching option (relative to current iterator position). If no option matching @p
+     *          aOption is seen, NULL pointer is returned.
+     */
+    const otCoapOption *GetNextOptionMatching(uint16_t aOption);
+
+    /**
+     * This method returns a pointer to the next option.
+     *
+     * @returns A pointer to the next option. If no more options are present NULL pointer is returned.
+     */
+    const otCoapOption *GetNextOption(void);
+
+    /**
+     * This function fills current option value into @p aValue.  The option is assumed to be an unsigned integer.
+     *
+     * @param[out]  aValue          Buffer to store the option value.
+     *
+     * @retval  OT_ERROR_NONE       Successfully filled value.
+     * @retval  OT_ERROR_NOT_FOUND  No more options, aIterator->mNextOptionOffset is set to offset of payload.
+     * @retval  OT_ERROR_NO_BUFS    Value is too long to fit in a uint64_t.
+     *
+     */
+    otError GetOptionValue(uint64_t &aValue) const;
+
+    /**
+     * This function fills current option value into @p aValue.
+     *
+     * @param[out]  aValue          Buffer to store the option value.  This buffer is assumed to be sufficiently large
+     *                              (see @ref otCoapOption::mLength).
+     *
+     * @retval  OT_ERROR_NONE       Successfully filled value.
+     * @retval  OT_ERROR_NOT_FOUND  No more options, mNextOptionOffset is set to offset of payload.
+     *
+     */
+    otError GetOptionValue(void *aValue) const;
+
+private:
+    void           ClearOption(void) { memset(&mOption, 0, sizeof(mOption)); }
+    const Message &GetMessage(void) const { return *static_cast<const Message *>(mMessage); }
 };
 
 /**

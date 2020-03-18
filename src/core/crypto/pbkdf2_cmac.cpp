@@ -33,8 +33,9 @@
 
 #include "pbkdf2_cmac.h"
 
+#include <string.h>
+
 #include "common/debug.hpp"
-#include "utils/wrap_string.h"
 
 #include <mbedtls/cmac.h>
 
@@ -59,7 +60,7 @@ void otPbkdf2Cmac(const uint8_t *aPassword,
     uint16_t     useLen       = 0;
 
     memcpy(prfInput, aSalt, aSaltLen);
-    assert(aIterationCounter % 2 == 0);
+    OT_ASSERT(aIterationCounter % 2 == 0);
     aIterationCounter /= 2;
 
     while (keyLen)

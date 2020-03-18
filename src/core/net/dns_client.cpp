@@ -28,8 +28,6 @@
 
 #include "dns_client.hpp"
 
-#include "utils/wrap_string.h"
-
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
 #include "common/instance.hpp"
@@ -365,7 +363,9 @@ Message *Client::FindRelatedQuery(const Header &aResponseHeader, QueryMetadata &
     {
         // Partially read DNS header to obtain message ID only.
         uint16_t count = message->Read(message->GetOffset(), sizeof(messageId), &messageId);
-        assert(count == sizeof(messageId));
+
+        OT_UNUSED_VARIABLE(count);
+        OT_ASSERT(count == sizeof(messageId));
 
         if (HostSwap16(messageId) == aResponseHeader.GetMessageId())
         {
@@ -382,7 +382,7 @@ exit:
 
 void Client::FinalizeDnsTransaction(Message &            aQuery,
                                     const QueryMetadata &aQueryMetadata,
-                                    otIp6Address *       aAddress,
+                                    const otIp6Address * aAddress,
                                     uint32_t             aTtl,
                                     otError              aResult)
 {

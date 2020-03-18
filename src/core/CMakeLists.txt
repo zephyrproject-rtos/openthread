@@ -30,6 +30,13 @@ add_library(openthread-ftd)
 add_library(openthread-mtd)
 add_library(openthread-radio)
 
+set_target_properties(
+    openthread-ftd openthread-mtd openthread-radio
+    PROPERTIES
+        C_STANDARD 99
+        CXX_STANDARD 98
+)
+
 target_compile_definitions(openthread-ftd PRIVATE
     ${OT_PRIVATE_DEFINES}
     OPENTHREAD_FTD=1
@@ -43,6 +50,18 @@ target_compile_definitions(openthread-mtd PRIVATE
 target_compile_definitions(openthread-radio PRIVATE
     ${OT_PRIVATE_DEFINES}
     OPENTHREAD_RADIO=1
+)
+
+target_compile_options(openthread-ftd PRIVATE
+    ${OT_CFLAGS}
+)
+
+target_compile_options(openthread-mtd PRIVATE
+    ${OT_CFLAGS}
+)
+
+target_compile_options(openthread-radio PRIVATE
+    ${OT_CFLAGS}
 )
 
 set(COMMON_INCLUDES
@@ -151,7 +170,6 @@ set(COMMON_SOURCES
     thread/announce_begin_server.cpp
     thread/announce_sender.cpp
     thread/child_table.cpp
-    thread/device_mode.cpp
     thread/energy_scan_server.cpp
     thread/indirect_sender.cpp
     thread/key_manager.cpp
@@ -162,6 +180,7 @@ set(COMMON_SOURCES
     thread/mesh_forwarder_mtd.cpp
     thread/mle.cpp
     thread/mle_router.cpp
+    thread/mle_types.cpp
     thread/network_data.cpp
     thread/network_data_leader.cpp
     thread/network_data_leader_ftd.cpp
@@ -178,9 +197,6 @@ set(COMMON_SOURCES
     utils/child_supervision.cpp
     utils/heap.cpp
     utils/jam_detector.cpp
-    utils/missing_strlcat.c
-    utils/missing_strlcpy.c
-    utils/missing_strnlen.c
     utils/parse_cmdline.cpp
     utils/slaac_address.cpp
 )
@@ -216,3 +232,15 @@ target_sources(openthread-radio PRIVATE
     thread/link_quality.cpp
     utils/parse_cmdline.cpp
 )
+
+if(OT_BUILTIN_MBEDTLS)
+    target_link_libraries(openthread-ftd
+        PUBLIC
+            mbedcrypto
+    )
+
+    target_link_libraries(openthread-mtd
+        PUBLIC
+            mbedcrypto
+    )
+endif()

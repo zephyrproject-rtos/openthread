@@ -85,9 +85,6 @@ typedef struct otLinkModeConfig
 /**
  * This structure holds diagnostic information for a neighboring Thread node
  *
- * `mFrameErrorRate` and `mMessageErrorRate` require `OPENTHREAD_CONFIG_ENABLE_TX_ERROR_RATE_TRACKING` feature to be
- * enabled.
- *
  */
 typedef struct
 {
@@ -590,7 +587,6 @@ otDeviceRole otThreadGetDeviceRole(otInstance *aInstance);
  *
  * @retval OT_ERROR_NONE          Successfully retrieved the leader data.
  * @retval OT_ERROR_DETACHED      Not currently attached.
- * @retval OT_ERROR_INVALID_ARGS  @p aLeaderData is NULL.
  *
  */
 otError otThreadGetLeaderData(otInstance *aInstance, otLeaderData *aLeaderData);

@@ -51,20 +51,23 @@ if OPENTHREAD_BUILD_TESTS
 
 AM_CPPFLAGS                                                         = \
     -DOPENTHREAD_FTD=1                                                \
+    -DOPENTHREAD_MTD=0                                                \
+    -DOPENTHREAD_RADIO=0                                              \
+    -DOPENTHREAD_SPINEL_CONFIG_OPENTHREAD_MESSAGE_ENABLE=1            \
     -I$(top_srcdir)/include                                           \
     -I$(top_srcdir)/src                                               \
     -I$(top_srcdir)/src/core                                          \
     $(NULL)
 
-if OPENTHREAD_EXAMPLES_POSIX
+if OPENTHREAD_EXAMPLES_SIMULATION
 AM_CPPFLAGS                                                        += \
     -I$(top_srcdir)/examples/platforms                                \
     $(NULL)
 endif
 
-if OPENTHREAD_PLATFORM_POSIX_APP
+if OPENTHREAD_PLATFORM_POSIX
 AM_CPPFLAGS                                                        += \
-    -DOPENTHREAD_PLATFORM_POSIX_APP=1                                 \
+    -DOPENTHREAD_PLATFORM_POSIX=1                                     \
     -I$(top_srcdir)/src/posix/platform                                \
     $(NULL)
 endif
@@ -89,7 +92,7 @@ COMMON_LDADD                                                       += \
     $(NULL)
 endif
 
-if OPENTHREAD_PLATFORM_POSIX_APP
+if OPENTHREAD_PLATFORM_POSIX
 COMMON_LDADD                                                       += \
     -lutil
     $(NULL)
@@ -120,16 +123,13 @@ check_PROGRAMS                                                     += \
     test-priority-queue                                               \
     test-pskc                                                         \
     test-string                                                       \
-    test-strlcat                                                      \
-    test-strlcpy                                                      \
-    test-strnlen                                                      \
     test-timer                                                        \
     $(NULL)
 
 if OPENTHREAD_ENABLE_NCP
 check_PROGRAMS                                                     += \
     test-hdlc                                                         \
-    test-ncp-buffer                                                   \
+    test-spinel-buffer                                                \
     test-spinel-decoder                                               \
     test-spinel-encoder                                               \
     $(NULL)
@@ -203,8 +203,8 @@ test_message_SOURCES         = $(COMMON_SOURCES) test_message.cpp
 test_message_queue_LDADD     = $(COMMON_LDADD)
 test_message_queue_SOURCES   = $(COMMON_SOURCES) test_message_queue.cpp
 
-test_ncp_buffer_LDADD        = $(COMMON_LDADD)
-test_ncp_buffer_SOURCES      = $(COMMON_SOURCES) test_ncp_buffer.cpp
+test_spinel_buffer_LDADD        = $(COMMON_LDADD)
+test_spinel_buffer_SOURCES      = $(COMMON_SOURCES) test_spinel_buffer.cpp
 
 test_netif_LDADD             = $(COMMON_LDADD)
 test_netif_SOURCES           = $(COMMON_SOURCES) test_netif.cpp
@@ -221,15 +221,6 @@ test_pskc_SOURCES            = $(COMMON_SOURCES) test_pskc.cpp
 test_string_LDADD            = $(COMMON_LDADD)
 test_string_SOURCES          = $(COMMON_SOURCES) test_string.cpp
 
-test_strlcat_LDADD           = $(COMMON_LDADD)
-test_strlcat_SOURCES         = test_strlcat.c
-
-test_strlcpy_LDADD           = $(COMMON_LDADD)
-test_strlcpy_SOURCES         = test_strlcpy.c
-
-test_strnlen_LDADD           = $(COMMON_LDADD)
-test_strnlen_SOURCES         = test_strnlen.c
-
 test_spinel_decoder_LDADD    = $(COMMON_LDADD)
 test_spinel_decoder_SOURCES  = $(COMMON_SOURCES) test_spinel_decoder.cpp
 
@@ -241,36 +232,6 @@ test_timer_SOURCES           = $(COMMON_SOURCES) test_timer.cpp
 
 test_toolchain_LDADD         = $(NULL)
 test_toolchain_SOURCES       = test_toolchain.cpp test_toolchain_c.c
-
-PRETTY_FILES                                                        = \
-    $(noinst_HEADERS)                                                 \
-    $(test_address_sanitizer_SOURCES)                                 \
-    $(test_aes_SOURCES)                                               \
-    $(test_child_SOURCES)                                             \
-    $(test_child_table_SOURCES)                                       \
-    $(test_hdlc_SOURCES)                                              \
-    $(test_heap_SOURCES)                                              \
-    $(test_hmac_sha256_SOURCES)                                       \
-    $(test_link_quality_SOURCES)                                      \
-    $(test_linked_list_SOURCES)                                       \
-    $(test_lowpan_SOURCES)                                            \
-    $(test_mac_frame_SOURCES)                                         \
-    $(test_message_queue_SOURCES)                                     \
-    $(test_message_SOURCES)                                           \
-    $(test_ncp_buffer_SOURCES)                                        \
-    $(test_netif_SOURCES)                                             \
-    $(test_network_data_SOURCES)                                      \
-    $(test_priority_queue_SOURCES)                                    \
-    $(test_pskc_SOURCES)                                              \
-    $(test_spinel_decoder_SOURCES)                                    \
-    $(test_spinel_encoder_SOURCES)                                    \
-    $(test_string_SOURCES)                                            \
-    $(test_strlcat_SOURCES)                                           \
-    $(test_strlcpy_SOURCES)                                           \
-    $(test_strnlen_SOURCES)                                           \
-    $(test_timer_SOURCES)                                             \
-    $(test_toolchain_SOURCES)                                         \
-    $(NULL)
 
 if OPENTHREAD_BUILD_COVERAGE
 CLEANFILES                   = $(wildcard *.gcda *.gcno)

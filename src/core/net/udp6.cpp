@@ -265,7 +265,7 @@ Message *Udp::NewMessage(uint16_t aReserved, const otMessageSettings *aSettings)
     return Get<Ip6>().NewMessage(sizeof(UdpHeader) + aReserved, aSettings);
 }
 
-otError Udp::SendDatagram(Message &aMessage, MessageInfo &aMessageInfo, IpProto aIpProto)
+otError Udp::SendDatagram(Message &aMessage, MessageInfo &aMessageInfo, uint8_t aIpProto)
 {
     otError error = OT_ERROR_NONE;
 
@@ -371,7 +371,7 @@ void Udp::HandlePayload(Message &aMessage, MessageInfo &aMessageInfo)
         }
 
         aMessage.RemoveHeader(aMessage.GetOffset());
-        assert(aMessage.GetOffset() == 0);
+        OT_ASSERT(aMessage.GetOffset() == 0);
         socket->HandleUdpReceive(aMessage, aMessageInfo);
         break;
     }

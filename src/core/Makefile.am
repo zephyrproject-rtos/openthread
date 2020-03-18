@@ -49,17 +49,23 @@ CPPFLAGS_COMMON                            = \
 
 libopenthread_radio_a_CPPFLAGS             = \
     $(CPPFLAGS_COMMON)                       \
+    -DOPENTHREAD_MTD=0                       \
+    -DOPENTHREAD_FTD=0                       \
     -DOPENTHREAD_RADIO=1                     \
     $(NULL)
 
 libopenthread_ftd_a_CPPFLAGS               = \
     $(CPPFLAGS_COMMON)                       \
+    -DOPENTHREAD_MTD=0                       \
     -DOPENTHREAD_FTD=1                       \
+    -DOPENTHREAD_RADIO=0                     \
     $(NULL)
 
 libopenthread_mtd_a_CPPFLAGS               = \
     $(CPPFLAGS_COMMON)                       \
     -DOPENTHREAD_MTD=1                       \
+    -DOPENTHREAD_FTD=0                       \
+    -DOPENTHREAD_RADIO=0                     \
     $(NULL)
 
 #------------------------------------------------------
@@ -202,7 +208,6 @@ SOURCES_COMMON                             = \
     thread/announce_begin_server.cpp         \
     thread/announce_sender.cpp               \
     thread/child_table.cpp                   \
-    thread/device_mode.cpp                   \
     thread/energy_scan_server.cpp            \
     thread/indirect_sender.cpp               \
     thread/key_manager.cpp                   \
@@ -213,6 +218,7 @@ SOURCES_COMMON                             = \
     thread/mesh_forwarder_mtd.cpp            \
     thread/mle.cpp                           \
     thread/mle_router.cpp                    \
+    thread/mle_types.cpp                     \
     thread/network_data.cpp                  \
     thread/network_data_leader.cpp           \
     thread/network_data_leader_ftd.cpp       \
@@ -229,9 +235,6 @@ SOURCES_COMMON                             = \
     utils/child_supervision.cpp              \
     utils/heap.cpp                           \
     utils/jam_detector.cpp                   \
-    utils/missing_strlcat.c                  \
-    utils/missing_strlcpy.c                  \
-    utils/missing_strnlen.c                  \
     utils/parse_cmdline.cpp                  \
     utils/slaac_address.cpp                  \
     $(NULL)
@@ -263,9 +266,6 @@ libopenthread_radio_a_SOURCES              = \
     radio/radio_callbacks.cpp                \
     radio/radio_platform.cpp                 \
     thread/link_quality.cpp                  \
-    utils/missing_strlcat.c                  \
-    utils/missing_strlcpy.c                  \
-    utils/missing_strnlen.c                  \
     utils/parse_cmdline.cpp                  \
     $(NULL)
 
@@ -404,7 +404,6 @@ HEADERS_COMMON                             = \
     thread/announce_begin_server.hpp         \
     thread/announce_sender.hpp               \
     thread/child_table.hpp                   \
-    thread/device_mode.hpp                   \
     thread/energy_scan_server.hpp            \
     thread/indirect_sender.hpp               \
     thread/indirect_sender_frame_context.hpp \
@@ -413,11 +412,11 @@ HEADERS_COMMON                             = \
     thread/lowpan.hpp                        \
     thread/mesh_forwarder.hpp                \
     thread/mle.hpp                           \
-    thread/mle_constants.hpp                 \
     thread/mle_router.hpp                    \
     thread/mle_router_ftd.hpp                \
     thread/mle_router_mtd.hpp                \
     thread/mle_tlvs.hpp                      \
+    thread/mle_types.hpp                     \
     thread/network_data.hpp                  \
     thread/network_data_leader.hpp           \
     thread/network_data_leader_ftd.hpp       \
@@ -441,17 +440,10 @@ HEADERS_COMMON                             = \
     utils/parse_cmdline.hpp                  \
     utils/slaac_address.hpp                  \
     utils/static_assert.hpp                  \
-    utils/wrap_string.h                      \
     $(NULL)
 
 noinst_HEADERS                             = \
     $(HEADERS_COMMON)                        \
-    $(NULL)
-
-PRETTY_FILES                               = \
-    $(HEADERS_COMMON)                        \
-    $(SOURCES_COMMON)                        \
-    $(EXTRA_DIST)                            \
     $(NULL)
 
 if OPENTHREAD_BUILD_COVERAGE

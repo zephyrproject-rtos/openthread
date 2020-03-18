@@ -36,8 +36,6 @@
 
 #include "openthread-core-config.h"
 
-#include "utils/wrap_string.h"
-
 #include "thread/child_table.hpp"
 #include "thread/mle.hpp"
 #include "thread/mle_tlvs.hpp"
@@ -101,7 +99,7 @@ public:
 
     otError GetNextNeighborInfo(otNeighborInfoIterator &, otNeighborInfo &) { return OT_ERROR_NOT_IMPLEMENTED; }
 
-    static int ComparePartitions(bool, const LeaderDataTlv &, bool, const LeaderDataTlv &) { return 0; }
+    static int ComparePartitions(bool, const LeaderData &, bool, const LeaderData &) { return 0; }
 
     void ResolveRoutingLoops(uint16_t, uint16_t) {}
 

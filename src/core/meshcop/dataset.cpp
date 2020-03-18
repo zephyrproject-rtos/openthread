@@ -311,7 +311,7 @@ otError Dataset::Set(const otOperationalDataset &aDataset)
     {
         MeshCoP::MeshLocalPrefixTlv tlv;
         tlv.Init();
-        tlv.SetMeshLocalPrefix(aDataset.mMeshLocalPrefix);
+        tlv.SetMeshLocalPrefix(static_cast<const Mle::MeshLocalPrefix &>(aDataset.mMeshLocalPrefix));
         Set(tlv);
     }
 
@@ -489,11 +489,11 @@ otError Dataset::AppendMleDatasetTlv(Message &aMessage) const
                 delayTimer.SetDelayTimer(0);
             }
 
-            SuccessOrExit(error = aMessage.AppendTlv(delayTimer));
+            SuccessOrExit(error = delayTimer.AppendTo(aMessage));
         }
         else
         {
-            SuccessOrExit(error = aMessage.AppendTlv(*cur));
+            SuccessOrExit(error = cur->AppendTo(aMessage));
         }
 
         cur = cur->GetNext();

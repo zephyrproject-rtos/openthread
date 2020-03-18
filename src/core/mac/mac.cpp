@@ -34,7 +34,6 @@
 #include "mac.hpp"
 
 #include <stdio.h>
-#include "utils/wrap_string.h"
 
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
@@ -83,6 +82,7 @@ Mac::Mac(Instance &aInstance)
     , mPendingWaitingForData(false)
     , mShouldTxPollBeforeData(false)
     , mRxOnWhenIdle(false)
+    , mPromiscuous(false)
     , mBeaconsEnabled(false)
     , mUsingTemporaryChannel(false)
 #if OPENTHREAD_CONFIG_MAC_STAY_AWAKE_BETWEEN_FRAGMENTS
@@ -106,6 +106,7 @@ Mac::Mac(Instance &aInstance)
     , mMaxFrameRetriesIndirect(kDefaultMaxFrameRetriesIndirect)
 #endif
     , mActiveScanHandler(NULL) // Initialize `mActiveScanHandler` and `mEnergyScanHandler` union
+    , mScanHandlerContext(NULL)
     , mSubMac(aInstance)
     , mOperationTask(aInstance, &Mac::HandleOperationTask, this)
     , mTimer(aInstance, &Mac::HandleTimer, this)
@@ -133,14 +134,15 @@ Mac::Mac(Instance &aInstance)
     SetShortAddress(GetShortAddress());
 }
 
-otError Mac::ActiveScan(uint32_t aScanChannels, uint16_t aScanDuration, ActiveScanHandler aHandler)
+otError Mac::ActiveScan(uint32_t aScanChannels, uint16_t aScanDuration, ActiveScanHandler aHandler, void *aContext)
 {
     otError error = OT_ERROR_NONE;
 
     VerifyOrExit(mEnabled, error = OT_ERROR_INVALID_STATE);
     VerifyOrExit(!IsActiveScanInProgress() && !IsEnergyScanInProgress(), error = OT_ERROR_BUSY);
 
-    mActiveScanHandler = aHandler;
+    mActiveScanHandler  = aHandler;
+    mScanHandlerContext = aContext;
 
     if (aScanDuration == 0)
     {
@@ -153,14 +155,15 @@ exit:
     return error;
 }
 
-otError Mac::EnergyScan(uint32_t aScanChannels, uint16_t aScanDuration, EnergyScanHandler aHandler)
+otError Mac::EnergyScan(uint32_t aScanChannels, uint16_t aScanDuration, EnergyScanHandler aHandler, void *aContext)
 {
     otError error = OT_ERROR_NONE;
 
     VerifyOrExit(mEnabled, error = OT_ERROR_INVALID_STATE);
     VerifyOrExit(!IsActiveScanInProgress() && !IsEnergyScanInProgress(), error = OT_ERROR_BUSY);
 
-    mEnergyScanHandler = aHandler;
+    mEnergyScanHandler  = aHandler;
+    mScanHandlerContext = aContext;
 
     Scan(kOperationEnergyScan, aScanChannels, aScanDuration);
 
@@ -210,15 +213,15 @@ bool Mac::IsInTransmitState(void) const
     return retval;
 }
 
-otError Mac::ConvertBeaconToActiveScanResult(RxFrame *aBeaconFrame, otActiveScanResult &aResult)
+otError Mac::ConvertBeaconToActiveScanResult(const RxFrame *aBeaconFrame, ActiveScanResult &aResult)
 {
-    otError        error = OT_ERROR_NONE;
-    Address        address;
-    Beacon *       beacon        = NULL;
-    BeaconPayload *beaconPayload = NULL;
-    uint16_t       payloadLength;
+    otError              error = OT_ERROR_NONE;
+    Address              address;
+    const Beacon *       beacon        = NULL;
+    const BeaconPayload *beaconPayload = NULL;
+    uint16_t             payloadLength;
 
-    memset(&aResult, 0, sizeof(otActiveScanResult));
+    memset(&aResult, 0, sizeof(ActiveScanResult));
 
     VerifyOrExit(aBeaconFrame != NULL, error = OT_ERROR_INVALID_ARGS);
 
@@ -234,8 +237,8 @@ otError Mac::ConvertBeaconToActiveScanResult(RxFrame *aBeaconFrame, otActiveScan
 
     payloadLength = aBeaconFrame->GetPayloadLength();
 
-    beacon        = reinterpret_cast<Beacon *>(aBeaconFrame->GetPayload());
-    beaconPayload = reinterpret_cast<BeaconPayload *>(beacon->GetPayload());
+    beacon        = reinterpret_cast<const Beacon *>(aBeaconFrame->GetPayload());
+    beaconPayload = reinterpret_cast<const BeaconPayload *>(beacon->GetPayload());
 
     if ((payloadLength >= (sizeof(*beacon) + sizeof(*beaconPayload))) && beacon->IsValid() && beaconPayload->IsValid())
     {
@@ -275,9 +278,29 @@ void Mac::PerformActiveScan(void)
     {
         mSubMac.SetPanId(mPanId);
         FinishOperation();
-        mActiveScanHandler(GetInstance(), NULL);
+        ReportActiveScanResult(NULL);
         PerformNextOperation();
     }
+}
+
+void Mac::ReportActiveScanResult(const RxFrame *aBeaconFrame)
+{
+    VerifyOrExit(mActiveScanHandler != NULL);
+
+    if (aBeaconFrame == NULL)
+    {
+        mActiveScanHandler(NULL, mScanHandlerContext);
+    }
+    else
+    {
+        ActiveScanResult result;
+
+        SuccessOrExit(ConvertBeaconToActiveScanResult(aBeaconFrame, result));
+        mActiveScanHandler(&result, mScanHandlerContext);
+    }
+
+exit:
+    return;
 }
 
 void Mac::PerformEnergyScan(void)
@@ -305,22 +328,29 @@ exit:
     if (error != OT_ERROR_NONE)
     {
         FinishOperation();
-        mEnergyScanHandler(GetInstance(), NULL);
+
+        if (mEnergyScanHandler != NULL)
+        {
+            mEnergyScanHandler(NULL, mScanHandlerContext);
+        }
+
         PerformNextOperation();
     }
 }
 
 void Mac::ReportEnergyScanResult(int8_t aRssi)
 {
-    if (aRssi != kInvalidRssiValue)
-    {
-        otEnergyScanResult result;
+    EnergyScanResult result;
 
-        result.mChannel = mScanChannel;
-        result.mMaxRssi = aRssi;
+    VerifyOrExit((mEnergyScanHandler != NULL) && (aRssi != kInvalidRssiValue));
 
-        mEnergyScanHandler(GetInstance(), &result);
-    }
+    result.mChannel = mScanChannel;
+    result.mMaxRssi = aRssi;
+
+    mEnergyScanHandler(&result, mScanHandlerContext);
+
+exit:
+    return;
 }
 
 void Mac::EnergyScanDone(int8_t aEnergyScanMaxRssi)
@@ -892,7 +922,7 @@ void Mac::ProcessTransmitSecurity(TxFrame &aFrame, bool aProcessAesCcm)
     switch (keyIdMode)
     {
     case Frame::kKeyIdMode0:
-        aFrame.SetAesKey(keyManager.GetKek());
+        aFrame.SetAesKey(keyManager.GetKek().GetKey());
         extAddress = &GetExtAddress();
 
         if (!aFrame.IsARetransmission())
@@ -935,7 +965,7 @@ void Mac::ProcessTransmitSecurity(TxFrame &aFrame, bool aProcessAesCcm)
     }
 
     default:
-        assert(false);
+        OT_ASSERT(false);
         break;
     }
 
@@ -956,6 +986,7 @@ void Mac::BeginTransmit(void)
     TxFrame &sendFrame             = mSubMac.GetTransmitFrame();
 
     VerifyOrExit(mEnabled, error = OT_ERROR_ABORT);
+    sendFrame.SetIsARetransmission(false);
 
     switch (mOperation)
     {
@@ -1013,7 +1044,7 @@ void Mac::BeginTransmit(void)
         break;
 
     default:
-        assert(false);
+        OT_ASSERT(false);
         break;
     }
 
@@ -1101,8 +1132,6 @@ void Mac::RecordFrameTransmitStatus(const TxFrame &aFrame,
     aFrame.GetDstAddr(dstAddr);
     neighbor = Get<Mle::MleRouter>().GetNeighbor(dstAddr);
 
-#if OPENTHREAD_CONFIG_ENABLE_TX_ERROR_RATE_TRACKING
-
     // Record frame transmission success/failure state (for a neighbor).
 
     if ((neighbor != NULL) && ackRequested)
@@ -1129,8 +1158,6 @@ void Mac::RecordFrameTransmitStatus(const TxFrame &aFrame,
         }
     }
 
-#endif // OPENTHREAD_CONFIG_ENABLE_TX_ERROR_RATE_TRACKING
-
     // Log frame transmission failure.
 
     if (aError != OT_ERROR_NONE)
@@ -1154,7 +1181,7 @@ void Mac::RecordFrameTransmitStatus(const TxFrame &aFrame,
 
     if ((aError == OT_ERROR_NONE) && ackRequested && (aAckFrame != NULL) && (neighbor != NULL))
     {
-        neighbor->GetLinkInfo().AddRss(GetNoiseFloor(), aAckFrame->GetRssi());
+        neighbor->GetLinkInfo().AddRss(aAckFrame->GetRssi());
     }
 
     // Update MAC counters.
@@ -1238,7 +1265,7 @@ void Mac::HandleTransmitDone(TxFrame &aFrame, RxFrame *aAckFrame, otError aError
         break;
 
     case kOperationTransmitPoll:
-        assert(aFrame.IsEmpty() || aFrame.GetAckRequest());
+        OT_ASSERT(aFrame.IsEmpty() || aFrame.GetAckRequest());
 
         if ((aError == OT_ERROR_NONE) && (aAckFrame != NULL))
         {
@@ -1261,15 +1288,46 @@ void Mac::HandleTransmitDone(TxFrame &aFrame, RxFrame *aAckFrame, otError aError
 
     case kOperationTransmitDataDirect:
         mCounters.mTxData++;
+
+        if (aError != OT_ERROR_NONE)
+        {
+            mCounters.mTxDirectMaxRetryExpiry++;
+        }
+#if OPENTHREAD_CONFIG_MAC_RETRY_SUCCESS_HISTOGRAM_ENABLE
+        else if (mSubMac.GetTransmitRetries() < OPENTHREAD_CONFIG_MAC_RETRY_SUCCESS_HISTOGRAM_MAX_SIZE_COUNT_DIRECT)
+        {
+            mRetryHistogram.mTxDirectRetrySuccess[mSubMac.GetTransmitRetries()]++;
+        }
+#endif
+
         otDumpDebgMac("TX", aFrame.GetHeader(), aFrame.GetLength());
         FinishOperation();
         Get<MeshForwarder>().HandleSentFrame(aFrame, aError);
+#if OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2
+        if (aError == OT_ERROR_NONE && Get<Mle::Mle>().GetParent().IsEnhancedKeepAliveSupported() &&
+            aFrame.GetSecurityEnabled() && aAckFrame != NULL)
+        {
+            Get<DataPollSender>().ProcessFrame(*aAckFrame);
+        }
+#endif
         PerformNextOperation();
         break;
 
 #if OPENTHREAD_FTD
     case kOperationTransmitDataIndirect:
         mCounters.mTxData++;
+
+        if (aError != OT_ERROR_NONE)
+        {
+            mCounters.mTxIndirectMaxRetryExpiry++;
+        }
+#if OPENTHREAD_CONFIG_MAC_RETRY_SUCCESS_HISTOGRAM_ENABLE
+        else if (mSubMac.GetTransmitRetries() < OPENTHREAD_CONFIG_MAC_RETRY_SUCCESS_HISTOGRAM_MAX_SIZE_COUNT_INDIRECT)
+        {
+            mRetryHistogram.mTxIndirectRetrySuccess[mSubMac.GetTransmitRetries()]++;
+        }
+#endif
+
         otDumpDebgMac("TX", aFrame.GetHeader(), aFrame.GetLength());
         FinishOperation();
         Get<DataPollHandler>().HandleSentFrame(aFrame, aError);
@@ -1283,7 +1341,7 @@ void Mac::HandleTransmitDone(TxFrame &aFrame, RxFrame *aAckFrame, otError aError
         break;
 
     default:
-        assert(false);
+        OT_ASSERT(false);
         break;
     }
 
@@ -1324,7 +1382,7 @@ void Mac::HandleTimer(void)
 #endif
 
     default:
-        assert(false);
+        OT_ASSERT(false);
         break;
     }
 }
@@ -1356,7 +1414,7 @@ otError Mac::ProcessReceiveSecurity(RxFrame &aFrame, const Address &aSrcAddr, Ne
     switch (keyIdMode)
     {
     case Frame::kKeyIdMode0:
-        macKey = keyManager.GetKek();
+        macKey = keyManager.GetKek().GetKey();
         VerifyOrExit(macKey != NULL);
         extAddress = &aSrcAddr.GetExtended();
         break;
@@ -1593,11 +1651,11 @@ void Mac::HandleReceivedFrame(RxFrame *aFrame, otError aError)
         ExitNow();
     }
 
-    Get<DataPollSender>().CheckFramePending(*aFrame);
+    Get<DataPollSender>().ProcessFrame(*aFrame);
 
     if (neighbor != NULL)
     {
-        neighbor->GetLinkInfo().AddRss(GetNoiseFloor(), aFrame->GetRssi());
+        neighbor->GetLinkInfo().AddRss(aFrame->GetRssi());
 
         if (aFrame->GetSecurityEnabled())
         {
@@ -1616,6 +1674,15 @@ void Mac::HandleReceivedFrame(RxFrame *aFrame, otError aError)
             default:
                 ExitNow(error = OT_ERROR_UNKNOWN_NEIGHBOR);
             }
+
+#if OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2 && OPENTHREAD_FTD
+            // From Thread 1.2, MAC Data Frame can also act as keep-alive message if child supports
+            if (aFrame->GetType() == Frame::kFcfFrameData && !neighbor->IsRxOnWhenIdle() &&
+                neighbor->IsEnhancedKeepAliveSupported())
+            {
+                neighbor->SetLastHeard(TimerMilli::GetNow());
+            }
+#endif
         }
     }
 
@@ -1626,7 +1693,7 @@ void Mac::HandleReceivedFrame(RxFrame *aFrame, otError aError)
         if (aFrame->GetType() == Frame::kFcfFrameBeacon)
         {
             mCounters.mRxBeacon++;
-            mActiveScanHandler(GetInstance(), aFrame);
+            ReportActiveScanResult(aFrame);
             ExitNow();
         }
 
@@ -1789,10 +1856,42 @@ void Mac::SetPromiscuous(bool aPromiscuous)
     UpdateIdleMode();
 }
 
-int8_t Mac::GetNoiseFloor(void)
+#if OPENTHREAD_CONFIG_MAC_RETRY_SUCCESS_HISTOGRAM_ENABLE
+const uint32_t *Mac::GetDirectRetrySuccessHistogram(uint8_t &aNumberOfEntries)
 {
-    return Get<Radio>().GetReceiveSensitivity();
+    if (mMaxFrameRetriesDirect >= OPENTHREAD_CONFIG_MAC_RETRY_SUCCESS_HISTOGRAM_MAX_SIZE_COUNT_DIRECT)
+    {
+        aNumberOfEntries = OPENTHREAD_CONFIG_MAC_RETRY_SUCCESS_HISTOGRAM_MAX_SIZE_COUNT_DIRECT;
+    }
+    else
+    {
+        aNumberOfEntries = mMaxFrameRetriesDirect + 1;
+    }
+
+    return mRetryHistogram.mTxDirectRetrySuccess;
 }
+
+#if OPENTHREAD_FTD
+const uint32_t *Mac::GetIndirectRetrySuccessHistogram(uint8_t &aNumberOfEntries)
+{
+    if (mMaxFrameRetriesIndirect >= OPENTHREAD_CONFIG_MAC_RETRY_SUCCESS_HISTOGRAM_MAX_SIZE_COUNT_INDIRECT)
+    {
+        aNumberOfEntries = OPENTHREAD_CONFIG_MAC_RETRY_SUCCESS_HISTOGRAM_MAX_SIZE_COUNT_INDIRECT;
+    }
+    else
+    {
+        aNumberOfEntries = mMaxFrameRetriesIndirect + 1;
+    }
+
+    return mRetryHistogram.mTxIndirectRetrySuccess;
+}
+#endif
+
+void Mac::ResetRetrySuccessHistogram()
+{
+    memset(&mRetryHistogram, 0, sizeof(mRetryHistogram));
+}
+#endif // OPENTHREAD_CONFIG_MAC_RETRY_SUCCESS_HISTOGRAM_ENABLE
 
 // LCOV_EXCL_START
 

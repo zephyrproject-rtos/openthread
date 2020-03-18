@@ -80,7 +80,7 @@ python --version || die
         --enable-mtd                      \
         --enable-ncp                      \
         --enable-radio-only               \
-        --with-examples=posix || die
+        --with-examples=simulation || die
 
     scan-build --status-bugs -analyze-headers -v make -j2 || die
 
@@ -93,7 +93,7 @@ python --version || die
         --enable-mtd                      \
         --enable-ncp                      \
         --enable-radio-only               \
-        --with-examples=posix || die
+        --with-examples=simulation || die
 
     scan-build --status-bugs -analyze-headers -v make -j2 || die
 }
@@ -121,7 +121,7 @@ build_cc2538() {
     git checkout -- . || die
     git clean -xfd || die
     mkdir build && cd build || die
-    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=examples/platforms/cc2538/arm-none-eabi.cmake -DOT_PLATFORM=cc2538 .. || die
+    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=examples/platforms/cc2538/arm-none-eabi.cmake -DOT_PLATFORM=cc2538 -DOT_COMPILE_WARNING_AS_ERROR=ON .. || die
     ninja || die
     cd .. || die
 
@@ -415,23 +415,102 @@ build_samr21() {
     build_samr21
 }
 
-[ $BUILD_TARGET != posix ] || {
+[ $BUILD_TARGET != simulation ] || {
+    CMAKE_FLAGS="                        \
+        -DOT_COMPILE_WARNING_AS_ERROR=on \
+        -DOT_BORDER_AGENT=on             \
+        -DOT_BORDER_ROUTER=on            \
+        -DOT_COAP=on                     \
+        -DOT_COAPS=on                    \
+        -DOT_COMMISSIONER=on             \
+        -DOT_CHANNEL_MANAGER=on          \
+        -DOT_CHANNEL_MONITOR=on          \
+        -DOT_CHILD_SUPERVISION=on        \
+        -DOT_DHCP6_CLIENT=on             \
+        -DOT_DHCP6_SERVER=on             \
+        -DOT_DIAGNOSTIC=on               \
+        -DOT_DNS_CLIENT=on               \
+        -DOT_ECDSA=on                    \
+        -DOT_IP6_FRAGM=on                \
+        -DOT_JAM_DETECTION=on            \
+        -DOT_JOINER=on                   \
+        -DOT_LINK_RAW=on                 \
+        -DOT_MAC_FILTER=on               \
+        -DOT_MTD_NETDIAG=on              \
+        -DOT_SERVICE=on                  \
+        -DOT_SLAAC=on                    \
+        -DOT_SNTP_CLIENT=on"
+
     git checkout -- . || die
     git clean -xfd || die
     mkdir build && cd build || die
-    cmake -GNinja -DOT_PLATFORM=posix .. || die
+    cmake -GNinja -DOT_PLATFORM=simulation $CMAKE_FLAGS .. || die
     ninja || die
     cd .. || die
 
     git checkout -- . || die
     git clean -xfd || die
     ./bootstrap || die
-    CPPFLAGS=-DOPENTHREAD_CONFIG_LOG_LEVEL=OT_LOG_LEVEL_NONE make -f examples/Makefile-posix || die
+    CPPFLAGS=-DOPENTHREAD_CONFIG_LOG_LEVEL=OT_LOG_LEVEL_NONE make -f examples/Makefile-simulation || die
 
     git checkout -- . || die
     git clean -xfd || die
     ./bootstrap || die
-    CPPFLAGS=-DOPENTHREAD_CONFIG_LOG_LEVEL=OT_LOG_LEVEL_DEBG make -f examples/Makefile-posix || die
+    CPPFLAGS=-DOPENTHREAD_CONFIG_LOG_LEVEL=OT_LOG_LEVEL_DEBG make -f examples/Makefile-simulation || die
+
+    export CPPFLAGS="                                             \
+        -DOPENTHREAD_CONFIG_ANNOUNCE_SENDER_ENABLE=1              \
+        -DOPENTHREAD_CONFIG_BORDER_AGENT_ENABLE=1                 \
+        -DOPENTHREAD_CONFIG_BORDER_ROUTER_ENABLE=1                \
+        -DOPENTHREAD_CONFIG_CHANNEL_MANAGER_ENABLE=1              \
+        -DOPENTHREAD_CONFIG_CHANNEL_MONITOR_ENABLE=1              \
+        -DOPENTHREAD_CONFIG_CHILD_SUPERVISION_ENABLE=1            \
+        -DOPENTHREAD_CONFIG_COAP_API_ENABLE=1                     \
+        -DOPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE=1              \
+        -DOPENTHREAD_CONFIG_COMMISSIONER_ENABLE=1                 \
+        -DOPENTHREAD_CONFIG_DHCP6_CLIENT_ENABLE=1                 \
+        -DOPENTHREAD_CONFIG_DHCP6_SERVER_ENABLE=1                 \
+        -DOPENTHREAD_CONFIG_DIAG_ENABLE=1                         \
+        -DOPENTHREAD_CONFIG_DNS_CLIENT_ENABLE=1                   \
+        -DOPENTHREAD_CONFIG_ECDSA_ENABLE=1                        \
+        -DOPENTHREAD_CONFIG_IP6_FRAGMENTATION_ENABLE=1            \
+        -DOPENTHREAD_CONFIG_IP6_SLAAC_ENABLE=1                    \
+        -DOPENTHREAD_CONFIG_LEGACY_ENABLE=1                       \
+        -DOPENTHREAD_CONFIG_MAC_BEACON_RSP_WHEN_JOINABLE_ENABLE=1 \
+        -DOPENTHREAD_CONFIG_MLE_ATTACH_BACKOFF_ENABLE=1           \
+        -DOPENTHREAD_CONFIG_MLE_STEERING_DATA_SET_OOB_ENABLE=1    \
+        -DOPENTHREAD_CONFIG_MPL_DYNAMIC_INTERVAL_ENABLE           \
+        -DOPENTHREAD_CONFIG_JAM_DETECTION_ENABLE=1                \
+        -DOPENTHREAD_CONFIG_JOINER_ENABLE=1                       \
+        -DOPENTHREAD_CONFIG_LINK_RAW_ENABLE=1                     \
+        -DOPENTHREAD_CONFIG_LOG_LEVEL_DYNAMIC_ENABLE=1            \
+        -DOPENTHREAD_CONFIG_MAC_FILTER_ENABLE=1                   \
+        -DOPENTHREAD_CONFIG_NCP_UART_ENABLE=1                     \
+        -DOPENTHREAD_CONFIG_PLATFORM_NETIF_ENABLE=1               \
+        -DOPENTHREAD_CONFIG_PLATFORM_RADIO_COEX_ENABLE=1          \
+        -DOPENTHREAD_CONFIG_PLATFORM_USEC_TIMER_ENABLE=1          \
+        -DOPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE=1             \
+        -DOPENTHREAD_CONFIG_SNTP_CLIENT_ENABLE=1                  \
+        -DOPENTHREAD_CONFIG_SOFTWARE_ACK_TIMEOUT_ENABLE=1         \
+        -DOPENTHREAD_CONFIG_SOFTWARE_CSMA_BACKOFF_ENABLE=1        \
+        -DOPENTHREAD_CONFIG_SOFTWARE_ENERGY_SCAN_ENABLE=1         \
+        -DOPENTHREAD_CONFIG_SOFTWARE_RETRANSMIT_ENABLE=1          \
+        -DOPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE=1          \
+        -DOPENTHREAD_CONFIG_TMF_NETWORK_DIAG_MTD_ENABLE=1         \
+        -DOPENTHREAD_CONFIG_UDP_FORWARD_ENABLE=1"
+
+    git checkout -- . || die
+    git clean -xfd || die
+    ./bootstrap || die
+    make -f examples/Makefile-simulation || die
+
+    export CPPFLAGS="${CPPFLAGS}                          \
+        -DOPENTHREAD_CONFIG_ASSERT_ENABLE=0"
+
+    git checkout -- . || die
+    git clean -xfd || die
+    ./bootstrap || die
+    make -f examples/Makefile-simulation || die
 
     export CPPFLAGS="                                    \
         -DOPENTHREAD_CONFIG_BORDER_ROUTER_ENABLE=1       \
@@ -448,7 +527,12 @@ build_samr21() {
     git checkout -- . || die
     git clean -xfd || die
     ./bootstrap || die
-    CPPFLAGS=-DOPENTHREAD_CONFIG_HEAP_EXTERNAL_ENABLE=1 make -f examples/Makefile-posix || die
+    CPPFLAGS=-DOPENTHREAD_CONFIG_HEAP_EXTERNAL_ENABLE=1 make -f examples/Makefile-simulation || die
+
+    git checkout -- . || die
+    git clean -xfd || die
+    ./bootstrap || die
+    CPPFLAGS=-DOPENTHREAD_CONFIG_MAC_RETRY_SUCCESS_HISTOGRAM_ENABLE=1 make -f examples/Makefile-simulation || die
 
     git checkout -- . || die
     git clean -xfd || die
@@ -457,7 +541,7 @@ build_samr21() {
         --enable-ncp                        \
         --enable-ftd                        \
         --enable-mtd                        \
-        --with-examples=posix               \
+        --with-examples=simulation          \
         --disable-docs                      \
         --disable-tests                     \
         --with-vendor-extension=./src/core/common/extension_example.cpp || die
@@ -469,7 +553,7 @@ build_samr21() {
     ./configure                             \
         --enable-cli                        \
         --enable-mtd                        \
-        --with-examples=posix               \
+        --with-examples=simulation          \
         --disable-docs                      \
         --disable-tests || die
     make -j 8 || die
@@ -488,86 +572,117 @@ build_samr21() {
         --enable-ftd                        \
         --enable-mtd                        \
         --enable-radio-only                 \
-        --with-examples=posix || die
+        --with-examples=simulation || die
+    make -j 8 || die
+
+    export CPPFLAGS="                               \
+        -DOPENTHREAD_CONFIG_NCP_UART_ENABLE=1"
+
+    git checkout -- . || die
+    git clean -xfd || die
+    ./bootstrap || die
+    ./configure                             \
+        --enable-ncp                        \
+        --enable-ftd                        \
+        --enable-mtd                        \
+        --with-examples=simulation          \
+        --disable-docs                      \
+        --disable-tests                     \
+        --with-ncp-vendor-hook-source=./src/ncp/example_vendor_hook.cpp || die
     make -j 8 || die
 }
 
-[ $BUILD_TARGET != posix-distcheck ] || {
+[ $BUILD_TARGET != simulation-distcheck ] || {
     export ASAN_SYMBOLIZER_PATH=`which llvm-symbolizer` || die
     export ASAN_OPTIONS=symbolize=1 || die
-    export DISTCHECK_CONFIGURE_FLAGS= CPPFLAGS=-DOPENTHREAD_POSIX_VIRTUAL_TIME=1 || die
+    export DISTCHECK_CONFIGURE_FLAGS= CPPFLAGS=-DOPENTHREAD_SIMULATION_VIRTUAL_TIME=1  || die
     ./bootstrap || die
-    REFERENCE_DEVICE=1 make -f examples/Makefile-posix distcheck || die
+    REFERENCE_DEVICE=1 make -f examples/Makefile-simulation distcheck || die
 }
 
-[ $BUILD_TARGET != posix-32-bit ] || {
+[ $BUILD_TARGET != simulation-32-bit ] || {
     ./bootstrap || die
-    REFERENCE_DEVICE=1 COVERAGE=1 CFLAGS=-m32 CXXFLAGS=-m32 LDFLAGS=-m32 make -f examples/Makefile-posix check || die
+    REFERENCE_DEVICE=1 COVERAGE=1 CFLAGS=-m32 CXXFLAGS=-m32 LDFLAGS=-m32 make -f examples/Makefile-simulation check || die
 }
 
-[ $BUILD_TARGET != posix-app-cli ] || {
+[ $BUILD_TARGET != posix-cli ] || {
     ./bootstrap || die
     # enable code coverage for OpenThread transceiver only
-    COVERAGE=1 VIRTUAL_TIME_UART=1 make -f examples/Makefile-posix || die
+    COVERAGE=1 VIRTUAL_TIME_UART=1 make -f examples/Makefile-simulation || die
     # readline supports pipe, editline does not
     REFERENCE_DEVICE=1 COVERAGE=1 READLINE=readline make -f src/posix/Makefile-posix || die
     REFERENCE_DEVICE=1 COVERAGE=1 PYTHONUNBUFFERED=1 OT_CLI_PATH="$(pwd)/$(ls output/posix/*/bin/ot-cli) -v" RADIO_DEVICE="$(pwd)/$(ls output/*/bin/ot-rcp)" make -f src/posix/Makefile-posix check || die
 }
 
-[ $BUILD_TARGET != posix-app-pty ] || {
+[ $BUILD_TARGET != v1.2 ] || {
+    ./bootstrap || die
+    ./script/test build || die
+    ./script/test cert_suite tests/scripts/thread-cert/v1_2_* || die
+}
+
+[ $BUILD_TARGET != posix-pty ] || {
     # check daemon mode
     git checkout -- . || die
     git clean -xfd || die
     mkdir build && cd build || die
-    cmake -GNinja -DOT_PLATFORM=posix-host -DOT_DAEMON=ON .. || die
+    cmake -GNinja -DOT_PLATFORM=posix -DOT_DAEMON=ON -DCOMPILE_WARNING_AS_ERROR=ON .. || die
     ninja || die
     cd .. || die
 
     git checkout -- . || die
     git clean -xfd || die
     mkdir build && cd build || die
-    cmake -GNinja -DOT_PLATFORM=posix-host .. || die
+    cmake -GNinja -DOT_PLATFORM=posix -DCOMPILE_WARNING_AS_ERROR=ON .. || die
     ninja || die
     cd .. || die
 
     ./bootstrap
-    .travis/check-posix-app-pty || die
+    .travis/check-posix-pty || die
 }
 
-[ $BUILD_TARGET != posix-mtd ] || {
+[ $BUILD_TARGET != posix-migrate ] || {
+    ./bootstrap
+    .travis/check-ncp-rcp-migrate || die
+}
+
+[ $BUILD_TARGET != simulation-mtd ] || {
     ./bootstrap || die
-    REFERENCE_DEVICE=1 COVERAGE=1 CFLAGS=-m32 CXXFLAGS=-m32 LDFLAGS=-m32 USE_MTD=1 make -f examples/Makefile-posix check || die
+    REFERENCE_DEVICE=1 COVERAGE=1 CFLAGS=-m32 CXXFLAGS=-m32 LDFLAGS=-m32 USE_MTD=1 make -f examples/Makefile-simulation check || die
 }
 
-[ $BUILD_TARGET != posix-ncp-spi ] || {
+[ $BUILD_TARGET != simulation-ncp-spi ] || {
     CPPFLAGS="-DOPENTHREAD_CONFIG_NCP_SPI_ENABLE=1"
 
     ./bootstrap || die
-    make -f examples/Makefile-posix check configure_OPTIONS="--enable-ncp --enable-ftd --with-examples=posix" || die
-}
-
-[ $BUILD_TARGET != posix-app-ncp ] || {
-    ./bootstrap || die
-    REFERENCE_DEVICE=1 COVERAGE=1 VIRTUAL_TIME_UART=1 make -f examples/Makefile-posix || die
-    # enable code coverage for OpenThread posix radio
-    REFERENCE_DEVICE=1 COVERAGE=1 READLINE=readline make -f src/posix/Makefile-posix || die
-    REFERENCE_DEVICE=1 COVERAGE=1 PYTHONUNBUFFERED=1 OT_NCP_PATH="$(pwd)/$(ls output/posix/*/bin/ot-ncp)" RADIO_DEVICE="$(pwd)/$(ls output/*/bin/ot-rcp)" NODE_TYPE=ncp-sim make -f src/posix/Makefile-posix check || die
+    make -f examples/Makefile-simulation check configure_OPTIONS="--enable-ncp --enable-ftd --with-examples=simulation" || die
 }
 
 [ $BUILD_TARGET != posix-ncp ] || {
     ./bootstrap || die
-    REFERENCE_DEVICE=1 COVERAGE=1 PYTHONUNBUFFERED=1 NODE_TYPE=ncp-sim make -f examples/Makefile-posix check || die
+    REFERENCE_DEVICE=1 COVERAGE=1 VIRTUAL_TIME_UART=1 make -f examples/Makefile-simulation || die
+    REFERENCE_DEVICE=1 COVERAGE=1 READLINE=readline make -f src/posix/Makefile-posix || die
+    REFERENCE_DEVICE=1 COVERAGE=1 PYTHONUNBUFFERED=1 OT_NCP_PATH="$(pwd)/$(ls output/posix/*/bin/ot-ncp)" RADIO_DEVICE="$(pwd)/$(ls output/*/bin/ot-rcp)" NODE_TYPE=ncp-sim make -f src/posix/Makefile-posix check || die
+}
+
+[ $BUILD_TARGET != posix-spi ] || {
+    ./bootstrap || die
+    REFERENCE_DEVICE=1 READLINE=readline RCP_SPI=1 make -f src/posix/Makefile-posix || die
+}
+
+[ $BUILD_TARGET != simulation-ncp ] || {
+    ./bootstrap || die
+    REFERENCE_DEVICE=1 COVERAGE=1 PYTHONUNBUFFERED=1 NODE_TYPE=ncp-simulation make -f examples/Makefile-simulation check || die
 }
 
 [ $BUILD_TARGET != toranj-test-framework ] || {
-    ./tests/toranj/start.sh || die
+    top_builddir=$(pwd)/build/toranj ./tests/toranj/start.sh || die
 }
 
 [ $BUILD_TARGET != osx ] || {
     git checkout -- . || die
     git clean -xfd || die
     ./bootstrap || die
-    make -f examples/Makefile-posix || die
+    make -f examples/Makefile-simulation || die
 
     git checkout -- . || die
     git clean -xfd || die

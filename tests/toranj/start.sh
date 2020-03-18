@@ -77,28 +77,27 @@ run() {
 
 cd $(dirname $0)
 
-# On Travis CI, the $BUILD_TARGET is defined as "toranj-test-framework".
-if [ "$BUILD_TARGET" = "toranj-test-framework" ]; then
+if [ "$COVERAGE" = 1 ]; then
     coverage_option="--enable-coverage"
 else
     coverage_option=""
 fi
 
-case $TORANJ_POSIX_APP_RCP_MODEL in
+case $TORANJ_POSIX_RCP_MODEL in
     1|yes)
-        use_posix_app_with_rcp=yes
+        use_posix_with_rcp=yes
         ;;
     *)
-        use_posix_app_with_rcp=no
+        use_posix_with_rcp=no
         ;;
 esac
 
-if [ "$use_posix_app_with_rcp" = "no" ]; then
+if [ "$use_posix_with_rcp" = "no" ]; then
     ./build.sh ${coverage_option} ncp || die
 
 else
     ./build.sh ${coverage_option} rcp || die
-    ./build.sh ${coverage_option} posix-app || die
+    ./build.sh ${coverage_option} posix || die
 fi
 
 cleanup

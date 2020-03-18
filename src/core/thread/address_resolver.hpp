@@ -208,20 +208,26 @@ private:
         kReasonRemovingEid,
     };
 
-    static const char *ConvertInvalidationReasonToString(InvalidationReason aReason);
+    static const char *InvalidationReasonToString(InvalidationReason aReason);
 
+    void   Init(void);
     Cache *NewCacheEntry(void);
-    void   MarkCacheEntryAsUsed(Cache &aEntry);
-    void   InvalidateCacheEntry(Cache &aEntry, InvalidationReason aReason);
+
+    void MoveCacheEntryAt(Cache &aEntry, uint8_t aAge);
+    void MoveCacheEntryAtFront(Cache &aEntry) { MoveCacheEntryAt(aEntry, 0); }
+    void MoveCacheEntryAtBack(Cache &aEntry) { MoveCacheEntryAt(aEntry, kCacheEntries - 1); }
+    void MoveCacheEntryBehindCached(Cache &aEntry);
+
+    void InvalidateCacheEntry(Cache &aEntry, InvalidationReason aReason);
 
     otError SendAddressQuery(const Ip6::Address &aEid);
-    otError SendAddressError(const ThreadTargetTlv &      aTarget,
-                             const ThreadMeshLocalEidTlv &aEid,
-                             const Ip6::Address *         aDestination);
-    void    SendAddressQueryResponse(const ThreadTargetTlv &             aTargetTlv,
-                                     const ThreadMeshLocalEidTlv &       aMlEidTlv,
-                                     const ThreadLastTransactionTimeTlv *aLastTransactionTimeTlv,
-                                     const Ip6::Address &                aDestination);
+    otError SendAddressError(const Ip6::Address &aTarget,
+                             const uint8_t *     aMeshLocalIid,
+                             const Ip6::Address *aDestination);
+    void    SendAddressQueryResponse(const Ip6::Address &aTarget,
+                                     const uint8_t *     aMeshLocalIid,
+                                     const uint32_t *    aLastTransactionTimeTlv,
+                                     const Ip6::Address &aDestination);
 
     static void HandleUdpReceive(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
 

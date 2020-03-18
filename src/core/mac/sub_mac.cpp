@@ -137,7 +137,7 @@ otError SubMac::Enable(void)
     SetState(kStateSleep);
 
 exit:
-    assert(error == OT_ERROR_NONE);
+    OT_ASSERT(error == OT_ERROR_NONE);
     return error;
 }
 
@@ -270,6 +270,8 @@ void SubMac::BeginTransmit(void)
 {
     otError error;
 
+    OT_UNUSED_VARIABLE(error);
+
     VerifyOrExit(mState == kStateCsmaBackoff);
 
 #if OPENTHREAD_CONFIG_MAC_DISABLE_CSMA_CA_ON_LAST_ATTEMPT
@@ -283,8 +285,11 @@ void SubMac::BeginTransmit(void)
         mTransmitFrame.SetCsmaCaEnabled(true);
     }
 
-    error = Get<Radio>().Receive(mTransmitFrame.GetChannel());
-    assert(error == OT_ERROR_NONE);
+    if ((mRadioCaps & OT_RADIO_CAPS_SLEEP_TO_TX) == 0)
+    {
+        error = Get<Radio>().Receive(mTransmitFrame.GetChannel());
+        OT_ASSERT(error == OT_ERROR_NONE);
+    }
 
     SetState(kStateTransmit);
 
@@ -294,7 +299,7 @@ void SubMac::BeginTransmit(void)
     }
 
     error = Get<Radio>().Transmit(mTransmitFrame);
-    assert(error == OT_ERROR_NONE);
+    OT_ASSERT(error == OT_ERROR_NONE);
 
 exit:
     return;
@@ -345,7 +350,7 @@ void SubMac::HandleTransmitDone(TxFrame &aFrame, RxFrame *aAckFrame, otError aEr
         break;
 
     default:
-        assert(false);
+        OT_ASSERT(false);
         OT_UNREACHABLE_CODE(ExitNow());
     }
 
@@ -370,11 +375,10 @@ void SubMac::HandleTransmitDone(TxFrame &aFrame, RxFrame *aAckFrame, otError aEr
     if (shouldRetx)
     {
         mTransmitRetries++;
+        aFrame.SetIsARetransmission(true);
         StartCsmaBackoff();
         ExitNow();
     }
-
-    mTransmitRetries = 0;
 
     SetState(kStateReceive);
 
@@ -387,6 +391,11 @@ exit:
 int8_t SubMac::GetRssi(void) const
 {
     return Get<Radio>().GetRssi();
+}
+
+int8_t SubMac::GetNoiseFloor(void)
+{
+    return Get<Radio>().GetReceiveSensitivity();
 }
 
 otError SubMac::EnergyScan(uint8_t aScanChannel, uint16_t aScanDuration)
@@ -414,7 +423,7 @@ otError SubMac::EnergyScan(uint8_t aScanChannel, uint16_t aScanDuration)
     else if (ShouldHandleEnergyScan())
     {
         error = Get<Radio>().Receive(aScanChannel);
-        assert(error == OT_ERROR_NONE);
+        OT_ASSERT(error == OT_ERROR_NONE);
 
         SetState(kStateEnergyScan);
         mEnergyScanMaxRssi = kInvalidRssiValue;
@@ -432,6 +441,8 @@ exit:
 
 void SubMac::SampleRssi(void)
 {
+    OT_ASSERT(!RadioSupportsEnergyScan());
+
     int8_t rssi = GetRssi();
 
     if (rssi != kInvalidRssiValue)
@@ -444,7 +455,11 @@ void SubMac::SampleRssi(void)
 
     if (TimerMilli::GetNow() < mEnergyScanEndTime)
     {
+#if OPENTHREAD_CONFIG_PLATFORM_USEC_TIMER_ENABLE
+        mTimer.StartAt(mTimer.GetFireTime(), kEnergyScanRssiSampleInterval * 1000UL);
+#else
         mTimer.StartAt(mTimer.GetFireTime(), kEnergyScanRssiSampleInterval);
+#endif
     }
     else
     {

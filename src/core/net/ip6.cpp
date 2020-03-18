@@ -76,13 +76,15 @@ Message *Ip6::NewMessage(const uint8_t *aData, uint16_t aDataLength, const otMes
 {
     otMessageSettings settings = {true, OT_MESSAGE_PRIORITY_NORMAL};
     Message *         message  = NULL;
+    uint8_t           priority;
 
     if (aSettings != NULL)
     {
         settings = *aSettings;
     }
 
-    SuccessOrExit(GetDatagramPriority(aData, aDataLength, *reinterpret_cast<uint8_t *>(&settings.mPriority)));
+    SuccessOrExit(GetDatagramPriority(aData, aDataLength, priority));
+    settings.mPriority = static_cast<otMessagePriority>(priority);
     VerifyOrExit((message = Get<MessagePool>().New(Message::kTypeIp6, 0, &settings)) != NULL);
 
     if (message->Append(aData, aDataLength) != OT_ERROR_NONE)
@@ -174,7 +176,7 @@ uint16_t Ip6::UpdateChecksum(uint16_t aChecksum, const Address &aAddress)
 uint16_t Ip6::ComputePseudoheaderChecksum(const Address &aSource,
                                           const Address &aDestination,
                                           uint16_t       aLength,
-                                          IpProto        aProto)
+                                          uint8_t        aProto)
 {
     uint16_t checksum;
 
@@ -448,7 +450,7 @@ void Ip6::EnqueueDatagram(Message &aMessage)
     mSendQueueTask.Post();
 }
 
-otError Ip6::SendDatagram(Message &aMessage, MessageInfo &aMessageInfo, IpProto aIpProto)
+otError Ip6::SendDatagram(Message &aMessage, MessageInfo &aMessageInfo, uint8_t aIpProto)
 {
     otError                    error = OT_ERROR_NONE;
     Header                     header;
@@ -623,7 +625,7 @@ exit:
 }
 
 #if OPENTHREAD_CONFIG_IP6_FRAGMENTATION_ENABLE
-otError Ip6::FragmentDatagram(Message &aMessage, IpProto aIpProto)
+otError Ip6::FragmentDatagram(Message &aMessage, uint8_t aIpProto)
 {
     otError        error = OT_ERROR_NONE;
     Header         header;
@@ -633,6 +635,8 @@ otError Ip6::FragmentDatagram(Message &aMessage, IpProto aIpProto)
     uint16_t       payloadFragment = 0;
     uint16_t       offset          = 0;
     int            assertValue     = 0;
+
+    OT_UNUSED_VARIABLE(assertValue);
 
     uint16_t maxPayloadFragment =
         FragmentHeader::MakeDivisibleByEight(kMinimalMtu - aMessage.GetOffset() - sizeof(fragmentHeader));
@@ -673,11 +677,11 @@ otError Ip6::FragmentDatagram(Message &aMessage, IpProto aIpProto)
 
         header.SetPayloadLength(payloadFragment + sizeof(fragmentHeader));
         assertValue = fragment->Write(0, sizeof(header), &header);
-        assert(assertValue == sizeof(header));
+        OT_ASSERT(assertValue == sizeof(header));
 
         SuccessOrExit(error = fragment->SetOffset(aMessage.GetOffset()));
         assertValue = fragment->Write(aMessage.GetOffset(), sizeof(fragmentHeader), &fragmentHeader);
-        assert(assertValue == sizeof(fragmentHeader));
+        OT_ASSERT(assertValue == sizeof(fragmentHeader));
 
         VerifyOrExit(aMessage.CopyTo(aMessage.GetOffset() + FragmentHeader::FragmentOffsetToBytes(offset),
                                      aMessage.GetOffset() + sizeof(fragmentHeader), payloadFragment,
@@ -719,6 +723,8 @@ otError Ip6::HandleFragment(Message &aMessage, Netif *aNetif, MessageInfo &aMess
     int            assertValue     = 0;
     bool           isFragmented    = true;
 
+    OT_UNUSED_VARIABLE(assertValue);
+
     VerifyOrExit(aMessage.Read(0, sizeof(header), &header) == sizeof(header), error = OT_ERROR_PARSE);
 
     VerifyOrExit(aMessage.Read(aMessage.GetOffset(), sizeof(fragmentHeader), &fragmentHeader) == sizeof(fragmentHeader),
@@ -734,8 +740,9 @@ otError Ip6::HandleFragment(Message &aMessage, Netif *aNetif, MessageInfo &aMess
 
     for (message = mReassemblyList.GetHead(); message; message = message->GetNext())
     {
-        VerifyOrExit(aMessage.Read(0, sizeof(headerBuffer), &headerBuffer) == sizeof(headerBuffer),
+        VerifyOrExit(message->Read(0, sizeof(headerBuffer), &headerBuffer) == sizeof(headerBuffer),
                      error = OT_ERROR_PARSE);
+
         if (message->GetDatagramTag() == fragmentHeader.GetIdentification() &&
             headerBuffer.GetSource() == header.GetSource() && headerBuffer.GetDestination() == header.GetDestination())
         {
@@ -757,7 +764,7 @@ otError Ip6::HandleFragment(Message &aMessage, Netif *aNetif, MessageInfo &aMess
 
         // copying the non-fragmentable header to the fragmentation buffer
         assertValue = aMessage.CopyTo(0, 0, aMessage.GetOffset(), *message);
-        assert(assertValue == aMessage.GetOffset());
+        OT_ASSERT(assertValue == aMessage.GetOffset());
 
         if (!mTimer.IsRunning())
         {
@@ -787,7 +794,7 @@ otError Ip6::HandleFragment(Message &aMessage, Netif *aNetif, MessageInfo &aMess
     // copy the fragment payload into the message buffer
     assertValue = aMessage.CopyTo(aMessage.GetOffset() + sizeof(fragmentHeader), aMessage.GetOffset() + offset,
                                   payloadFragment, *message);
-    assert(assertValue == static_cast<int>(payloadFragment));
+    OT_ASSERT(assertValue == static_cast<int>(payloadFragment));
 
     // check if it is the last frame
     if (!fragmentHeader.IsMoreFlagSet())
@@ -801,9 +808,9 @@ otError Ip6::HandleFragment(Message &aMessage, Netif *aNetif, MessageInfo &aMess
         // creates the header for the reassembled ipv6 package
         VerifyOrExit(aMessage.Read(0, sizeof(header), &header) == sizeof(header), error = OT_ERROR_PARSE);
         header.SetPayloadLength(message->GetLength() - sizeof(header));
-        header.SetNextHeader(static_cast<IpProto>(fragmentHeader.GetNextHeader()));
+        header.SetNextHeader(fragmentHeader.GetNextHeader());
         assertValue = message->Write(0, sizeof(header), &header);
-        assert(assertValue == sizeof(header));
+        OT_ASSERT(assertValue == sizeof(header));
 
         otLogDebgIp6("Reassembly complete.");
 
@@ -901,7 +908,7 @@ exit:
 }
 
 #else
-otError Ip6::FragmentDatagram(Message &aMessage, IpProto aIpProto)
+otError Ip6::FragmentDatagram(Message &aMessage, uint8_t aIpProto)
 {
     OT_UNUSED_VARIABLE(aIpProto);
 
@@ -1427,7 +1434,7 @@ exit:
 
 // LCOV_EXCL_START
 
-const char *Ip6::IpProtoToString(IpProto aIpProto)
+const char *Ip6::IpProtoToString(uint8_t aIpProto)
 {
     const char *retval;
 

@@ -37,7 +37,6 @@
 
 #include "common/logging.hpp"
 #include "common/new.hpp"
-#include "thread/router_table.hpp"
 
 namespace ot {
 
@@ -77,10 +76,6 @@ Instance::Instance(void)
     , mNotifier(*this)
     , mSettings(*this)
     , mMessagePool(*this)
-    , mActiveScanCallback(NULL)
-    , mActiveScanCallbackContext(NULL)
-    , mEnergyScanCallback(NULL)
-    , mEnergyScanCallbackContext(NULL)
     , mIp6(*this)
     , mThreadNetif(*this)
 #if OPENTHREAD_CONFIG_COAP_API_ENABLE
@@ -102,8 +97,8 @@ Instance::Instance(void)
 #if OPENTHREAD_RADIO || OPENTHREAD_CONFIG_LINK_RAW_ENABLE
     , mLinkRaw(*this)
 #endif
-#if OPENTHREAD_CONFIG_ENABLE_DYNAMIC_LOG_LEVEL
-    , mLogLevel(static_cast<otLogLevel>(OPENTHREAD_CONFIG_INITIAL_LOG_LEVEL))
+#if OPENTHREAD_CONFIG_LOG_LEVEL_DYNAMIC_ENABLE
+    , mLogLevel(static_cast<otLogLevel>(OPENTHREAD_CONFIG_LOG_LEVEL_INIT))
 #endif
 #if OPENTHREAD_ENABLE_VENDOR_EXTENSION
     , mExtension(Extension::ExtensionBase::Init(*this))
@@ -229,33 +224,6 @@ exit:
     return error;
 }
 
-void Instance::RegisterActiveScanCallback(otHandleActiveScanResult aCallback, void *aContext)
-{
-    mActiveScanCallback        = aCallback;
-    mActiveScanCallbackContext = aContext;
-}
-
-void Instance::InvokeActiveScanCallback(otActiveScanResult *aResult) const
-{
-    if (mActiveScanCallback != NULL)
-    {
-        mActiveScanCallback(aResult, mActiveScanCallbackContext);
-    }
-}
-
-void Instance::RegisterEnergyScanCallback(otHandleEnergyScanResult aCallback, void *aContext)
-{
-    mEnergyScanCallback        = aCallback;
-    mEnergyScanCallbackContext = aContext;
-}
-
-void Instance::InvokeEnergyScanCallback(otEnergyScanResult *aResult) const
-{
-    if (mEnergyScanCallback != NULL)
-    {
-        mEnergyScanCallback(aResult, mEnergyScanCallbackContext);
-    }
-}
 #endif // OPENTHREAD_MTD || OPENTHREAD_FTD
 
 } // namespace ot

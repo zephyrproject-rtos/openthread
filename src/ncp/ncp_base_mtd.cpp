@@ -120,13 +120,12 @@ static uint8_t ExternalRoutePreferenceToFlagByte(int aPreference)
         flags = SPINEL_ROUTE_PREFERENCE_LOW;
         break;
 
-    case OT_ROUTE_PREFERENCE_MED:
-        flags = SPINEL_ROUTE_PREFERENCE_MEDIUM;
-        break;
-
     case OT_ROUTE_PREFERENCE_HIGH:
         flags = SPINEL_ROUTE_PREFERENCE_HIGH;
         break;
+
+    case OT_ROUTE_PREFERENCE_MED:
+        // fall through
 
     default:
         flags = SPINEL_ROUTE_PREFERENCE_MEDIUM;
@@ -230,27 +229,6 @@ exit:
     return error;
 }
 
-template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_PHY_FREQ>(void)
-{
-    uint32_t      freq_khz(0);
-    const uint8_t chan(otLinkGetChannel(mInstance));
-
-    if (chan == 0)
-    {
-        freq_khz = 868300;
-    }
-    else if (chan < 11)
-    {
-        freq_khz = 906000 - (2000 * 1) + 2000 * (chan);
-    }
-    else if (chan < 26)
-    {
-        freq_khz = 2405000 - (5000 * 11) + 5000 * (chan);
-    }
-
-    return mEncoder.WriteUint32(freq_khz);
-}
-
 template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_PHY_CHAN_SUPPORTED>(void)
 {
     uint32_t newMask = 0;
@@ -263,19 +241,9 @@ exit:
     return error;
 }
 
-otError NcpBase::CommandHandler_NET_SAVE(uint8_t aHeader)
-{
-    return PrepareLastStatusResponse(aHeader, SPINEL_STATUS_UNIMPLEMENTED);
-}
-
 otError NcpBase::CommandHandler_NET_CLEAR(uint8_t aHeader)
 {
     return PrepareLastStatusResponse(aHeader, ThreadErrorToSpinelStatus(otInstanceErasePersistentInfo(mInstance)));
-}
-
-otError NcpBase::CommandHandler_NET_RECALL(uint8_t aHeader)
-{
-    return PrepareLastStatusResponse(aHeader, SPINEL_STATUS_UNIMPLEMENTED);
 }
 
 template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_NET_SAVED>(void)
@@ -631,8 +599,6 @@ exit:
     return error;
 }
 
-#if OPENTHREAD_CONFIG_ENABLE_TX_ERROR_RATE_TRACKING
-
 template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_THREAD_NEIGHBOR_TABLE_ERROR_RATES>(void)
 {
     otError                error = OT_ERROR_NONE;
@@ -656,8 +622,6 @@ template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_THREAD_NEIGHBOR_TABLE
 exit:
     return error;
 }
-
-#endif // OPENTHREAD_CONFIG_ENABLE_TX_ERROR_RATE_TRACKING
 
 template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_THREAD_ASSISTING_PORTS>(void)
 {
@@ -1059,8 +1023,8 @@ otError NcpBase::EncodeOperationalDataset(const otOperationalDataset &aDataset)
 
         SuccessOrExit(mEncoder.OpenStruct());
         SuccessOrExit(mEncoder.WriteUintPacked(SPINEL_PROP_IPV6_ML_PREFIX));
-        SuccessOrExit(error = mEncoder.WriteIp6Address(addr)); // Mesh local prefix
-        SuccessOrExit(error = mEncoder.WriteUint8(64));        // Prefix length (in bits)
+        SuccessOrExit(error = mEncoder.WriteIp6Address(addr));             // Mesh local prefix
+        SuccessOrExit(error = mEncoder.WriteUint8(OT_IP6_PREFIX_BITSIZE)); // Prefix length (in bits)
         SuccessOrExit(mEncoder.CloseStruct());
     }
 
@@ -1248,7 +1212,7 @@ otError NcpBase::DecodeOperationalDataset(otOperationalDataset &aDataset,
 
                 SuccessOrExit(error = mDecoder.ReadIp6Address(addr));
                 SuccessOrExit(error = mDecoder.ReadUint8(prefixLen));
-                VerifyOrExit(prefixLen == 64, error = OT_ERROR_INVALID_ARGS);
+                VerifyOrExit(prefixLen == OT_IP6_PREFIX_BITSIZE, error = OT_ERROR_INVALID_ARGS);
                 memcpy(aDataset.mMeshLocalPrefix.m8, addr, OT_MESH_LOCAL_PREFIX_SIZE);
             }
 
@@ -1582,8 +1546,8 @@ template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_IPV6_ML_PREFIX>(void)
     // Zero out the last 8 bytes.
     memset(addr.mFields.m8 + 8, 0, 8);
 
-    SuccessOrExit(error = mEncoder.WriteIp6Address(addr)); // Mesh local prefix
-    SuccessOrExit(error = mEncoder.WriteUint8(64));        // Prefix length (in bits)
+    SuccessOrExit(error = mEncoder.WriteIp6Address(addr));             // Mesh local prefix
+    SuccessOrExit(error = mEncoder.WriteUint8(OT_IP6_PREFIX_BITSIZE)); // Prefix length (in bits)
 
 exit:
     return error;
@@ -1597,7 +1561,7 @@ template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_IPV6_ML_PREFIX>(void)
 
     SuccessOrExit(error = mDecoder.ReadIp6Address(meshLocalPrefix));
     SuccessOrExit(error = mDecoder.ReadUint8(prefixLength));
-    VerifyOrExit(prefixLength == 64, error = OT_ERROR_INVALID_ARGS);
+    VerifyOrExit(prefixLength == OT_IP6_PREFIX_BITSIZE, error = OT_ERROR_INVALID_ARGS);
 
     error = otThreadSetMeshLocalPrefix(mInstance, reinterpret_cast<const otMeshLocalPrefix *>(meshLocalPrefix));
 
@@ -1984,17 +1948,7 @@ template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_STREAM_NET>(void)
 
     error = otIp6Send(mInstance, message);
 
-    // `otIp6Send()` takes ownership of `message` (in both success or
-    // failure cases). `message` is set to NULL so it is not freed at
-    // exit.
-    message = NULL;
-
 exit:
-
-    if (message != NULL)
-    {
-        otMessageFree(message);
-    }
 
     if (error == OT_ERROR_NONE)
     {
@@ -2447,8 +2401,6 @@ template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_CNTR_ALL_MAC_COUNTERS
     otError              error    = OT_ERROR_NONE;
     const otMacCounters *counters = otLinkGetCounters(mInstance);
 
-    assert(counters != NULL);
-
     // Encode Tx related counters
     SuccessOrExit(error = mEncoder.OpenStruct());
     SuccessOrExit(error = mEncoder.WriteUint32(counters->mTxTotal));
@@ -2466,6 +2418,8 @@ template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_CNTR_ALL_MAC_COUNTERS
     SuccessOrExit(error = mEncoder.WriteUint32(counters->mTxErrCca));
     SuccessOrExit(error = mEncoder.WriteUint32(counters->mTxErrAbort));
     SuccessOrExit(error = mEncoder.WriteUint32(counters->mTxErrBusyChannel));
+    SuccessOrExit(error = mEncoder.WriteUint32(counters->mTxDirectMaxRetryExpiry));
+    SuccessOrExit(error = mEncoder.WriteUint32(counters->mTxIndirectMaxRetryExpiry));
     SuccessOrExit(error = mEncoder.CloseStruct());
 
     // Encode Rx related counters
@@ -2505,7 +2459,7 @@ template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_CNTR_MLE_COUNTERS>(vo
     otError              error    = OT_ERROR_NONE;
     const otMleCounters *counters = otThreadGetMleCounters(mInstance);
 
-    assert(counters != NULL);
+    OT_ASSERT(counters != NULL);
 
     SuccessOrExit(error = mEncoder.WriteUint16(counters->mDisabledRole));
     SuccessOrExit(error = mEncoder.WriteUint16(counters->mDetachedRole));
@@ -2533,7 +2487,7 @@ template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_CNTR_ALL_IP_COUNTERS>
     otError             error    = OT_ERROR_NONE;
     const otIpCounters *counters = otThreadGetIp6Counters(mInstance);
 
-    assert(counters != NULL);
+    OT_ASSERT(counters != NULL);
 
     // Encode Tx related counters
     SuccessOrExit(error = mEncoder.OpenStruct());
@@ -2550,6 +2504,49 @@ template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_CNTR_ALL_IP_COUNTERS>
 exit:
     return error;
 }
+
+#if OPENTHREAD_CONFIG_MAC_RETRY_SUCCESS_HISTOGRAM_ENABLE
+template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_CNTR_MAC_RETRY_HISTOGRAM>(void)
+{
+    otError         error = OT_ERROR_NONE;
+    const uint32_t *histogramDirect;
+    const uint32_t *histogramIndirect;
+    uint8_t         histogramDirectEntries;
+    uint8_t         histogramIndirectEntries;
+
+    histogramDirect   = otLinkGetTxDirectRetrySuccessHistogram(mInstance, &histogramDirectEntries);
+    histogramIndirect = otLinkGetTxIndirectRetrySuccessHistogram(mInstance, &histogramIndirectEntries);
+
+    OT_ASSERT((histogramDirectEntries == 0) || (histogramDirect != NULL));
+    OT_ASSERT((histogramIndirectEntries == 0) || (histogramIndirect != NULL));
+
+    // Encode direct message retries histogram
+    SuccessOrExit(error = mEncoder.OpenStruct());
+    for (uint8_t i = 0; i < histogramDirectEntries; i++)
+    {
+        SuccessOrExit(error = mEncoder.WriteUint32(histogramDirect[i]));
+    }
+    SuccessOrExit(error = mEncoder.CloseStruct());
+
+    // Encode indirect message retries histogram
+    SuccessOrExit(error = mEncoder.OpenStruct());
+    for (uint8_t i = 0; i < histogramIndirectEntries; i++)
+    {
+        SuccessOrExit(error = mEncoder.WriteUint32(histogramIndirect[i]));
+    }
+    SuccessOrExit(error = mEncoder.CloseStruct());
+
+exit:
+    return error;
+}
+
+template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_CNTR_MAC_RETRY_HISTOGRAM>(void)
+{
+    otLinkResetTxRetrySuccessHistogram(mInstance);
+
+    return OT_ERROR_NONE;
+}
+#endif // OPENTHREAD_CONFIG_MAC_RETRY_SUCCESS_HISTOGRAM_ENABLE
 
 template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_CNTR_ALL_IP_COUNTERS>(void)
 {
@@ -2895,17 +2892,7 @@ template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_STREAM_NET_INSECURE>(
 
     error = otIp6Send(mInstance, message);
 
-    // `otIp6Send()` takes ownership of `message` (in both success or
-    // failure cases). `message` is set to NULL so it is not freed at
-    // exit.
-    message = NULL;
-
 exit:
-    if (message != NULL)
-    {
-        otMessageFree(message);
-    }
-
     if (error == OT_ERROR_NONE)
     {
         mInboundInsecureIpFrameCounter++;
@@ -2921,6 +2908,9 @@ exit:
 template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_CNTR_RESET>(void)
 {
     otLinkResetCounters(mInstance);
+#if OPENTHREAD_CONFIG_MAC_RETRY_SUCCESS_HISTOGRAM_ENABLE
+    otLinkResetTxRetrySuccessHistogram(mInstance);
+#endif
     otThreadResetIp6Counters(mInstance);
     otThreadResetMleCounters(mInstance);
     ResetCounters();
@@ -3092,7 +3082,7 @@ exit:
 
 #endif // OPENTHREAD_CONFIG_MAC_FILTER_ENABLE
 
-#if OPENTHREAD_PLATFORM_POSIX_APP
+#if OPENTHREAD_PLATFORM_POSIX
 
 template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_RCP_VERSION>(void)
 {
@@ -3665,6 +3655,8 @@ void NcpBase::ProcessThreadChangedFlags(void)
         {OT_CHANGED_THREAD_PANID, SPINEL_PROP_MAC_15_4_PANID},
         {OT_CHANGED_THREAD_NETWORK_NAME, SPINEL_PROP_NET_NETWORK_NAME},
         {OT_CHANGED_THREAD_EXT_PANID, SPINEL_PROP_NET_XPANID},
+        {OT_CHANGED_THREAD_RLOC_ADDED, SPINEL_PROP_IPV6_ADDRESS_TABLE},
+        {OT_CHANGED_THREAD_RLOC_REMOVED, SPINEL_PROP_IPV6_ADDRESS_TABLE},
         {OT_CHANGED_MASTER_KEY, SPINEL_PROP_NET_MASTER_KEY},
         {OT_CHANGED_PSKC, SPINEL_PROP_NET_PSKC},
         {OT_CHANGED_CHANNEL_MANAGER_NEW_CHANNEL, SPINEL_PROP_CHANNEL_MANAGER_NEW_CHANNEL},
@@ -3747,7 +3739,7 @@ void NcpBase::ProcessThreadChangedFlags(void)
     }
 
     // Clear any remaining ThreadFlag that has no matching
-    // NCP property update (e.g., OT_CHANGED_THREAD_RLOC_ADDED)
+    // NCP property update (e.g., OT_CHANGED_SECURITY_POLICY)
 
     mThreadChangedFlags = 0;
 

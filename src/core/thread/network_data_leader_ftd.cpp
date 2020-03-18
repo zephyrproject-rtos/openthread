@@ -119,8 +119,8 @@ void Leader::SetContextIdReuseDelay(uint32_t aDelay)
 
 void Leader::RemoveBorderRouter(uint16_t aRloc16, MatchMode aMatchMode)
 {
-    bool rlocIn     = false;
-    bool rlocStable = false;
+    bool rlocIn;
+    bool rlocStable;
 
     RlocLookup(aRloc16, rlocIn, rlocStable, mTlvs, mLength, aMatchMode);
     VerifyOrExit(rlocIn);
@@ -148,14 +148,21 @@ void Leader::HandleServerData(void *aContext, otMessage *aMessage, const otMessa
 void Leader::HandleServerData(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
     ThreadNetworkDataTlv networkData;
-    ThreadRloc16Tlv      rloc16;
+    uint16_t             rloc16;
 
     otLogInfoNetData("Received network data registration");
 
-    if (ThreadTlv::GetTlv(aMessage, ThreadTlv::kRloc16, sizeof(rloc16), rloc16) == OT_ERROR_NONE)
+    VerifyOrExit(aMessageInfo.GetPeerAddr().IsRoutingLocator());
+
+    switch (Tlv::ReadUint16Tlv(aMessage, ThreadTlv::kRloc16, rloc16))
     {
-        VerifyOrExit(rloc16.IsValid());
-        RemoveBorderRouter(rloc16.GetRloc16(), kMatchModeRloc16);
+    case OT_ERROR_NONE:
+        RemoveBorderRouter(rloc16, kMatchModeRloc16);
+        break;
+    case OT_ERROR_NOT_FOUND:
+        break;
+    default:
+        ExitNow();
     }
 
     if (ThreadTlv::GetTlv(aMessage, ThreadTlv::kThreadNetworkData, sizeof(networkData), networkData) == OT_ERROR_NONE)
@@ -206,7 +213,7 @@ void Leader::HandleCommissioningSet(Coap::Message &aMessage, const Ip6::MessageI
     {
         MeshCoP::Tlv::Type type;
 
-        VerifyOrExit((cur + 1) <= end && cur->GetNext() <= end);
+        VerifyOrExit(((cur + 1) <= end) && !cur->IsExtended() && (cur->GetNext() <= end));
 
         type = cur->GetType();
 
@@ -341,7 +348,7 @@ void Leader::SendCommissioningGetResponse(const Coap::Message &   aRequest,
             {
                 if (cur->GetType() == type)
                 {
-                    SuccessOrExit(error = message->AppendTlv(*cur));
+                    SuccessOrExit(error = cur->AppendTo(*message));
                     break;
                 }
             }
@@ -370,18 +377,15 @@ void Leader::SendCommissioningSetResponse(const Coap::Message &    aRequest,
                                           const Ip6::MessageInfo & aMessageInfo,
                                           MeshCoP::StateTlv::State aState)
 {
-    otError           error = OT_ERROR_NONE;
-    Coap::Message *   message;
-    MeshCoP::StateTlv state;
+    otError        error = OT_ERROR_NONE;
+    Coap::Message *message;
 
     VerifyOrExit((message = MeshCoP::NewMeshCoPMessage(Get<Coap::Coap>())) != NULL, error = OT_ERROR_NO_BUFS);
 
     SuccessOrExit(error = message->SetDefaultResponseHeader(aRequest));
     SuccessOrExit(error = message->SetPayloadMarker());
 
-    state.Init();
-    state.SetState(aState);
-    SuccessOrExit(error = message->AppendTlv(state));
+    SuccessOrExit(error = Tlv::AppendUint8Tlv(*message, MeshCoP::Tlv::kState, static_cast<uint8_t>(aState)));
 
     SuccessOrExit(error = Get<Coap::Coap>().SendMessage(*message, aMessageInfo));
 
@@ -433,6 +437,9 @@ otError Leader::RlocLookup(uint16_t  aRloc16,
     HasRouteEntry *    hasRouteEntry;
     ServiceTlv *       service;
     ServerTlv *        server;
+
+    aIn     = false;
+    aStable = false;
 
     while (cur < end)
     {
@@ -657,6 +664,8 @@ bool Leader::IsStableUpdated(uint8_t *aTlvs, uint8_t aTlvsLength, uint8_t *aTlvs
 
                 while (curInner < endInner)
                 {
+                    VerifyOrExit((curInner + 1) <= endInner && curInner->GetNext() <= endInner);
+
                     if (curInner->IsStable())
                     {
                         switch (curInner->GetType())
@@ -669,11 +678,12 @@ bool Leader::IsStableUpdated(uint8_t *aTlvs, uint8_t aTlvsLength, uint8_t *aTlvs
                             NetworkDataTlv *curServerBase = serviceBase->GetSubTlvs();
                             NetworkDataTlv *endServerBase = serviceBase->GetNext();
 
-                            while (curServerBase <= endServerBase)
+                            while (curServerBase < endServerBase)
                             {
                                 ServerTlv *serverBase = static_cast<ServerTlv *>(curServerBase);
 
-                                VerifyOrExit((curServerBase + 1) <= endServerBase && curServerBase->GetNext() <= end);
+                                VerifyOrExit((curServerBase + 1) <= endServerBase &&
+                                             curServerBase->GetNext() <= endServerBase);
 
                                 if (curServerBase->IsStable() && (server->GetServer16() == serverBase->GetServer16()) &&
                                     (server->GetServerDataLength() == serverBase->GetServerDataLength()) &&
@@ -719,13 +729,14 @@ exit:
 
 otError Leader::RegisterNetworkData(uint16_t aRloc16, uint8_t *aTlvs, uint8_t aTlvsLength)
 {
-    otError error         = OT_ERROR_NONE;
-    bool    rlocIn        = false;
-    bool    rlocStable    = false;
-    bool    stableUpdated = false;
+    otError error = OT_ERROR_NONE;
+    bool    rlocIn;
+    bool    rlocStable;
     bool    unused;
     uint8_t oldTlvs[NetworkData::kMaxSize];
     uint8_t oldTlvsLength = NetworkData::kMaxSize;
+
+    VerifyOrExit(Get<RouterTable>().IsAllocated(Mle::Mle::RouterIdFromRloc16(aRloc16)), error = OT_ERROR_NO_ROUTE);
 
     // Verify that `aTlvs` only contains entries matching `aRloc16`.
     SuccessOrExit(error = RlocLookup(aRloc16, rlocIn, rlocStable, aTlvs, aTlvsLength, kMatchModeRloc16,
@@ -737,33 +748,27 @@ otError Leader::RegisterNetworkData(uint16_t aRloc16, uint8_t *aTlvs, uint8_t aT
     {
         if (IsStableUpdated(aTlvs, aTlvsLength, mTlvs, mLength) || IsStableUpdated(mTlvs, mLength, aTlvs, aTlvsLength))
         {
-            stableUpdated = true;
+            rlocStable = true;
         }
 
         // Store old Service IDs for given rloc16, so updates to server will reuse the same Service ID
         SuccessOrExit(error = GetNetworkData(false, oldTlvs, oldTlvsLength));
 
         RemoveRloc(aRloc16, kMatchModeRloc16);
-        SuccessOrExit(error = AddNetworkData(aTlvs, aTlvsLength, oldTlvs, oldTlvsLength));
-
-        mVersion++;
-
-        if (stableUpdated)
-        {
-            mStableVersion++;
-        }
     }
     else
     {
         // No old data to be preserved, lets avoid memcpy() & FindService calls.
-        SuccessOrExit(error = AddNetworkData(aTlvs, aTlvsLength, oldTlvs, 0));
+        oldTlvsLength = 0;
+    }
 
-        mVersion++;
+    SuccessOrExit(error = AddNetworkData(aTlvs, aTlvsLength, oldTlvs, oldTlvsLength));
 
-        if (rlocStable)
-        {
-            mStableVersion++;
-        }
+    mVersion++;
+
+    if (rlocStable)
+    {
+        mStableVersion++;
     }
 
     Get<Notifier>().Signal(OT_CHANGED_THREAD_NETDATA);
@@ -1185,9 +1190,9 @@ void Leader::StopContextReuseTimer(uint8_t aContextId)
 
 otError Leader::SendServerDataNotification(uint16_t aRloc16)
 {
-    otError error      = OT_ERROR_NONE;
-    bool    rlocIn     = false;
-    bool    rlocStable = false;
+    otError error = OT_ERROR_NONE;
+    bool    rlocIn;
+    bool    rlocStable;
 
     RlocLookup(aRloc16, rlocIn, rlocStable, mTlvs, mLength, kMatchModeRloc16);
 

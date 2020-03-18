@@ -119,7 +119,7 @@ otError KeyManager::SetMasterKey(const MasterKey &aKey)
     ComputeKey(mKeySequence, mKey);
 
     // reset parent frame counters
-    parent = Get<Mle::MleRouter>().GetParent();
+    parent = &Get<Mle::MleRouter>().GetParent();
     parent->SetKeySequence(0);
     parent->SetLinkFrameCounter(0);
     parent->SetMleFrameCounter(0);
@@ -133,7 +133,7 @@ otError KeyManager::SetMasterKey(const MasterKey &aKey)
     }
 
     // reset child frame counters
-    for (ChildTable::Iterator iter(GetInstance(), ChildTable::kInStateAnyExceptInvalid); !iter.IsDone(); iter++)
+    for (ChildTable::Iterator iter(GetInstance(), Child::kInStateAnyExceptInvalid); !iter.IsDone(); iter++)
     {
         iter.GetChild()->SetKeySequence(0);
         iter.GetChild()->SetLinkFrameCounter(0);
@@ -218,9 +218,15 @@ void KeyManager::IncrementMleFrameCounter(void)
     }
 }
 
+void KeyManager::SetKek(const Kek &aKek)
+{
+    mKek             = aKek;
+    mKekFrameCounter = 0;
+}
+
 void KeyManager::SetKek(const uint8_t *aKek)
 {
-    memcpy(mKek, aKek, sizeof(mKek));
+    memcpy(mKek.m8, aKek, sizeof(mKek));
     mKekFrameCounter = 0;
 }
 

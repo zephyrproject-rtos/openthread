@@ -40,12 +40,6 @@ SUBDIRS                                 = \
     platform                              \
     $(NULL)
 
-# Always pretty (e.g. for 'make pretty') these subdirectories.
-
-PRETTY_SUBDIRS                          = \
-    platform                              \
-    $(NULL)
-
 openthread_headers                      = \
     channel_manager.h                     \
     channel_monitor.h                     \
@@ -54,7 +48,6 @@ openthread_headers                      = \
     coap_secure.h                         \
     coap.h                                \
     commissioner.h                        \
-    config.h                              \
     crypto.h                              \
     border_agent.h                        \
     border_router.h                       \
@@ -91,6 +84,10 @@ openthreaddir = $(includedir)/openthread
 dist_openthread_HEADERS = $(openthread_headers)
 
 include_HEADERS                         = \
+    $(NULL)
+
+noinst_HEADERS                          = \
+    config.h                              \
     $(NULL)
 
 install-headers: install-includeHEADERS

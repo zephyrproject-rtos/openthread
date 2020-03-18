@@ -146,21 +146,21 @@ void NetworkDiagnostic::HandleDiagnosticGetResponse(void *               aContex
                                                     otError              aResult)
 {
     static_cast<NetworkDiagnostic *>(aContext)->HandleDiagnosticGetResponse(
-        *static_cast<Coap::Message *>(aMessage), *static_cast<const Ip6::MessageInfo *>(aMessageInfo), aResult);
+        static_cast<Coap::Message *>(aMessage), static_cast<const Ip6::MessageInfo *>(aMessageInfo), aResult);
 }
 
-void NetworkDiagnostic::HandleDiagnosticGetResponse(Coap::Message &         aMessage,
-                                                    const Ip6::MessageInfo &aMessageInfo,
+void NetworkDiagnostic::HandleDiagnosticGetResponse(Coap::Message *         aMessage,
+                                                    const Ip6::MessageInfo *aMessageInfo,
                                                     otError                 aResult)
 {
     VerifyOrExit(aResult == OT_ERROR_NONE);
-    VerifyOrExit(aMessage.GetCode() == OT_COAP_CODE_CHANGED);
+    VerifyOrExit(aMessage && aMessage->GetCode() == OT_COAP_CODE_CHANGED);
 
     otLogInfoNetDiag("Received diagnostic get response");
 
     if (mReceiveDiagnosticGetCallback)
     {
-        mReceiveDiagnosticGetCallback(&aMessage, &aMessageInfo, mReceiveDiagnosticGetCallbackContext);
+        mReceiveDiagnosticGetCallback(aMessage, aMessageInfo, mReceiveDiagnosticGetCallbackContext);
     }
 
 exit:
@@ -230,7 +230,7 @@ otError NetworkDiagnostic::AppendChildTable(Message &aMessage)
 
     tlv.Init();
 
-    count = Get<ChildTable>().GetNumChildren(ChildTable::kInStateValid);
+    count = Get<ChildTable>().GetNumChildren(Child::kInStateValid);
 
     // The length of the Child Table TLV may exceed the outgoing link's MTU (1280B).
     // As a workaround we limit the number of entries in the Child Table TLV,
@@ -245,7 +245,7 @@ otError NetworkDiagnostic::AppendChildTable(Message &aMessage)
 
     SuccessOrExit(error = aMessage.Append(&tlv, sizeof(ChildTableTlv)));
 
-    for (ChildTable::Iterator iter(GetInstance(), ChildTable::kInStateValid); !iter.IsDone(); iter++)
+    for (ChildTable::Iterator iter(GetInstance(), Child::kInStateValid); !iter.IsDone(); iter++)
     {
         VerifyOrExit(count--);
 
@@ -261,7 +261,7 @@ otError NetworkDiagnostic::AppendChildTable(Message &aMessage)
         entry.SetReserved(0);
         entry.SetTimeout(timeout + 4);
 
-        entry.SetChildId(Mle::Mle::GetChildId(child.GetRloc16()));
+        entry.SetChildId(Mle::Mle::ChildIdFromRloc16(child.GetRloc16()));
         entry.SetMode(child.GetDeviceMode());
 
         SuccessOrExit(error = aMessage.Append(&entry, sizeof(ChildTableEntry)));
@@ -313,7 +313,7 @@ otError NetworkDiagnostic::FillRequestedTlvs(Message &             aRequest,
             ExtMacAddressTlv tlv;
             tlv.Init();
             tlv.SetMacAddr(Get<Mac::Mac>().GetExtAddress());
-            SuccessOrExit(error = aResponse.AppendTlv(tlv));
+            SuccessOrExit(error = tlv.AppendTo(aResponse));
             break;
         }
 
@@ -322,7 +322,7 @@ otError NetworkDiagnostic::FillRequestedTlvs(Message &             aRequest,
             Address16Tlv tlv;
             tlv.Init();
             tlv.SetRloc16(Get<Mle::MleRouter>().GetRloc16());
-            SuccessOrExit(error = aResponse.AppendTlv(tlv));
+            SuccessOrExit(error = tlv.AppendTo(aResponse));
             break;
         }
 
@@ -331,7 +331,7 @@ otError NetworkDiagnostic::FillRequestedTlvs(Message &             aRequest,
             ModeTlv tlv;
             tlv.Init();
             tlv.SetMode(Get<Mle::MleRouter>().GetDeviceMode());
-            SuccessOrExit(error = aResponse.AppendTlv(tlv));
+            SuccessOrExit(error = tlv.AppendTo(aResponse));
             break;
         }
 
@@ -342,7 +342,7 @@ otError NetworkDiagnostic::FillRequestedTlvs(Message &             aRequest,
                 TimeoutTlv tlv;
                 tlv.Init();
                 tlv.SetTimeout(Get<Mle::MleRouter>().GetTimeout());
-                SuccessOrExit(error = aResponse.AppendTlv(tlv));
+                SuccessOrExit(error = tlv.AppendTo(aResponse));
             }
 
             break;
@@ -353,7 +353,7 @@ otError NetworkDiagnostic::FillRequestedTlvs(Message &             aRequest,
             ConnectivityTlv tlv;
             tlv.Init();
             Get<Mle::MleRouter>().FillConnectivityTlv(reinterpret_cast<Mle::ConnectivityTlv &>(tlv));
-            SuccessOrExit(error = aResponse.AppendTlv(tlv));
+            SuccessOrExit(error = tlv.AppendTo(aResponse));
             break;
         }
 
@@ -363,26 +363,39 @@ otError NetworkDiagnostic::FillRequestedTlvs(Message &             aRequest,
             RouteTlv tlv;
             tlv.Init();
             Get<Mle::MleRouter>().FillRouteTlv(reinterpret_cast<Mle::RouteTlv &>(tlv));
-            SuccessOrExit(error = aResponse.AppendTlv(tlv));
+            SuccessOrExit(error = tlv.AppendTo(aResponse));
             break;
         }
 #endif
 
         case NetworkDiagnosticTlv::kLeaderData:
         {
-            LeaderDataTlv tlv(reinterpret_cast<const LeaderDataTlv &>(Get<Mle::MleRouter>().GetLeaderDataTlv()));
+            LeaderDataTlv          tlv;
+            const Mle::LeaderData &leaderData = Get<Mle::MleRouter>().GetLeaderData();
+
             tlv.Init();
-            SuccessOrExit(error = aResponse.AppendTlv(tlv));
+            tlv.SetPartitionId(leaderData.GetPartitionId());
+            tlv.SetWeighting(leaderData.GetWeighting());
+            tlv.SetDataVersion(leaderData.GetDataVersion());
+            tlv.SetStableDataVersion(leaderData.GetStableDataVersion());
+            tlv.SetLeaderRouterId(leaderData.GetLeaderRouterId());
+
+            SuccessOrExit(error = tlv.AppendTo(aResponse));
             break;
         }
 
         case NetworkDiagnosticTlv::kNetworkData:
         {
             NetworkDataTlv tlv;
+            uint8_t        length;
+
             tlv.Init();
 
-            Get<Mle::MleRouter>().FillNetworkDataTlv((reinterpret_cast<Mle::NetworkDataTlv &>(tlv)), false);
-            SuccessOrExit(error = aResponse.AppendTlv(tlv));
+            length = sizeof(NetworkDataTlv) - sizeof(Tlv); // sizeof( NetworkDataTlv::mNetworkData )
+            Get<NetworkData::Leader>().GetNetworkData(/* aStableOnly */ false, tlv.GetNetworkData(), length);
+            tlv.SetLength(length);
+
+            SuccessOrExit(error = tlv.AppendTo(aResponse));
             break;
         }
 
@@ -398,7 +411,7 @@ otError NetworkDiagnostic::FillRequestedTlvs(Message &             aRequest,
             memset(&tlv, 0, sizeof(tlv));
             tlv.Init();
             FillMacCountersTlv(tlv);
-            SuccessOrExit(error = aResponse.AppendTlv(tlv));
+            SuccessOrExit(error = tlv.AppendTo(aResponse));
             break;
         }
 
@@ -446,7 +459,7 @@ otError NetworkDiagnostic::FillRequestedTlvs(Message &             aRequest,
             }
 
             tlv.SetLength(length);
-            SuccessOrExit(error = aResponse.AppendTlv(tlv));
+            SuccessOrExit(error = tlv.AppendTo(aResponse));
             break;
         }
 
@@ -459,7 +472,7 @@ otError NetworkDiagnostic::FillRequestedTlvs(Message &             aRequest,
                 MaxChildTimeoutTlv tlv;
                 tlv.Init();
                 tlv.SetTimeout(maxTimeout);
-                SuccessOrExit(error = aResponse.AppendTlv(tlv));
+                SuccessOrExit(error = tlv.AppendTo(aResponse));
             }
 
             break;

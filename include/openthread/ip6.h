@@ -52,9 +52,10 @@ extern "C" {
  *
  */
 
-#define OT_IP6_PREFIX_SIZE 8   ///< Size of an IPv6 prefix (bytes)
-#define OT_IP6_IID_SIZE 8      ///< Size of an IPv6 Interface Identifier (bytes)
-#define OT_IP6_ADDRESS_SIZE 16 ///< Size of an IPv6 address (bytes)
+#define OT_IP6_PREFIX_SIZE 8                           ///< Size of an IPv6 prefix (bytes)
+#define OT_IP6_PREFIX_BITSIZE (OT_IP6_PREFIX_SIZE * 8) ///< Size of an IPv6 prefix (bits)
+#define OT_IP6_IID_SIZE 8                              ///< Size of an IPv6 Interface Identifier (bytes)
+#define OT_IP6_ADDRESS_SIZE 16                         ///< Size of an IPv6 address (bytes)
 
 /**
  * @struct otIp6Address
@@ -87,7 +88,7 @@ OT_TOOL_PACKED_BEGIN
 struct otIp6Prefix
 {
     otIp6Address mPrefix; ///< The IPv6 prefix.
-    uint8_t      mLength; ///< The IPv6 prefix length.
+    uint8_t      mLength; ///< The IPv6 prefix length (in bits).
 } OT_TOOL_PACKED_END;
 
 /**
@@ -103,7 +104,7 @@ typedef struct otIp6Prefix otIp6Prefix;
 typedef struct otNetifAddress
 {
     otIp6Address           mAddress;                ///< The IPv6 unicast address.
-    uint8_t                mPrefixLength;           ///< The Prefix length.
+    uint8_t                mPrefixLength;           ///< The Prefix length (in bits).
     bool                   mPreferred : 1;          ///< TRUE if the address is preferred, FALSE otherwise.
     bool                   mValid : 1;              ///< TRUE if the address is valid, FALSE otherwise.
     bool                   mScopeOverrideValid : 1; ///< TRUE if the mScopeOverride value is valid, FALSE otherwise.

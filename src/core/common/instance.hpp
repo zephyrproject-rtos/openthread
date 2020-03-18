@@ -168,7 +168,7 @@ public:
      *
      */
     otLogLevel GetLogLevel(void) const
-#if OPENTHREAD_CONFIG_ENABLE_DYNAMIC_LOG_LEVEL
+#if OPENTHREAD_CONFIG_LOG_LEVEL_DYNAMIC_ENABLE
     {
         return mLogLevel;
     }
@@ -178,7 +178,7 @@ public:
     }
 #endif
 
-#if OPENTHREAD_CONFIG_ENABLE_DYNAMIC_LOG_LEVEL
+#if OPENTHREAD_CONFIG_LOG_LEVEL_DYNAMIC_ENABLE
     /**
      * This method sets the log level.
      *
@@ -214,55 +214,17 @@ public:
      */
     otError ErasePersistentInfo(void);
 
-    /**
-     * This method registers the active scan callback.
-     *
-     * Subsequent calls to this method will overwrite the previous callback handler.
-     *
-     * @param[in]  aCallback   A pointer to the callback function pointer.
-     * @param[in]  aContext    A pointer to application-specific context.
-     *
-     */
-    void RegisterActiveScanCallback(otHandleActiveScanResult aCallback, void *aContext);
-
-    /**
-     * This method invokes the previously registered active scan callback with a given scan result.
-     *
-     * @param[in]  aResult     A pointer to active scan result.
-     *
-     */
-    void InvokeActiveScanCallback(otActiveScanResult *aResult) const;
-
-    /**
-     * This method registers the energy scan callback.
-     *
-     * Subsequent calls to this method will overwrite the previous callback handler.
-     *
-     * @param[in]  aCallback   A pointer to the callback function pointer.
-     * @param[in]  aContext    A pointer to application-specific context.
-     *
-     */
-    void RegisterEnergyScanCallback(otHandleEnergyScanResult aCallback, void *aContext);
-
-    /**
-     * This method invokes the previously registered energy scan callback with a given result.
-     *
-     * @param[in]  aResult     A pointer to energy scan result.
-     *
-     */
-    void InvokeEnergyScanCallback(otEnergyScanResult *aResult) const;
-
 #if OPENTHREAD_CONFIG_HEAP_EXTERNAL_ENABLE
     void HeapFree(void *aPointer)
     {
-        assert(mFree != NULL);
+        OT_ASSERT(mFree != NULL);
 
         mFree(aPointer);
     }
 
     void *HeapCAlloc(size_t aCount, size_t aSize)
     {
-        assert(mCAlloc != NULL);
+        OT_ASSERT(mCAlloc != NULL);
 
         return mCAlloc(aCount, aSize);
     }
@@ -365,11 +327,6 @@ private:
     Settings    mSettings;
     MessagePool mMessagePool;
 
-    otHandleActiveScanResult mActiveScanCallback;
-    void *                   mActiveScanCallbackContext;
-    otHandleEnergyScanResult mEnergyScanCallback;
-    void *                   mEnergyScanCallbackContext;
-
     Ip6::Ip6    mIp6;
     ThreadNetif mThreadNetif;
 
@@ -398,7 +355,7 @@ private:
     Mac::LinkRaw mLinkRaw;
 #endif // OPENTHREAD_RADIO || OPENTHREAD_CONFIG_LINK_RAW_ENABLE
 
-#if OPENTHREAD_CONFIG_ENABLE_DYNAMIC_LOG_LEVEL
+#if OPENTHREAD_CONFIG_LOG_LEVEL_DYNAMIC_ENABLE
     otLogLevel mLogLevel;
 #endif
 #if OPENTHREAD_ENABLE_VENDOR_EXTENSION

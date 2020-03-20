@@ -3,6 +3,7 @@ if(CONFIG_NET_L2_OPENTHREAD)
 # OpenThread options
 set(OT_BUILD_EXECUTABLES OFF CACHE BOOL "Disable OpenThread samples")
 set(OT_BUILTIN_MBEDTLS OFF CACHE BOOL "Use Zephry's mbedTLS")
+set(OT_BUILTIN_MBEDTLS_MANAGEMENT OFF CACHE BOOL "Use Zephyr's mbedTLS heap")
 set(OT_PLATFORM "zephyr" CACHE STRING "Zephyr as a target platform")
 
 if(CONFIG_OPENTHREAD_COMMISSIONER)

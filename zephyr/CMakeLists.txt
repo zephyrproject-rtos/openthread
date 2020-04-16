@@ -62,6 +62,9 @@ if(CONFIG_OPENTHREAD_UDP_FORWARD)
   set(OT_UDP_FORWARD ON CACHE BOOL "Enable UDP Forward")
 endif()
 
+if(CONFIG_OPENTHREAD_COAP)
+  set(OT_COAP ON CACHE BOOL "Enable CoAP api")
+endif()
 
 # Zephyr libc capabilies
 set(HAVE_STRLCPY OFF CACHE BOOL "Zephyr's minimal libc does not provide strlcpy")

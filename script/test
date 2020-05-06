@@ -32,14 +32,29 @@
 
 set -euo pipefail
 
-readonly OT_BUILD_JOBS=$(getconf _NPROCESSORS_ONLN)
 readonly OT_BUILDDIR="$(pwd)/build"
 readonly OT_SRCDIR="$(pwd)"
 readonly OT_TEST_COMMON_OPTIONS=(
+    "-DOT_BORDER_AGENT=ON"
+    "-DOT_BORDER_ROUTER=ON"
+    "-DOT_CHANNEL_MANAGER=ON"
+    "-DOT_CHANNEL_MONITOR=ON"
     "-DOT_CHILD_SUPERVISION=ON"
+    "-DOT_COAP=ON"
+    "-DOT_COAPS=ON"
+    "-DOT_COMMISSIONER=ON"
     "-DOT_COVERAGE=ON"
+    "-DOT_DHCP6_CLIENT=ON"
+    "-DOT_DHCP6_SERVER=ON"
+    "-DOT_DIAGNOSTIC=ON"
+    "-DOT_IP6_FRAGM=ON"
+    "-DOT_JAM_DETECTION=ON"
+    "-DOT_JOINER=ON"
+    "-DOT_LOG_LEVEL_DYNAMIC=ON"
     "-DOT_MAC_FILTER=ON"
     "-DOT_REFERENCE_DEVICE=ON"
+    "-DOT_SERVICE=ON"
+    "-DOT_SLAAC=ON"
 )
 
 readonly COLOR_PASS='\033[0;32m'
@@ -62,6 +77,12 @@ build_simulation()
         "-DOT_THREAD_VERSION=${version}"
     )
 
+    if [[ "${version}" == "1.2" ]]; then
+        options+=(
+            "-DOT_DUA=ON"
+        )
+    fi
+
     if [[ "${VIRTUAL_TIME}" == 1 ]]; then
         options+=("-DOT_SIMULATION_VIRTUAL_TIME=ON")
 
@@ -74,9 +95,24 @@ build_simulation()
     local builddir="${OT_BUILDDIR}/cmake/openthread-simulation-${version}"
     (mkdir -p "${builddir}" \
         && cd "${builddir}" \
-        && cmake -GNinja "${OT_SRCDIR}" "${options[@]}" \
+        && cmake -GNinja "${options[@]}" "${ot_extra_options[@]}" "${OT_SRCDIR}" \
         && ninja)
 
+    if [[ "${version}" == "1.2" ]]; then
+
+        options+=(
+        "-DOT_BACKBONE_ROUTER=ON"
+        "-DOT_BORDER_ROUTER=ON"
+        "-DOT_SERVICE=ON"
+        )
+
+        local builddir="${OT_BUILDDIR}/cmake/openthread-simulation-${version}-bbr"
+        (mkdir -p "${builddir}" \
+            && cd "${builddir}" \
+            && cmake -GNinja "${options[@]}" "${ot_extra_options[@]}" "${OT_SRCDIR}" \
+            && ninja)
+
+    fi
 }
 
 build_posix()
@@ -86,8 +122,16 @@ build_posix()
 
     options+=(
         "-DOT_PLATFORM=posix"
+        "-DOT_POSIX_MAX_POWER_TABLE=ON"
+        "-DOT_READLINE=readline"
         "-DOT_THREAD_VERSION=${version}"
     )
+
+    if [[ "${version}" == "1.2" ]]; then
+        options+=(
+            "-DOT_DUA=ON"
+        )
+    fi
 
     if [[ "${VIRTUAL_TIME}" == 1 ]]; then
         options+=("-DOT_POSIX_VIRTUAL_TIME=ON")
@@ -96,8 +140,23 @@ build_posix()
     local builddir="${OT_BUILDDIR}/cmake/openthread-posix-${version}"
     (mkdir -p "${builddir}" \
         && cd "${builddir}" \
-        && cmake -GNinja "${OT_SRCDIR}" "${options[@]}" \
+        && cmake -GNinja "${options[@]}" "${ot_extra_options[@]}" "${OT_SRCDIR}" \
         && ninja)
+
+    if [[ "${version}" == "1.2" ]]; then
+
+        options+=(
+        "-DOT_BACKBONE_ROUTER=ON"
+        "-DOT_BORDER_ROUTER=ON"
+        "-DOT_SERVICE=ON"
+        )
+
+        local builddir="${OT_BUILDDIR}/cmake/openthread-posix-${version}-bbr"
+        (mkdir -p "${builddir}" \
+            && cd "${builddir}" \
+            && cmake -GNinja "${options[@]}" "${ot_extra_options[@]}" "${OT_SRCDIR}" \
+            && ninja)
+    fi
 }
 
 do_build() {
@@ -121,11 +180,23 @@ do_clean() {
     rm -rfv "${OT_BUILDDIR}"
 }
 
+do_unit() {
+    local builddir="${OT_BUILDDIR}/cmake/openthread-simulation-${THREAD_VERSION}"
+    if [[ ! -d "${builddir}" ]]; then
+        echo "Cannot find build directory!"
+        exit -1
+    fi
+
+    cd "${builddir}"
+    ninja test
+}
+
 do_cert() {
     export top_builddir="${OT_BUILDDIR}/cmake/openthread-simulation-${THREAD_VERSION}"
 
     if [[ "${THREAD_VERSION}" == "1.2" ]]; then
         export top_builddir_1_1="${OT_BUILDDIR}/cmake/openthread-simulation-1.1"
+        export top_builddir_1_2_bbr="${OT_BUILDDIR}/cmake/openthread-simulation-1.2-bbr"
     fi
 
     [[ ! -d tmp ]] || rm -rvf tmp
@@ -137,6 +208,7 @@ do_cert_suite() {
 
     if [[ "${THREAD_VERSION}" == "1.2" ]]; then
         export top_builddir_1_1="${OT_BUILDDIR}/cmake/openthread-simulation-1.1"
+        export top_builddir_1_2_bbr="${OT_BUILDDIR}/cmake/openthread-simulation-1.2-bbr"
     fi
 
     local pass_count=0
@@ -145,7 +217,7 @@ do_cert_suite() {
     [[ ! -f fail.log ]] || rm fail.log
 
     for test_case in "$@"; do
-        [[ ! -d tmp ]] || rm -rf tmp
+        rm -rf tmp
         if "${test_case}" &> test.log; then
             echo -e "${COLOR_PASS}PASS${COLOR_NONE} ${test_case}"
             pass_count=$(( pass_count + 1 ))
@@ -176,6 +248,40 @@ do_cert_suite() {
     fi
 }
 
+do_expect()
+{
+    local ot_command
+    local rcp_command=
+    local test_pattern
+
+    if [[ "${NODE_MODE}" == rcp ]]; then
+        ot_command="${OT_CLI_PATH}"
+        rcp_command="${RADIO_DEVICE}"
+        test_pattern='posix-*.exp'
+    else
+        ot_command="${OT_BUILDDIR}/cmake/openthread-simulation-${THREAD_VERSION}/examples/apps/cli/ot-cli-ftd"
+        test_pattern='cli-*.exp'
+    fi
+
+    while read -r script; do
+        rm -rf tmp
+        OT_COMMAND="${ot_command}" RCP_COMMAND="${rcp_command}" "${script}" || {
+            local exit_code=$?
+            echo -e "${COLOR_FAIL}FAIL${COLOR_NONE} ${script}"
+            exit "${exit_code}"
+        }
+        echo -e "${COLOR_PASS}PASS${COLOR_NONE} ${script}"
+    done < <(
+        if [[ $# != 0 ]]; then
+            for script in "$@"; do echo ${script}; done
+        else
+            find tests/scripts/expect -type f -executable -name "${test_pattern}"
+        fi
+    )
+
+    exit 0
+}
+
 print_usage() {
     echo "USAGE: [ENVIRONMENTS] $0 COMMANDS
 
@@ -191,6 +297,8 @@ COMMANDS:
     build           Build project for running tests. This can be used to rebuild the project for changes.
     cert            Run a single thread-cert test. ENVIRONMENTS should be the same as those given to build or update.
     cert_suite      Run a batch of thread-cert tests and summarize the test results. Only echo logs for failing tests.
+    unit            Run all the unit tests. This should be called after simulation is built.
+    expect          Run expect tests.
     help            Print this help.
 
 EXAMPLES:
@@ -213,6 +321,12 @@ EXAMPLES:
     # Test Thread 1.2 with real time
     THREAD_VERSION=1.2 VIRTUAL_TIME=0 $0 clean build cert tests/scripts/thread-cert/v1_2_router_5_1_1.py
     THREAD_VERSION=1.2 VIRTUAL_TIME=0 $0 clean build cert_suite tests/scripts/thread-cert/v1_2_*
+
+    # Run a single expect test
+    $0 clean build expect tests/scripts/expect/log-level.exp
+
+    # Run all expect tests
+    $0 clean build expect
     "
 
     exit "$1"
@@ -220,24 +334,39 @@ EXAMPLES:
 
 do_package() {
     local builddir="${OT_BUILDDIR}/cmake/openthread-sim"
+    local options=(
+        "-DOT_BORDER_AGENT=ON"
+        "-DOT_BORDER_ROUTER=ON"
+        "-DOT_CHILD_SUPERVISION=ON"
+        "-DOT_COMMISSIONER=ON"
+        "-DOT_DIAGNOSTIC=ON"
+        "-DOT_IP6_FRAGM=ON"
+        "-DOT_JAM_DETECTION=ON"
+        "-DOT_JOINER=ON"
+        "-DOT_LOG_LEVEL_DYNAMIC=ON"
+        "-DOT_MAC_FILTER=ON"
+        "-DOT_SERVICE=ON"
+        "-DOT_SLAAC=ON"
+    )
     (mkdir -p "${builddir}" \
         && cd "${builddir}" \
-        && cmake "${OT_SRCDIR}" -DOT_PLATFORM="simulation" \
-        && make -j"${OT_BUILD_JOBS}" package \
+        && cmake -GNinja -DOT_PLATFORM="simulation" "${options[@]}" "${ot_extra_options[@]}" "${OT_SRCDIR}" \
+        && ninja package \
         && ls "${builddir}"/openthread-simulation-*.deb)
 
     builddir="${OT_BUILDDIR}/cmake/openthread-host"
     (mkdir -p "${builddir}" \
         && cd "${builddir}" \
-        && cmake "${OT_SRCDIR}" -DOT_PLATFORM="posix" \
-        && make -j"${OT_BUILD_JOBS}" package \
+        && cmake -GNinja -DOT_PLATFORM="posix" "${options[@]}" "${ot_extra_options[@]}" "${OT_SRCDIR}" \
+        && ninja package \
         && ls "${builddir}"/openthread-standalone-*.deb)
 
     builddir="${OT_BUILDDIR}/cmake/openthread-daemon"
     (mkdir -p "${builddir}" \
         && cd "${builddir}" \
-        && cmake "${OT_SRCDIR}" -DOT_PLATFORM="posix" -DOT_DAEMON=1 -DOT_PLATFORM_NETIF=1 -DOT_PLATFORM_UDP=1 \
-        && make -j"${OT_BUILD_JOBS}" package \
+        && cmake -GNinja -DOT_PLATFORM="posix" \
+        -DOT_DAEMON=1 -DOT_PLATFORM_NETIF=1 -DOT_PLATFORM_UDP=1 "${options[@]}" "${ot_extra_options[@]}" "${OT_SRCDIR}" \
+        && ninja package \
         && ls "${builddir}"/openthread-daemon-*.deb)
 }
 
@@ -252,6 +381,8 @@ envsetup()
             export RADIO_DEVICE_1_1="${OT_BUILDDIR}/cmake/openthread-simulation-1.1/examples/apps/ncp/ot-rcp"
             export OT_CLI_PATH_1_1="${OT_BUILDDIR}/cmake/openthread-posix-1.1/src/posix/ot-cli"
             export OT_NCP_PATH_1_1="${OT_BUILDDIR}/cmake/openthread-posix-1.1/src/posix/ot-ncp"
+            export OT_CLI_PATH_1_2_BBR="${OT_BUILDDIR}/cmake/openthread-posix-1.2-bbr/src/posix/ot-cli"
+            export OT_NCP_PATH_1_2_BBR="${OT_BUILDDIR}/cmake/openthread-posix-1.2-bbr/src/posix/ot-ncp"
         fi
     fi
 
@@ -263,6 +394,9 @@ envsetup()
     else
         export -n VERBOSE
     fi
+
+    read -r -a ot_extra_options <<< "${OT_OPTIONS-}"
+    ot_extra_options=${ot_extra_options:-()}
 }
 
 main()
@@ -294,11 +428,18 @@ main()
                 shift
                 do_cert_suite "$@"
                 ;;
+            unit)
+                do_unit
+                ;;
             help)
                 print_usage
                 ;;
             package)
                 do_package
+                ;;
+            expect)
+                shift
+                do_expect "$@"
                 ;;
         esac
         shift

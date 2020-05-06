@@ -58,26 +58,6 @@
 #endif
 
 /**
- * @def OPENTHREAD_POSIX_CONFIG_RCP_UART_ENABLE
- *
- * Define as 1 to enable UART interface to RCP.
- *
- */
-#ifndef OPENTHREAD_POSIX_CONFIG_RCP_UART_ENABLE
-#define OPENTHREAD_POSIX_CONFIG_RCP_UART_ENABLE 0
-#endif
-
-/**
- * @def OPENTHREAD_POSIX_CONFIG_RCP_SPI_ENABLE
- *
- * Define as 1 to enable SPI interface to RCP.
- *
- */
-#ifndef OPENTHREAD_POSIX_CONFIG_RCP_SPI_ENABLE
-#define OPENTHREAD_POSIX_CONFIG_RCP_SPI_ENABLE 0
-#endif
-
-/**
  * @def OPENTHREAD_POSIX_CONFIG_DAEMON_ENABLE
  *
  * Define to 1 to enable POSIX daemon.
@@ -85,6 +65,40 @@
  */
 #ifndef OPENTHREAD_POSIX_CONFIG_DAEMON_ENABLE
 #define OPENTHREAD_POSIX_CONFIG_DAEMON_ENABLE 0
+#endif
+
+/**
+ * RCP bus UART.
+ *
+ * @note This value is also for simulated UART bus.
+ *
+ */
+#define OT_POSIX_RCP_BUS_UART 1
+
+/**
+ * RCP bus SPI.
+ *
+ */
+#define OT_POSIX_RCP_BUS_SPI 2
+
+/**
+ * @def OPENTHREAD_POSIX_CONFIG_RCP_BUS
+ *
+ * This setting configures what type of RCP bus to use.
+ *
+ */
+#ifndef OPENTHREAD_POSIX_CONFIG_RCP_BUS
+#define OPENTHREAD_POSIX_CONFIG_RCP_BUS OT_POSIX_RCP_BUS_UART
+#endif
+
+/**
+ * @def OPENTHREAD_POSIX_CONFIG_MAX_POWER_TABLE_ENABLE
+ *
+ * Define as 1 to enable max power table support.
+ *
+ */
+#ifndef OPENTHREAD_POSIX_CONFIG_MAX_POWER_TABLE_ENABLE
+#define OPENTHREAD_POSIX_CONFIG_MAX_POWER_TABLE_ENABLE 0
 #endif
 
 #endif // OPENTHREAD_PLATFORM_CONFIG_H_

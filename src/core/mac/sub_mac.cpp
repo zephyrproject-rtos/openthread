@@ -130,7 +130,7 @@ otError SubMac::Enable(void)
 {
     otError error = OT_ERROR_NONE;
 
-    VerifyOrExit(mState == kStateDisabled);
+    VerifyOrExit(mState == kStateDisabled, OT_NOOP);
 
     SuccessOrExit(error = Get<Radio>().Enable());
     SuccessOrExit(error = Get<Radio>().Sleep());
@@ -207,7 +207,7 @@ otError SubMac::Send(void)
     case kStateTransmit:
     case kStateEnergyScan:
         ExitNow(error = OT_ERROR_INVALID_STATE);
-        break;
+        OT_UNREACHABLE_CODE(break);
 
     case kStateSleep:
     case kStateReceive:
@@ -230,14 +230,6 @@ void SubMac::StartCsmaBackoff(void)
     SetState(kStateCsmaBackoff);
 
     VerifyOrExit(ShouldHandleCsmaBackOff(), BeginTransmit());
-
-#if OPENTHREAD_CONFIG_MAC_DISABLE_CSMA_CA_ON_LAST_ATTEMPT
-    if ((mTransmitRetries > 0) && (mTransmitRetries == mTransmitFrame.GetMaxFrameRetries()))
-    {
-        BeginTransmit();
-        ExitNow();
-    }
-#endif
 
     if (backoffExponent > kMaxBE)
     {
@@ -272,18 +264,9 @@ void SubMac::BeginTransmit(void)
 
     OT_UNUSED_VARIABLE(error);
 
-    VerifyOrExit(mState == kStateCsmaBackoff);
+    VerifyOrExit(mState == kStateCsmaBackoff, OT_NOOP);
 
-#if OPENTHREAD_CONFIG_MAC_DISABLE_CSMA_CA_ON_LAST_ATTEMPT
-    if ((mTransmitRetries > 0) && (mTransmitRetries == mTransmitFrame.GetMaxFrameRetries()))
-    {
-        mTransmitFrame.SetCsmaCaEnabled(false);
-    }
-    else
-#endif
-    {
-        mTransmitFrame.SetCsmaCaEnabled(true);
-    }
+    mTransmitFrame.SetCsmaCaEnabled(true);
 
     if ((mRadioCaps & OT_RADIO_CAPS_SLEEP_TO_TX) == 0)
     {
@@ -508,7 +491,7 @@ bool SubMac::ShouldHandleCsmaBackOff(void) const
     VerifyOrExit(!RadioSupportsCsmaBackoff(), swCsma = false);
 
 #if OPENTHREAD_CONFIG_LINK_RAW_ENABLE
-    VerifyOrExit(Get<LinkRaw>().IsEnabled());
+    VerifyOrExit(Get<LinkRaw>().IsEnabled(), OT_NOOP);
 #endif
 
 #if OPENTHREAD_CONFIG_LINK_RAW_ENABLE || OPENTHREAD_RADIO
@@ -526,7 +509,7 @@ bool SubMac::ShouldHandleAckTimeout(void) const
     VerifyOrExit(!RadioSupportsAckTimeout(), swAckTimeout = false);
 
 #if OPENTHREAD_CONFIG_LINK_RAW_ENABLE
-    VerifyOrExit(Get<LinkRaw>().IsEnabled());
+    VerifyOrExit(Get<LinkRaw>().IsEnabled(), OT_NOOP);
 #endif
 
 #if OPENTHREAD_CONFIG_LINK_RAW_ENABLE || OPENTHREAD_RADIO
@@ -544,7 +527,7 @@ bool SubMac::ShouldHandleRetries(void) const
     VerifyOrExit(!RadioSupportsRetries(), swRetries = false);
 
 #if OPENTHREAD_CONFIG_LINK_RAW_ENABLE
-    VerifyOrExit(Get<LinkRaw>().IsEnabled());
+    VerifyOrExit(Get<LinkRaw>().IsEnabled(), OT_NOOP);
 #endif
 
 #if OPENTHREAD_CONFIG_LINK_RAW_ENABLE || OPENTHREAD_RADIO
@@ -562,7 +545,7 @@ bool SubMac::ShouldHandleEnergyScan(void) const
     VerifyOrExit(!RadioSupportsEnergyScan(), swEnergyScan = false);
 
 #if OPENTHREAD_CONFIG_LINK_RAW_ENABLE
-    VerifyOrExit(Get<LinkRaw>().IsEnabled());
+    VerifyOrExit(Get<LinkRaw>().IsEnabled(), OT_NOOP);
 #endif
 
 #if OPENTHREAD_CONFIG_LINK_RAW_ENABLE || OPENTHREAD_RADIO

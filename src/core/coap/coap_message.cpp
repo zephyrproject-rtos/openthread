@@ -286,7 +286,7 @@ otError Message::SetToken(uint8_t aTokenLength)
 
     OT_ASSERT(aTokenLength <= sizeof(token));
 
-    Random::NonCrypto::FillBuffer(token, aTokenLength);
+    Random::Crypto::FillBuffer(token, aTokenLength);
 
     return SetToken(token, aTokenLength);
 }
@@ -304,7 +304,7 @@ Message *Message::Clone(uint16_t aLength) const
 {
     Message *message = static_cast<Message *>(ot::Message::Clone(aLength));
 
-    VerifyOrExit(message != NULL);
+    VerifyOrExit(message != NULL, OT_NOOP);
 
     memcpy(&message->GetHelpData(), &GetHelpData(), sizeof(GetHelpData()));
 
@@ -570,13 +570,12 @@ otError OptionIterator::GetOptionValue(uint64_t &aValue) const
 {
     otError error = OT_ERROR_NONE;
     uint8_t value[sizeof(aValue)];
-    uint8_t pos = 0;
 
     VerifyOrExit(mOption.mLength <= sizeof(aValue), error = OT_ERROR_NO_BUFS);
     SuccessOrExit(error = GetOptionValue(value));
 
     aValue = 0;
-    for (pos = 0; pos < mOption.mLength; pos++)
+    for (uint16_t pos = 0; pos < mOption.mLength; pos++)
     {
         aValue <<= 8;
         aValue |= value[pos];

@@ -58,6 +58,7 @@ LEGACY                               ?= 1
 LINK_RAW                             ?= 0
 LOG_OUTPUT                           ?= PLATFORM_DEFINED
 MAC_FILTER                           ?= 1
+MAX_POWER_TABLE                      ?= 1
 MTD_NETDIAG                          ?= 1
 READLINE                             ?= readline
 REFERENCE_DEVICE                     ?= 1
@@ -95,6 +96,10 @@ ifneq ($(HOST),)
 configure_OPTIONS              += --host=$(HOST)
 endif
 
+ifeq ($(MAX_POWER_TABLE),1)
+COMMONCFLAGS                   += -DOPENTHREAD_POSIX_CONFIG_MAX_POWER_TABLE_ENABLE=1
+endif
+
 ifeq ($(PLATFORM_NETIF),1)
 COMMONCFLAGS                   += -DOPENTHREAD_CONFIG_PLATFORM_NETIF_ENABLE=1
 endif
@@ -103,10 +108,10 @@ ifneq ($(READLINE),)
 configure_OPTIONS              += --with-readline=$(READLINE)
 endif
 
-ifeq ($(RCP_SPI),1)
-COMMONCFLAGS                   += -DOPENTHREAD_POSIX_CONFIG_RCP_SPI_ENABLE=1
+ifeq ($(RCP_BUS),spi)
+COMMONCFLAGS                   += -DOPENTHREAD_POSIX_CONFIG_RCP_BUS=OT_POSIX_RCP_BUS_SPI
 else
-COMMONCFLAGS                   += -DOPENTHREAD_POSIX_CONFIG_RCP_UART_ENABLE=1
+COMMONCFLAGS                   += -DOPENTHREAD_POSIX_CONFIG_RCP_BUS=OT_POSIX_RCP_BUS_UART
 endif
 
 ifeq ($(VIRTUAL_TIME),1)

@@ -58,6 +58,22 @@ otError otThreadSetMaxAllowedChildren(otInstance *aInstance, uint16_t aMaxChildr
     return instance.Get<ChildTable>().SetMaxChildrenAllowed(aMaxChildren);
 }
 
+uint8_t otThreadGetMaxChildIpAddresses(otInstance *aInstance)
+{
+    Instance &instance = *static_cast<Instance *>(aInstance);
+
+    return instance.Get<Mle::MleRouter>().GetMaxChildIpAddresses();
+}
+
+#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
+otError otThreadSetMaxChildIpAddresses(otInstance *aInstance, uint8_t aMaxIpAddresses)
+{
+    Instance &instance = *static_cast<Instance *>(aInstance);
+
+    return instance.Get<Mle::MleRouter>().SetMaxChildIpAddresses(aMaxIpAddresses);
+}
+#endif
+
 bool otThreadIsRouterEligible(otInstance *aInstance)
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
@@ -185,16 +201,16 @@ otError otThreadBecomeRouter(otInstance *aInstance)
 
     switch (instance.Get<Mle::MleRouter>().GetRole())
     {
-    case OT_DEVICE_ROLE_DISABLED:
-    case OT_DEVICE_ROLE_DETACHED:
+    case Mle::kRoleDisabled:
+    case Mle::kRoleDetached:
         break;
 
-    case OT_DEVICE_ROLE_CHILD:
+    case Mle::kRoleChild:
         error = instance.Get<Mle::MleRouter>().BecomeRouter(ThreadStatusTlv::kHaveChildIdRequest);
         break;
 
-    case OT_DEVICE_ROLE_ROUTER:
-    case OT_DEVICE_ROLE_LEADER:
+    case Mle::kRoleRouter:
+    case Mle::kRoleLeader:
         error = OT_ERROR_NONE;
         break;
     }
@@ -300,12 +316,13 @@ otError otThreadGetRouterInfo(otInstance *aInstance, uint16_t aRouterId, otRoute
     return instance.Get<RouterTable>().GetRouterInfo(aRouterId, *aRouterInfo);
 }
 
-otError otThreadGetEidCacheEntry(otInstance *aInstance, uint8_t aIndex, otEidCacheEntry *aEntry)
+otError otThreadGetNextCacheEntry(otInstance *aInstance, otCacheEntryInfo *aEntryInfo, otCacheEntryIterator *aIterator)
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    OT_ASSERT(aEntry != NULL);
-    return instance.Get<AddressResolver>().GetEntry(aIndex, *aEntry);
+    OT_ASSERT((aIterator != NULL) && (aEntryInfo != NULL));
+
+    return instance.Get<AddressResolver>().GetNextCacheEntry(*aEntryInfo, *aIterator);
 }
 
 #if OPENTHREAD_CONFIG_MLE_STEERING_DATA_SET_OOB_ENABLE
@@ -329,7 +346,7 @@ otError otThreadSetPskc(otInstance *aInstance, const otPskc *aPskc)
     otError   error    = OT_ERROR_NONE;
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    VerifyOrExit(instance.Get<Mle::MleRouter>().GetRole() == OT_DEVICE_ROLE_DISABLED, error = OT_ERROR_INVALID_STATE);
+    VerifyOrExit(instance.Get<Mle::MleRouter>().IsDisabled(), error = OT_ERROR_INVALID_STATE);
 
     instance.Get<KeyManager>().SetPskc(*static_cast<const Pskc *>(aPskc));
     instance.Get<MeshCoP::ActiveDataset>().Clear();
@@ -346,7 +363,7 @@ int8_t otThreadGetParentPriority(otInstance *aInstance)
     return instance.Get<Mle::MleRouter>().GetAssignParentPriority();
 }
 
-otError otThreadSetParentPriority(otInstance *aInstance, const int8_t aParentPriority)
+otError otThreadSetParentPriority(otInstance *aInstance, int8_t aParentPriority)
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 

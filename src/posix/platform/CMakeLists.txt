@@ -35,7 +35,17 @@ endif()
 
 option(OT_POSIX_VIRTUAL_TIME "enable virtual time" OFF)
 if(OT_POSIX_VIRTUAL_TIME)
-    list(APPEND OT_PRIVATE_DEFINES "OPENTHREAD_POSIX_VIRTUAL_TIME=1")
+    list(APPEND OT_PLATFORM_DEFINES "OPENTHREAD_POSIX_VIRTUAL_TIME=1")
+endif()
+
+option(OT_POSIX_MAX_POWER_TABLE  "enable max power table" OFF)
+if(OT_POSIX_MAX_POWER_TABLE)
+    list(APPEND OT_PLATFORM_DEFINES "OPENTHREAD_POSIX_CONFIG_MAX_POWER_TABLE_ENABLE=1")
+endif()
+
+set(OT_POSIX_CONFIG_RCP_BUS "" CACHE STRING "RCP bus type")
+if(OT_POSIX_CONFIG_RCP_BUS)
+    list(APPEND OT_PLATFORM_DEFINES "OPENTHREAD_POSIX_CONFIG_RCP_BUS=OT_POSIX_RCP_BUS_${OT_POSIX_CONFIG_RCP_BUS}")
 endif()
 
 if(NOT OT_CONFIG)
@@ -43,13 +53,7 @@ if(NOT OT_CONFIG)
     set(OT_CONFIG ${OT_CONFIG} PARENT_SCOPE)
 endif()
 
-list(APPEND OT_PLATFORM_DEFINES
-    "OPENTHREAD_CONFIG_LOG_LEVEL_DYNAMIC_ENABLE=1"
-    "OPENTHREAD_CONFIG_LOG_OUTPUT=OPENTHREAD_CONFIG_LOG_OUTPUT_PLATFORM_DEFINED"
-    "OPENTHREAD_CONFIG_NCP_UART_ENABLE=1"
-    "OPENTHREAD_POSIX=1"
-    "OPENTHREAD_POSIX_CONFIG_RCP_UART_ENABLE=1"
-)
+list(APPEND OT_PLATFORM_DEFINES "OPENTHREAD_POSIX=1")
 
 set(OT_PLATFORM_DEFINES ${OT_PLATFORM_DEFINES} PARENT_SCOPE)
 
@@ -62,7 +66,7 @@ add_library(openthread-posix
     logging.cpp
     misc.cpp
     netif.cpp
-    radio_spinel.cpp
+    radio.cpp
     settings.cpp
     spi_interface.cpp
     system.cpp
@@ -71,7 +75,15 @@ add_library(openthread-posix
     virtual_time.cpp
 )
 
+set_target_properties(
+    openthread-posix
+    PROPERTIES
+        C_STANDARD 99
+        CXX_STANDARD 11
+)
+
 target_link_libraries(openthread-posix PUBLIC
+    openthread-platform
     util
 )
 

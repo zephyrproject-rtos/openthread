@@ -153,7 +153,7 @@ uint8_t *Buffer::GetUpdatedBufPtr(uint8_t *aBufPtr, uint16_t aOffset, Direction 
 
     case kUnknown:
         OT_ASSERT(false);
-        break;
+        OT_UNREACHABLE_CODE(break);
     }
 
     return ptr;
@@ -196,7 +196,7 @@ uint16_t Buffer::GetDistance(const uint8_t *aStartPtr, const uint8_t *aEndPtr, D
 
     case kUnknown:
         OT_ASSERT(false);
-        break;
+        OT_UNREACHABLE_CODE(break);
     }
 
     return static_cast<uint16_t>(distance);
@@ -252,7 +252,7 @@ otError Buffer::InFrameBeginSegment(void)
     uint16_t headerFlags = kSegmentHeaderNoFlag;
 
     // Verify that segment is not yet started (i.e., head and tail are the same).
-    VerifyOrExit(mWriteSegmentHead == mWriteSegmentTail);
+    VerifyOrExit(mWriteSegmentHead == mWriteSegmentTail, OT_NOOP);
 
     // Check if this is the start of a new frame (i.e., frame start is same as segment head).
     if (mWriteFrameStart[mWriteDirection] == mWriteSegmentHead)
@@ -309,7 +309,7 @@ void Buffer::InFrameDiscard(void)
     otMessage *message;
 #endif
 
-    VerifyOrExit(mWriteDirection != kUnknown);
+    VerifyOrExit(mWriteDirection != kUnknown, OT_NOOP);
 
     // Move the write segment head and tail pointers back to frame start.
     mWriteSegmentHead = mWriteSegmentTail = mWriteFrameStart[mWriteDirection];
@@ -466,12 +466,12 @@ uint16_t Buffer::InFrameGetDistance(const WritePosition &aPosition) const
     uint16_t segmentLength;
     uint16_t offset;
 
-    VerifyOrExit(mWriteDirection != kUnknown);
-    VerifyOrExit(aPosition.mSegmentHead == mWriteSegmentHead);
+    VerifyOrExit(mWriteDirection != kUnknown, OT_NOOP);
+    VerifyOrExit(aPosition.mSegmentHead == mWriteSegmentHead, OT_NOOP);
 
     segmentLength = GetDistance(mWriteSegmentHead, mWriteSegmentTail, mWriteDirection);
     offset        = GetDistance(mWriteSegmentHead, aPosition.mPosition, mWriteDirection);
-    VerifyOrExit(offset < segmentLength);
+    VerifyOrExit(offset < segmentLength, OT_NOOP);
 
     distance = GetDistance(aPosition.mPosition, mWriteSegmentTail, mWriteDirection);
 

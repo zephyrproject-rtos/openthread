@@ -76,11 +76,11 @@ void CoapBase::ClearRequests(const Ip6::Address *aAddress)
 {
     Message *nextMessage;
 
-    for (Message *message = static_cast<Message *>(mPendingRequests.GetHead()); message != NULL; message = nextMessage)
+    for (Message *message = mPendingRequests.GetHead(); message != NULL; message = nextMessage)
     {
         Metadata metadata;
 
-        nextMessage = static_cast<Message *>(message->GetNext());
+        nextMessage = message->GetNextCoapMessage();
         metadata.ReadFrom(*message);
 
         if ((aAddress == NULL) || (metadata.mSourceAddress == *aAddress))
@@ -117,7 +117,7 @@ Message *CoapBase::NewMessage(const otMessageSettings *aSettings)
 {
     Message *message = NULL;
 
-    VerifyOrExit((message = static_cast<Message *>(Get<Ip6::Udp>().NewMessage(0, aSettings))) != NULL);
+    VerifyOrExit((message = static_cast<Message *>(Get<Ip6::Udp>().NewMessage(0, aSettings))) != NULL, OT_NOOP);
     message->SetOffset(0);
 
 exit:
@@ -254,9 +254,8 @@ otError CoapBase::SendAck(const Message &aRequest, const Ip6::MessageInfo &aMess
 
 otError CoapBase::SendEmptyAck(const Message &aRequest, const Ip6::MessageInfo &aMessageInfo)
 {
-    return (aRequest.GetType() == OT_COAP_TYPE_CONFIRMABLE
-                ? SendHeaderResponse(OT_COAP_CODE_CHANGED, aRequest, aMessageInfo)
-                : OT_ERROR_INVALID_ARGS);
+    return (aRequest.IsConfirmable() ? SendHeaderResponse(OT_COAP_CODE_CHANGED, aRequest, aMessageInfo)
+                                     : OT_ERROR_INVALID_ARGS);
 }
 
 otError CoapBase::SendNotFound(const Message &aRequest, const Ip6::MessageInfo &aMessageInfo)
@@ -269,7 +268,7 @@ otError CoapBase::SendEmptyMessage(Message::Type aType, const Message &aRequest,
     otError  error   = OT_ERROR_NONE;
     Message *message = NULL;
 
-    VerifyOrExit(aRequest.GetType() == OT_COAP_TYPE_CONFIRMABLE, error = OT_ERROR_INVALID_ARGS);
+    VerifyOrExit(aRequest.IsConfirmable(), error = OT_ERROR_INVALID_ARGS);
 
     VerifyOrExit((message = NewMessage()) != NULL, error = OT_ERROR_NO_BUFS);
 
@@ -310,7 +309,7 @@ otError CoapBase::SendHeaderResponse(Message::Code aCode, const Message &aReques
 
     default:
         ExitNow(error = OT_ERROR_INVALID_ARGS);
-        break;
+        OT_UNREACHABLE_CODE(break);
     }
 
     SuccessOrExit(error = message->SetToken(aRequest.GetToken(), aRequest.GetTokenLength()));
@@ -340,9 +339,9 @@ void CoapBase::HandleRetransmissionTimer(void)
     Message *        nextMessage;
     Ip6::MessageInfo messageInfo;
 
-    for (Message *message = static_cast<Message *>(mPendingRequests.GetHead()); message != NULL; message = nextMessage)
+    for (Message *message = mPendingRequests.GetHead(); message != NULL; message = nextMessage)
     {
-        nextMessage = static_cast<Message *>(message->GetNext());
+        nextMessage = message->GetNextCoapMessage();
 
         metadata.ReadFrom(*message);
 
@@ -412,9 +411,9 @@ otError CoapBase::AbortTransaction(ResponseHandler aHandler, void *aContext)
     Message *nextMessage;
     Metadata metadata;
 
-    for (Message *message = static_cast<Message *>(mPendingRequests.GetHead()); message != NULL; message = nextMessage)
+    for (Message *message = mPendingRequests.GetHead(); message != NULL; message = nextMessage)
     {
-        nextMessage = static_cast<Message *>(message->GetNext());
+        nextMessage = message->GetNextCoapMessage();
         metadata.ReadFrom(*message);
 
         if (metadata.mResponseHandler == aHandler && metadata.mResponseContext == aContext)
@@ -493,13 +492,12 @@ Message *CoapBase::FindRelatedRequest(const Message &         aResponse,
 {
     Message *message;
 
-    for (message = static_cast<Message *>(mPendingRequests.GetHead()); message != NULL;
-         message = static_cast<Message *>(message->GetNext()))
+    for (message = mPendingRequests.GetHead(); message != NULL; message = message->GetNextCoapMessage())
     {
         aMetadata.ReadFrom(*message);
 
         if (((aMetadata.mDestinationAddress == aMessageInfo.GetPeerAddr()) ||
-             aMetadata.mDestinationAddress.IsMulticast() || aMetadata.mDestinationAddress.IsAnycastRoutingLocator()) &&
+             aMetadata.mDestinationAddress.IsMulticast() || aMetadata.mDestinationAddress.IsIidAnycastLocator()) &&
             (aMetadata.mDestinationPort == aMessageInfo.GetPeerPort()))
         {
             switch (aResponse.GetType())
@@ -562,7 +560,7 @@ void CoapBase::ProcessReceivedResponse(Message &aMessage, const Ip6::MessageInfo
 #endif
 
     request = FindRelatedRequest(aMessage, aMessageInfo, metadata);
-    VerifyOrExit(request != NULL);
+    VerifyOrExit(request != NULL, OT_NOOP);
 
 #if OPENTHREAD_CONFIG_COAP_OBSERVE_API_ENABLE
     if (metadata.mObserve && request->IsRequest())
@@ -723,7 +721,7 @@ void CoapBase::ProcessReceivedRequest(Message &aMessage, const Ip6::MessageInfo 
                 *curUriPath++ = '/';
             }
 
-            VerifyOrExit(option->mLength < sizeof(uriPath) - static_cast<size_t>(curUriPath + 1 - uriPath));
+            VerifyOrExit(option->mLength < sizeof(uriPath) - static_cast<size_t>(curUriPath + 1 - uriPath), OT_NOOP);
 
             iterator.GetOptionValue(curUriPath);
             curUriPath += option->mLength;
@@ -810,8 +808,7 @@ const Message *ResponsesQueue::FindMatchedResponse(const Message &aRequest, cons
 {
     Message *message;
 
-    for (message = static_cast<Message *>(mQueue.GetHead()); message != NULL;
-         message = static_cast<Message *>(message->GetNext()))
+    for (message = mQueue.GetHead(); message != NULL; message = message->GetNextCoapMessage())
     {
         if (message->GetMessageId() == aRequest.GetMessageId())
         {
@@ -840,11 +837,11 @@ void ResponsesQueue::EnqueueResponse(Message &               aMessage,
     metadata.mDequeueTime = TimerMilli::GetNow() + aTxParameters.CalculateExchangeLifetime();
     metadata.mMessageInfo = aMessageInfo;
 
-    VerifyOrExit(FindMatchedResponse(aMessage, aMessageInfo) == NULL);
+    VerifyOrExit(FindMatchedResponse(aMessage, aMessageInfo) == NULL, OT_NOOP);
 
     UpdateQueue();
 
-    VerifyOrExit((responseCopy = aMessage.Clone()) != NULL);
+    VerifyOrExit((responseCopy = aMessage.Clone()) != NULL, OT_NOOP);
 
     VerifyOrExit(metadata.AppendTo(*responseCopy) == OT_ERROR_NONE, responseCopy->Free());
 
@@ -866,8 +863,7 @@ void ResponsesQueue::UpdateQueue(void)
     // `kMaxCachedResponses` remove the one with earliest dequeue
     // time.
 
-    for (Message *message = static_cast<Message *>(mQueue.GetHead()); message != NULL;
-         message          = static_cast<Message *>(message->GetNext()))
+    for (Message *message = mQueue.GetHead(); message != NULL; message = message->GetNextCoapMessage())
     {
         ResponseMetadata metadata;
 
@@ -898,7 +894,7 @@ void ResponsesQueue::DequeueAllResponses(void)
 {
     Message *message;
 
-    while ((message = static_cast<Message *>(mQueue.GetHead())) != NULL)
+    while ((message = mQueue.GetHead()) != NULL)
     {
         DequeueResponse(*message);
     }
@@ -915,11 +911,11 @@ void ResponsesQueue::HandleTimer(void)
     TimeMilli nextDequeueTime = now.GetDistantFuture();
     Message * nextMessage;
 
-    for (Message *message = static_cast<Message *>(mQueue.GetHead()); message != NULL; message = nextMessage)
+    for (Message *message = mQueue.GetHead(); message != NULL; message = nextMessage)
     {
         ResponseMetadata metadata;
 
-        nextMessage = static_cast<Message *>(message->GetNext());
+        nextMessage = message->GetNextCoapMessage();
 
         metadata.ReadFrom(*message);
 
@@ -952,9 +948,15 @@ void ResponsesQueue::ResponseMetadata::ReadFrom(const Message &aMessage)
 /// Return product of @p aValueA and @p aValueB if no overflow otherwise 0.
 static uint32_t Multiply(uint32_t aValueA, uint32_t aValueB)
 {
-    uint32_t result = aValueA * aValueB;
+    uint32_t result = 0;
 
-    return (result / aValueA == aValueB) ? result : 0;
+    VerifyOrExit(aValueA, OT_NOOP);
+
+    result = aValueA * aValueB;
+    result = (result / aValueA == aValueB) ? result : 0;
+
+exit:
+    return result;
 }
 
 bool TxParameters::IsValid(void) const

@@ -124,6 +124,7 @@ otError KeyManager::SetMasterKey(const MasterKey &aKey)
     parent->SetLinkFrameCounter(0);
     parent->SetMleFrameCounter(0);
 
+#if OPENTHREAD_FTD
     // reset router frame counters
     for (RouterTable::Iterator iter(GetInstance()); !iter.IsDone(); iter++)
     {
@@ -139,6 +140,7 @@ otError KeyManager::SetMasterKey(const MasterKey &aKey)
         iter.GetChild()->SetLinkFrameCounter(0);
         iter.GetChild()->SetMleFrameCounter(0);
     }
+#endif
 
 exit:
     return error;
@@ -167,7 +169,7 @@ void KeyManager::SetCurrentKeySequence(uint32_t aKeySequence)
         if (mKeySwitchGuardEnabled)
         {
             // Check if the guard timer has expired if key rotation is requested.
-            VerifyOrExit(mHoursSinceKeyRotation >= mKeySwitchGuardTime);
+            VerifyOrExit(mHoursSinceKeyRotation >= mKeySwitchGuardTime, OT_NOOP);
             StartKeyRotationTimer();
         }
 

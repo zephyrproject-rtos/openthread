@@ -100,7 +100,7 @@ public:
     /**
      * This method generate the response header according to the saved metadata.
      *
-     * @param[out]  aHeader     A refernce to the response header.
+     * @param[out]  aHeader     A reference to the response header.
      * @param[in]   aCode       The response code to fill in the response header.
      *
      * @retval OT_ERROR_NONE     Successfully generated the response header.
@@ -193,7 +193,7 @@ static void SendErrorMessage(Coap::CoapSecure &   aCoapSecure,
 
     VerifyOrExit((message = NewMeshCoPMessage(aCoapSecure)) != NULL, error = OT_ERROR_NO_BUFS);
 
-    if (aRequest.GetType() == OT_COAP_TYPE_NON_CONFIRMABLE || aSeparate)
+    if (aRequest.IsNonConfirmable() || aSeparate)
     {
         message->Init(OT_COAP_TYPE_NON_CONFIRMABLE, CoapCodeFromError(aError));
     }
@@ -350,6 +350,7 @@ BorderAgent::BorderAgent(Instance &aInstance)
     , mUdpReceiver(BorderAgent::HandleUdpReceive, this)
     , mTimer(aInstance, HandleTimeout, this)
     , mState(OT_BORDER_AGENT_STATE_STOPPED)
+    , mNotifierCallback(aInstance, &BorderAgent::HandleStateChanged, this)
 {
     mCommissionerAloc.Clear();
     mCommissionerAloc.mPrefixLength       = 64;
@@ -357,6 +358,32 @@ BorderAgent::BorderAgent(Instance &aInstance)
     mCommissionerAloc.mValid              = true;
     mCommissionerAloc.mScopeOverride      = Ip6::Address::kRealmLocalScope;
     mCommissionerAloc.mScopeOverrideValid = true;
+}
+
+void BorderAgent::HandleStateChanged(Notifier::Callback &aCallback, otChangedFlags aFlags)
+{
+    aCallback.GetOwner<BorderAgent>().HandleStateChanged(aFlags);
+}
+
+void BorderAgent::HandleStateChanged(otChangedFlags aFlags)
+{
+    VerifyOrExit((aFlags & (OT_CHANGED_THREAD_ROLE | OT_CHANGED_COMMISSIONER_STATE)) != 0, OT_NOOP);
+
+#if OPENTHREAD_CONFIG_COMMISSIONER_ENABLE && OPENTHREAD_FTD
+    VerifyOrExit(Get<MeshCoP::Commissioner>().IsDisabled(), OT_NOOP);
+#endif
+
+    if (Get<Mle::MleRouter>().IsAttached())
+    {
+        Start();
+    }
+    else
+    {
+        Stop();
+    }
+
+exit:
+    return;
 }
 
 void BorderAgent::HandleProxyTransmit(const Coap::Message &aMessage)
@@ -453,8 +480,7 @@ void BorderAgent::HandleRelayReceive(const Coap::Message &aMessage)
     Coap::Message *message = NULL;
     otError        error;
 
-    VerifyOrExit(aMessage.GetType() == OT_COAP_TYPE_NON_CONFIRMABLE && aMessage.GetCode() == OT_COAP_CODE_POST,
-                 error = OT_ERROR_DROP);
+    VerifyOrExit(aMessage.IsNonConfirmable() && aMessage.GetCode() == OT_COAP_CODE_POST, error = OT_ERROR_DROP);
     VerifyOrExit((message = NewMeshCoPMessage(Get<Coap::CoapSecure>())) != NULL, error = OT_ERROR_NO_BUFS);
 
     message->Init(OT_COAP_TYPE_NON_CONFIRMABLE, OT_COAP_CODE_POST);
@@ -518,7 +544,7 @@ void BorderAgent::HandleRelayTransmit(const Coap::Message &aMessage)
     Ip6::MessageInfo messageInfo;
     uint16_t         offset = 0;
 
-    VerifyOrExit(aMessage.GetType() == OT_COAP_TYPE_NON_CONFIRMABLE && aMessage.GetCode() == OT_COAP_CODE_POST);
+    VerifyOrExit(aMessage.IsNonConfirmable() && aMessage.GetCode() == OT_COAP_CODE_POST, OT_NOOP);
 
     SuccessOrExit(error = Tlv::ReadUint16Tlv(aMessage, Tlv::kJoinerRouterLocator, joinerRouterRloc));
 
@@ -535,7 +561,7 @@ void BorderAgent::HandleRelayTransmit(const Coap::Message &aMessage)
     messageInfo.SetSockAddr(Get<Mle::MleRouter>().GetMeshLocal16());
     messageInfo.SetPeerPort(kCoapUdpPort);
     messageInfo.SetPeerAddr(Get<Mle::MleRouter>().GetMeshLocal16());
-    messageInfo.GetPeerAddr().mFields.m16[7] = HostSwap16(joinerRouterRloc);
+    messageInfo.GetPeerAddr().SetLocator(joinerRouterRloc);
 
     SuccessOrExit(error = Get<Coap::Coap>().SendMessage(*message, messageInfo));
 
@@ -717,8 +743,21 @@ void BorderAgent::SetState(otBorderAgentState aState)
     if (mState != aState)
     {
         mState = aState;
-        Get<Notifier>().Signal(OT_CHANGED_BORDER_AGENT_STATE);
     }
+}
+
+void BorderAgent::ApplyMeshLocalPrefix(void)
+{
+    VerifyOrExit(mState == OT_BORDER_AGENT_STATE_ACTIVE, OT_NOOP);
+
+    if (Get<ThreadNetif>().RemoveUnicastAddress(mCommissionerAloc) == OT_ERROR_NONE)
+    {
+        mCommissionerAloc.GetAddress().SetPrefix(Get<Mle::MleRouter>().GetMeshLocalPrefix());
+        Get<ThreadNetif>().AddUnicastAddress(mCommissionerAloc);
+    }
+
+exit:
+    return;
 }
 
 } // namespace MeshCoP

@@ -151,53 +151,15 @@
 #endif
 
 /**
- * @def SETTINGS_CONFIG_BASE_ADDRESS
+ * @def OPENTHREAD_CONFIG_PLATFORM_FLASH_API_ENABLE
  *
- * The base address of settings.
+ * Define to 1 to enable otPlatFlash* APIs to support non-volatile storage.
  *
- */
-#ifndef SETTINGS_CONFIG_BASE_ADDRESS
-#define SETTINGS_CONFIG_BASE_ADDRESS 0
-#endif
-
-/**
- * @def SETTINGS_CONFIG_PAGE_SIZE
- *
- * The page size of settings.
+ * When defined to 1, the platform MUST implement the otPlatFlash* APIs instead of the otPlatSettings* APIs.
  *
  */
-#ifndef SETTINGS_CONFIG_PAGE_SIZE
-#define SETTINGS_CONFIG_PAGE_SIZE 4096
-#endif
-
-/**
- * @def SETTINGS_CONFIG_PAGE_NUM
- *
- * The page number of settings.
- *
- */
-#ifndef SETTINGS_CONFIG_PAGE_NUM
-#define SETTINGS_CONFIG_PAGE_NUM 2
-#endif
-
-/**
- * @def OPENTHREAD_CONFIG_HEAP_INTERNAL_SIZE
- *
- * The size of heap buffer when DTLS is enabled.
- *
- */
-#ifndef OPENTHREAD_CONFIG_HEAP_INTERNAL_SIZE
-#define OPENTHREAD_CONFIG_HEAP_INTERNAL_SIZE (4096 * sizeof(void *))
-#endif
-
-/**
- * @def OPENTHREAD_CONFIG_HEAP_INTERNAL_SIZE_NO_DTLS
- *
- * The size of heap buffer when DTLS is disabled.
- *
- */
-#ifndef OPENTHREAD_CONFIG_HEAP_INTERNAL_SIZE_NO_DTLS
-#define OPENTHREAD_CONFIG_HEAP_INTERNAL_SIZE_NO_DTLS 2048
+#ifndef OPENTHREAD_CONFIG_PLATFORM_FLASH_API_ENABLE
+#define OPENTHREAD_CONFIG_PLATFORM_FLASH_API_ENABLE 1
 #endif
 
 /**

@@ -310,7 +310,7 @@ public:
      * @returns  A reference to the resolving queue.
      *
      */
-    const MessageQueue &GetResolvingQueue(void) const { return mResolvingQueue; }
+    const PriorityQueue &GetResolvingQueue(void) const { return mResolvingQueue; }
 #endif
 
 private:
@@ -336,11 +336,14 @@ private:
         kMessageEvict,           ///< Indicates that the message was evicted.
     };
 
-    otError CheckReachability(uint8_t *           aFrame,
+    void    SendIcmpErrorIfDstUnreach(const Message &     aMessage,
+                                      const Mac::Address &aMacSource,
+                                      const Mac::Address &aMacDest);
+    otError CheckReachability(const uint8_t *     aFrame,
                               uint16_t            aFrameLength,
                               const Mac::Address &aMeshSource,
                               const Mac::Address &aMeshDest);
-    void    UpdateRoutes(uint8_t *           aFrame,
+    void    UpdateRoutes(const uint8_t *     aFrame,
                          uint16_t            aFrameLength,
                          const Mac::Address &aMeshSource,
                          const Mac::Address &aMeshDest);
@@ -352,6 +355,12 @@ private:
                                  Ip6::Header &       aIp6Header,
                                  uint8_t &           aHeaderLength,
                                  bool &              aNextHeaderCompressed);
+    otError  FrameToMessage(const uint8_t *     aFrame,
+                            uint16_t            aFrameLength,
+                            uint16_t            aDatagramSize,
+                            const Mac::Address &aMacSource,
+                            const Mac::Address &aMacDest,
+                            Message *&          aMessage);
     otError  GetIp6Header(const uint8_t *     aFrame,
                           uint16_t            aFrameLength,
                           const Mac::Address &aMacSource,
@@ -365,12 +374,12 @@ private:
                         uint16_t                aFrameLength,
                         const Mac::Address &    aMacSource,
                         const otThreadLinkInfo &aLinkInfo);
-    void     HandleFragment(uint8_t *               aFrame,
+    void     HandleFragment(const uint8_t *         aFrame,
                             uint16_t                aFrameLength,
                             const Mac::Address &    aMacSource,
                             const Mac::Address &    aMacDest,
                             const otThreadLinkInfo &aLinkInfo);
-    void     HandleLowpanHC(uint8_t *               aFrame,
+    void     HandleLowpanHC(const uint8_t *         aFrame,
                             uint16_t                aFrameLength,
                             const Mac::Address &    aMacSource,
                             const Mac::Address &    aMacDest,
@@ -384,8 +393,9 @@ private:
                               uint16_t            aMeshDest      = 0xffff);
 
     void    SendMesh(Message &aMessage, Mac::TxFrame &aFrame);
+    void    SendDestinationUnreachable(uint16_t aMeshSource, const Message &aMessage);
     otError UpdateIp6Route(Message &aMessage);
-    otError UpdateIp6RouteFtd(Ip6::Header &ip6Header);
+    otError UpdateIp6RouteFtd(Ip6::Header &ip6Header, Message &aMessage);
     otError UpdateMeshRoute(Message &aMessage);
     bool    UpdateReassemblyList(void);
     bool    UpdateFragmentLifetime(void);
@@ -519,7 +529,7 @@ private:
 
 #if OPENTHREAD_FTD
     FragmentPriorityEntry mFragmentEntries[kNumFragmentPriorityEntries];
-    MessageQueue          mResolvingQueue;
+    PriorityQueue         mResolvingQueue;
     IndirectSender        mIndirectSender;
 #endif
 

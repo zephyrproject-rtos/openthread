@@ -64,7 +64,7 @@ otError Dhcp6Server::UpdateService(void)
     Lowpan::Context                 lowpanContext;
 
     // remove dhcp agent aloc and prefix delegation
-    for (int i = 0; i < OPENTHREAD_CONFIG_DHCP6_SERVER_NUM_PREFIXES; i++)
+    for (size_t i = 0; i < OT_ARRAY_LENGTH(mPrefixAgents); i++)
     {
         bool found = false;
 
@@ -149,7 +149,7 @@ otError Dhcp6Server::AddPrefixAgent(const otIp6Prefix &aIp6Prefix, const Lowpan:
     otError      error    = OT_ERROR_NONE;
     PrefixAgent *newEntry = NULL;
 
-    for (int i = 0; i < OPENTHREAD_CONFIG_DHCP6_SERVER_NUM_PREFIXES; i++)
+    for (size_t i = 0; i < OT_ARRAY_LENGTH(mPrefixAgents); i++)
     {
         if (!mPrefixAgents[i].IsValid())
         {
@@ -183,11 +183,11 @@ void Dhcp6Server::HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aM
     Dhcp6Header  header;
     otIp6Address dst = aMessageInfo.mPeerAddr;
 
-    VerifyOrExit(aMessage.Read(aMessage.GetOffset(), sizeof(header), &header) == sizeof(header));
+    VerifyOrExit(aMessage.Read(aMessage.GetOffset(), sizeof(header), &header) == sizeof(header), OT_NOOP);
     aMessage.MoveOffset(sizeof(header));
 
     // discard if not solicit type
-    VerifyOrExit((header.GetType() == kTypeSolicit));
+    VerifyOrExit((header.GetType() == kTypeSolicit), OT_NOOP);
 
     ProcessSolicit(aMessage, dst, header.GetTransactionId());
 
@@ -204,14 +204,14 @@ void Dhcp6Server::ProcessSolicit(Message &aMessage, otIp6Address &aDst, uint8_t 
     uint16_t         length = aMessage.GetLength() - aMessage.GetOffset();
 
     // Client Identifier (discard if not present)
-    VerifyOrExit((optionOffset = FindOption(aMessage, offset, length, kOptionClientIdentifier)) > 0);
+    VerifyOrExit((optionOffset = FindOption(aMessage, offset, length, kOptionClientIdentifier)) > 0, OT_NOOP);
     SuccessOrExit(ProcessClientIdentifier(aMessage, optionOffset, clientIdentifier));
 
     // Server Identifier (assuming Rapid Commit, discard if present)
-    VerifyOrExit(FindOption(aMessage, offset, length, kOptionServerIdentifier) == 0);
+    VerifyOrExit(FindOption(aMessage, offset, length, kOptionServerIdentifier) == 0, OT_NOOP);
 
     // Rapid Commit (assuming Rapid Commit, discard if not present)
-    VerifyOrExit(FindOption(aMessage, offset, length, kOptionRapidCommit) > 0);
+    VerifyOrExit(FindOption(aMessage, offset, length, kOptionRapidCommit) > 0, OT_NOOP);
 
     // Elapsed Time if present
     if ((optionOffset = FindOption(aMessage, offset, length, kOptionElapsedTime)) > 0)
@@ -220,7 +220,7 @@ void Dhcp6Server::ProcessSolicit(Message &aMessage, otIp6Address &aDst, uint8_t 
     }
 
     // IA_NA (discard if not present)
-    VerifyOrExit((optionOffset = FindOption(aMessage, offset, length, kOptionIaNa)) > 0);
+    VerifyOrExit((optionOffset = FindOption(aMessage, offset, length, kOptionIaNa)) > 0, OT_NOOP);
     SuccessOrExit(ProcessIaNa(aMessage, optionOffset, iana));
 
     SuccessOrExit(SendReply(aDst, aTransactionId, clientIdentifier, iana));
@@ -237,7 +237,7 @@ uint16_t Dhcp6Server::FindOption(Message &aMessage, uint16_t aOffset, uint16_t a
     while (aOffset <= end)
     {
         Dhcp6Option option;
-        VerifyOrExit(aMessage.Read(aOffset, sizeof(option), &option) == sizeof(option));
+        VerifyOrExit(aMessage.Read(aOffset, sizeof(option), &option) == sizeof(option), OT_NOOP);
 
         if (option.GetCode() == aCode)
         {
@@ -291,7 +291,7 @@ otError Dhcp6Server::ProcessIaNa(Message &aMessage, uint16_t aOffset, IaNa &aIaN
 
     while (length > 0)
     {
-        VerifyOrExit((optionOffset = FindOption(aMessage, aOffset, length, kOptionIaAddress)) > 0);
+        VerifyOrExit((optionOffset = FindOption(aMessage, aOffset, length, kOptionIaAddress)) > 0, OT_NOOP);
         SuccessOrExit(error = ProcessIaAddress(aMessage, optionOffset));
 
         length -= ((optionOffset - aOffset) + sizeof(IaAddress));
@@ -312,7 +312,7 @@ otError Dhcp6Server::ProcessIaAddress(Message &aMessage, uint16_t aOffset)
                  error = OT_ERROR_PARSE);
 
     // mask matching prefix
-    for (uint8_t i = 0; i < OPENTHREAD_CONFIG_DHCP6_SERVER_NUM_PREFIXES; i++)
+    for (size_t i = 0; i < OT_ARRAY_LENGTH(mPrefixAgents); i++)
     {
         if (mPrefixAgents[i].IsValid() && mPrefixAgents[i].IsPrefixMatch(option.GetAddress()))
         {
@@ -394,7 +394,7 @@ otError Dhcp6Server::AppendIaNa(Message &aMessage, IaNa &aIaNa)
 
     if (mPrefixAgentsMask)
     {
-        for (uint8_t i = 0; i < OPENTHREAD_CONFIG_DHCP6_SERVER_NUM_PREFIXES; i++)
+        for (size_t i = 0; i < OT_ARRAY_LENGTH(mPrefixAgents); i++)
         {
             if ((mPrefixAgentsMask & (1 << i)))
             {
@@ -434,7 +434,7 @@ otError Dhcp6Server::AppendIaAddress(Message &aMessage, ClientIdentifier &aClien
     if (mPrefixAgentsMask)
     {
         // if specified, only apply specified prefixes
-        for (uint8_t i = 0; i < OPENTHREAD_CONFIG_DHCP6_SERVER_NUM_PREFIXES; i++)
+        for (size_t i = 0; i < OT_ARRAY_LENGTH(mPrefixAgents); i++)
         {
             if (mPrefixAgentsMask & (1 << i))
             {
@@ -445,7 +445,7 @@ otError Dhcp6Server::AppendIaAddress(Message &aMessage, ClientIdentifier &aClien
     else
     {
         // if not specified, apply all configured prefixes
-        for (uint8_t i = 0; i < OPENTHREAD_CONFIG_DHCP6_SERVER_NUM_PREFIXES; i++)
+        for (size_t i = 0; i < OT_ARRAY_LENGTH(mPrefixAgents); i++)
         {
             if (mPrefixAgents[i].IsValid())
             {
@@ -480,6 +480,20 @@ otError Dhcp6Server::AppendRapidCommit(Message &aMessage)
 
     option.Init();
     return aMessage.Append(&option, sizeof(option));
+}
+
+void Dhcp6Server::ApplyMeshLocalPrefix(void)
+{
+    for (size_t i = 0; i < OT_ARRAY_LENGTH(mPrefixAgents); i++)
+    {
+        if (mPrefixAgents[i].IsValid())
+        {
+            PrefixAgent *entry = &mPrefixAgents[i];
+            Get<ThreadNetif>().RemoveUnicastAddress(entry->GetAloc());
+            entry->GetAloc().GetAddress().SetPrefix(Get<Mle::MleRouter>().GetMeshLocalPrefix());
+            Get<ThreadNetif>().AddUnicastAddress(entry->GetAloc());
+        }
+    }
 }
 
 } // namespace Dhcp6

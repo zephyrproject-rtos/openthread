@@ -87,7 +87,7 @@ void virtualTimeInit(void)
     sockaddr.sin_port        = htons(kBasePort + sPortOffset + sNodeId);
     sockaddr.sin_addr.s_addr = INADDR_ANY;
 
-    sSockFd = SocketWithCloseExec(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    sSockFd = SocketWithCloseExec(AF_INET, SOCK_DGRAM, IPPROTO_UDP, kSocketBlock);
 
     if (sSockFd == -1)
     {
@@ -201,7 +201,7 @@ void virtualTimeProcess(otInstance *  aInstance,
     virtualTimeRadioSpinelProcess(aInstance, &event);
 }
 
-uint64_t platformGetTime(void)
+uint64_t otPlatTimeGet(void)
 {
     return sNow;
 }

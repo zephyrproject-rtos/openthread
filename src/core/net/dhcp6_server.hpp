@@ -83,6 +83,12 @@ public:
      */
     otError UpdateService();
 
+    /**
+     * This method applies the Mesh Local Prefix.
+     *
+     */
+    void ApplyMeshLocalPrefix(void);
+
 private:
     class PrefixAgent
     {
@@ -167,15 +173,10 @@ private:
         {
             mPrefix = aPrefix;
 
-            mAloc.GetAddress().SetPrefix(aMeshLocalPrefix);
-            mAloc.mAddress.mFields.m16[4] = HostSwap16(0x0000);
-            mAloc.mAddress.mFields.m16[5] = HostSwap16(0x00ff);
-            mAloc.mAddress.mFields.m16[6] = HostSwap16(0xfe00);
-            mAloc.mAddress.mFields.m8[14] = Ip6::Address::kAloc16Mask;
-            mAloc.mAddress.mFields.m8[15] = aContextId;
-            mAloc.mPrefixLength           = OT_IP6_PREFIX_BITSIZE;
-            mAloc.mPreferred              = true;
-            mAloc.mValid                  = true;
+            mAloc.GetAddress().SetToAnycastLocator(aMeshLocalPrefix, (Ip6::Address::kAloc16Mask << 8) + aContextId);
+            mAloc.mPrefixLength = OT_IP6_PREFIX_BITSIZE;
+            mAloc.mPreferred    = true;
+            mAloc.mValid        = true;
         }
 
     private:

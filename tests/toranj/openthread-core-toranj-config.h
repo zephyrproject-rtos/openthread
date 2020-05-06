@@ -26,30 +26,17 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef OPENTHREAD_CORE_TORANJ_CONFIG_H_
-#define OPENTHREAD_CORE_TORANJ_CONFIG_H_
-
 /**
  * This header file defines the OpenThread core configuration options used in NCP build for `toranj` test framework.
  *
  */
 
-#ifndef OPENTHREAD_RADIO
-#define OPENTHREAD_RADIO 0
+#if !defined(OPENTHREAD_CORE_TORANJ_CONFIG_SIMULATION_H_) && !defined(OPENTHREAD_CORE_TORANJ_CONFIG_POSIX_H_)
+#error "This header file should only be included through the platform-specific one"
 #endif
 
-/**
- * @def OPENTHREAD_CONFIG_PLATFORM_INFO
- *
- * The platform-specific string to insert into the OpenThread version string.
- *
- */
-#if OPENTHREAD_RADIO
-#define OPENTHREAD_CONFIG_PLATFORM_INFO "SIMULATION-RCP-toranj"
-#elif OPENTHREAD_PLATFORM_POSIX
-#define OPENTHREAD_CONFIG_PLATFORM_INFO "POSIX-toranj"
-#else
-#define OPENTHREAD_CONFIG_PLATFORM_INFO "SIMULATION-toranj"
+#ifndef OPENTHREAD_RADIO
+#define OPENTHREAD_RADIO 0
 #endif
 
 /**
@@ -122,7 +109,25 @@
  * The number of EID-to-RLOC cache entries.
  *
  */
-#define OPENTHREAD_CONFIG_TMF_ADDRESS_CACHE_ENTRIES 32
+#define OPENTHREAD_CONFIG_TMF_ADDRESS_CACHE_ENTRIES 16
+
+/**
+ * @def OPENTHREAD_CONFIG_TMF_ADDRESS_QUERY_TIMEOUT
+ *
+ * The timeout value (in seconds) waiting for a address notification response after sending an address query.
+ *
+ * Default: 3 seconds
+ *
+ */
+#define OPENTHREAD_CONFIG_TMF_ADDRESS_QUERY_TIMEOUT 6
+
+/**
+ * @def OPENTHREAD_CONFIG_TMF_ADDRESS_QUERY_INITIAL_RETRY_DELAY
+ *
+ * Initial retry delay for address query (in seconds).
+ *
+ */
+#define OPENTHREAD_CONFIG_TMF_ADDRESS_QUERY_INITIAL_RETRY_DELAY 4
 
 /**
  * @def OPENTHREAD_CONFIG_TMF_ADDRESS_QUERY_MAX_RETRY_DELAY
@@ -133,6 +138,27 @@
  *
  */
 #define OPENTHREAD_CONFIG_TMF_ADDRESS_QUERY_MAX_RETRY_DELAY 120
+
+/**
+ * @def OPENTHREAD_CONFIG_TMF_ADDRESS_CACHE_MAX_SNOOP_ENTRIES
+ *
+ * The maximum number of EID-to-RLOC cache entries that can be uses for "snoop optimization" where an entry is created
+ * by inspecting a received message.
+ *
+ */
+#define OPENTHREAD_CONFIG_TMF_ADDRESS_CACHE_MAX_SNOOP_ENTRIES 2
+
+/**
+ * @def OPENTHREAD_CONFIG_TMF_SNOOP_CACHE_ENTRY_TIMEOUT
+ *
+ * The timeout value (in seconds) blocking eviction of an address cache entry created through snoop optimization (i.e.,
+ * inspection of a received message). After the timeout expires the entry can be reclaimed again. This timeout allows
+ * a longer response delay for a received message giving more chance that a snooped entry will be used (avoiding
+ * sending Address Query when a response message is sent to same destination from which the message was received
+ * earlier).
+ *
+ */
+#define OPENTHREAD_CONFIG_TMF_SNOOP_CACHE_ENTRY_TIMEOUT 3
 
 /**
  * @def OPENTHREAD_CONFIG_MLE_MAX_CHILDREN
@@ -421,24 +447,3 @@
  */
 #define OPENTHREAD_CONFIG_SOFTWARE_CSMA_BACKOFF_ENABLE 1
 #endif // OPENTHREAD_RADIO
-
-//--------------------------------------------------------------------------------------------------------------------
-// POSIX-App configurations
-
-/**
- * @def OPENTHREAD_POSIX_CONFIG_RCP_PTY_ENABLE
- *
- * Define as 1 to enable PTY device support in POSIX app.
- *
- */
-#define OPENTHREAD_POSIX_CONFIG_RCP_PTY_ENABLE 1
-
-/**
- * @def OPENTHREAD_POSIX_CONFIG_RCP_UART_ENABLE
- *
- * Define as 1 to enable UART interface to RCP.
- *
- */
-#define OPENTHREAD_POSIX_CONFIG_RCP_UART_ENABLE 1
-
-#endif /* OPENTHREAD_CORE_TORANJ_CONFIG_H_ */

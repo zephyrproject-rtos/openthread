@@ -333,6 +333,18 @@
 #endif
 
 /**
+ * @def OPENTHREAD_CONFIG_PLATFORM_FLASH_API_ENABLE
+ *
+ * Define to 1 to enable otPlatFlash* APIs to support non-volatile storage.
+ *
+ * When defined to 1, the platform MUST implement the otPlatFlash* APIs instead of the otPlatSettings* APIs.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_PLATFORM_FLASH_API_ENABLE
+#define OPENTHREAD_CONFIG_PLATFORM_FLASH_API_ENABLE 0
+#endif
+
+/**
  * @def OPENTHREAD_CONFIG_FAILED_CHILD_TRANSMISSIONS
  *
  * This setting configures the number of consecutive MCPS.DATA-Confirms having Status NO_ACK
@@ -426,6 +438,26 @@
  */
 #ifndef OPENTHREAD_CONFIG_LEGACY_ENABLE
 #define OPENTHREAD_CONFIG_LEGACY_ENABLE 0
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_OTNS_ENABLE
+ *
+ * Define to 1 to enable OTNS interactions.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_OTNS_ENABLE
+#define OPENTHREAD_CONFIG_OTNS_ENABLE 0
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_DUA_ENABLE
+ *
+ * Define as 1 to support Thread 1.2 Domain Unicast Address feature.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_DUA_ENABLE
+#define OPENTHREAD_CONFIG_DUA_ENABLE 0
 #endif
 
 #endif // OPENTHREAD_CORE_DEFAULT_CONFIG_H_

@@ -42,6 +42,9 @@
 #include <openthread/error.h>
 #include <openthread/heap.h>
 #include <openthread/platform/logging.h>
+#if OPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE
+#include <openthread/platform/memory.h>
+#endif
 
 #include "common/random_manager.hpp"
 #include "common/tasklet.hpp"
@@ -73,11 +76,23 @@
 #if OPENTHREAD_CONFIG_CHANNEL_MONITOR_ENABLE
 #include "utils/channel_monitor.hpp"
 #endif
+
+#if (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
+#include "backbone_router/leader.hpp"
+
+#if OPENTHREAD_FTD && OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE
+#include "backbone_router/local.hpp"
+#endif
+
+#endif // (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
+
 #endif // OPENTHREAD_FTD || OPENTHREAD_MTD
 #if OPENTHREAD_ENABLE_VENDOR_EXTENSION
 #include "common/extension.hpp"
 #endif
-
+#if OPENTHREAD_CONFIG_OTNS_ENABLE
+#include "utils/otns.hpp"
+#endif
 /**
  * @addtogroup core-instance
  *
@@ -185,7 +200,11 @@ public:
      * @param[in] aLogLevel  A log level.
      *
      */
-    void SetLogLevel(otLogLevel aLogLevel) { mLogLevel = aLogLevel; }
+    void SetLogLevel(otLogLevel aLogLevel)
+    {
+        OT_ASSERT(aLogLevel <= OT_LOG_LEVEL_DEBG && aLogLevel >= OT_LOG_LEVEL_NONE);
+        mLogLevel = aLogLevel;
+    }
 #endif
 
     /**
@@ -245,6 +264,9 @@ public:
      *
      */
     Utils::Heap &GetHeap(void) { return mHeap; }
+#else
+    void  HeapFree(void *aPointer) { otPlatFree(aPointer); }
+    void *HeapCAlloc(size_t aCount, size_t aSize) { return otPlatCAlloc(aCount, aSize); }
 #endif // OPENTHREAD_CONFIG_HEAP_EXTERNAL_ENABLE
 
 #if OPENTHREAD_CONFIG_COAP_API_ENABLE
@@ -323,9 +345,10 @@ private:
     // Notifier, Settings, and MessagePool are initialized  before
     // other member variables since other classes/objects from their
     // constructor may use them.
-    Notifier    mNotifier;
-    Settings    mSettings;
-    MessagePool mMessagePool;
+    Notifier       mNotifier;
+    Settings       mSettings;
+    SettingsDriver mSettingsDriver;
+    MessagePool    mMessagePool;
 
     Ip6::Ip6    mIp6;
     ThreadNetif mThreadNetif;
@@ -348,6 +371,10 @@ private:
 
 #if OPENTHREAD_CONFIG_ANNOUNCE_SENDER_ENABLE
     AnnounceSender mAnnounceSender;
+#endif
+
+#if OPENTHREAD_CONFIG_OTNS_ENABLE
+    Utils::Otns mOtns;
 #endif
 
 #endif // OPENTHREAD_MTD || OPENTHREAD_FTD
@@ -390,6 +417,11 @@ template <> inline Settings &Instance::Get(void)
     return mSettings;
 }
 
+template <> inline SettingsDriver &Instance::Get(void)
+{
+    return mSettingsDriver;
+}
+
 template <> inline MeshForwarder &Instance::Get(void)
 {
     return mThreadNetif.mMeshForwarder;
@@ -405,6 +437,7 @@ template <> inline Mle::MleRouter &Instance::Get(void)
     return mThreadNetif.mMleRouter;
 }
 
+#if OPENTHREAD_FTD
 template <> inline ChildTable &Instance::Get(void)
 {
     return mThreadNetif.mMleRouter.mChildTable;
@@ -414,6 +447,7 @@ template <> inline RouterTable &Instance::Get(void)
 {
     return mThreadNetif.mMleRouter.mRouterTable;
 }
+#endif
 
 template <> inline Ip6::Netif &Instance::Get(void)
 {
@@ -526,6 +560,13 @@ template <> inline NetworkData::Leader &Instance::Get(void)
 {
     return mThreadNetif.mNetworkDataLeader;
 }
+
+#if OPENTHREAD_FTD || OPENTHREAD_CONFIG_BORDER_ROUTER_ENABLE || OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
+template <> inline NetworkData::Notifier &Instance::Get(void)
+{
+    return mThreadNetif.mNetworkDataNotifier;
+}
+#endif
 
 template <> inline Ip6::Udp &Instance::Get(void)
 {
@@ -676,6 +717,36 @@ template <> inline MessagePool &Instance::Get(void)
 {
     return mMessagePool;
 }
+
+#if (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
+
+template <> inline BackboneRouter::Leader &Instance::Get(void)
+{
+    return mThreadNetif.mBackboneRouterLeader;
+}
+
+#if OPENTHREAD_FTD && OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE
+template <> inline BackboneRouter::Local &Instance::Get(void)
+{
+    return mThreadNetif.mBackboneRouterLocal;
+}
+#endif
+
+#if OPENTHREAD_CONFIG_DUA_ENABLE
+template <> inline DuaManager &Instance::Get(void)
+{
+    return mThreadNetif.mDuaManager;
+}
+#endif
+
+#endif // (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
+
+#if OPENTHREAD_CONFIG_OTNS_ENABLE
+template <> inline Utils::Otns &Instance::Get(void)
+{
+    return mOtns;
+}
+#endif
 
 #endif // OPENTHREAD_MTD || OPENTHREAD_FTD
 

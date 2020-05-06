@@ -59,6 +59,16 @@ class Commissioner : public InstanceLocator
 {
 public:
     /**
+     * Joiner operation flags.
+     *
+     */
+    enum JoinerOpFlag
+    {
+        kJoinerOpFlagDefault         = 0,      ///< The default flags
+        kJoinerOpFlagNotNotifyLeader = 1 << 0, ///< Do not notify Leader
+    };
+
+    /**
      * This constructor initializes the Commissioner object.
      *
      * @param[in]  aInstance     A reference to the OpenThread instance.
@@ -74,7 +84,8 @@ public:
      * @param[in]  aCallbackContext  A pointer to application-specific context.
      *
      * @retval OT_ERROR_NONE           Successfully started the Commissioner service.
-     * @retval OT_ERROR_INVALID_STATE  Commissioner is already started.
+     * @retval OT_ERROR_ALREADY        Commissioner is already started.
+     * @retval OT_ERROR_INVALID_STATE  Device is not currently attached to a network.
      *
      */
     otError Start(otCommissionerStateCallback  aStateCallback,
@@ -84,11 +95,13 @@ public:
     /**
      * This method stops the Commissioner service.
      *
-     * @retval OT_ERROR_NONE           Successfully stopped the Commissioner service.
-     * @retval OT_ERROR_INVALID_STATE  Commissioner is already stopped.
+     * @param[in]  aResign      Whether send LEAD_KA.req to resign as Commissioner
+     *
+     * @retval OT_ERROR_NONE     Successfully stopped the Commissioner service.
+     * @retval OT_ERROR_ALREADY  Commissioner is already stopped.
      *
      */
-    otError Stop(void);
+    otError Stop(bool aResign);
 
     /**
      * This method clears all Joiner entries.
@@ -125,15 +138,17 @@ public:
     /**
      * This method removes a Joiner entry.
      *
-     * @param[in]  aEui64          A pointer to the Joiner's IEEE EUI-64 or NULL for any Joiner.
-     * @param[in]  aDelay          The delay to remove Joiner (in seconds).
+     * @param[in]  aEui64         A pointer to the Joiner's IEEE EUI-64 or NULL for any Joiner.
+     * @param[in]  aDelay         The delay to remove Joiner (in seconds).
+     * @param[in]  aFlags         The flags for removing the Joiner.
      *
      * @retval OT_ERROR_NONE           Successfully added the Joiner.
      * @retval OT_ERROR_NOT_FOUND      The Joiner specified by @p aEui64 was not found.
      * @retval OT_ERROR_INVALID_STATE  Commissioner service is not started.
      *
+     * @sa JoinerOpFlag
      */
-    otError RemoveJoiner(const Mac::ExtAddress *aEui64, uint32_t aDelay);
+    otError RemoveJoiner(const Mac::ExtAddress *aEui64, uint32_t aDelay, JoinerOpFlag aFlags = kJoinerOpFlagDefault);
 
     /**
      * This method gets the Provisioning URL.
@@ -169,6 +184,14 @@ public:
      *
      */
     bool IsActive(void) const { return mState == OT_COMMISSIONER_STATE_ACTIVE; }
+
+    /**
+     * This method indicates whether or not the Commissioner role is disabled.
+     *
+     * @returns TRUE if the Commissioner role is disabled, FALSE otherwise.
+     *
+     */
+    bool IsDisabled(void) const { return mState == OT_COMMISSIONER_STATE_DISABLED; }
 
     /**
      * This function returns the Commissioner State.
@@ -212,25 +235,6 @@ public:
                                            uint8_t                       aLength);
 
     /**
-     * This static method generates PSKc.
-     *
-     * PSKc is used to establish the Commissioner Session.
-     *
-     * @param[in]  aPassPhrase   The commissioning passphrase.
-     * @param[in]  aNetworkName  The network name for PSKc computation.
-     * @param[in]  aExtPanId     The extended pan id for PSKc computation.
-     * @param[out] aPskc         A reference to a PSKc where the generated PSKc will be placed.
-     *
-     * @retval OT_ERROR_NONE          Successfully generate PSKc.
-     * @retval OT_ERROR_INVALID_ARGS  If the length of passphrase is out of range.
-     *
-     */
-    static otError GeneratePskc(const char *              aPassPhrase,
-                                const char *              aNetworkName,
-                                const Mac::ExtendedPanId &aExtPanId,
-                                Pskc &                    aPskc);
-
-    /**
      * This method returns a reference to the AnnounceBeginClient instance.
      *
      * @returns A reference to the AnnounceBeginClient instance.
@@ -253,6 +257,12 @@ public:
      *
      */
     PanIdQueryClient &GetPanIdQueryClient(void) { return mPanIdQuery; }
+
+    /**
+     * This method applies the Mesh Local Prefix.
+     *
+     */
+    void ApplyMeshLocalPrefix(void);
 
 private:
     enum
@@ -320,6 +330,7 @@ private:
     otError SendCommissionerSet(void);
     otError SendPetition(void);
     otError SendKeepAlive(void);
+    otError SendKeepAlive(uint16_t aSessionId);
 
     void SetState(otCommissionerState aState);
     void SignalJoinerEvent(otCommissionerJoinerEvent aEvent, const Mac::ExtAddress &aJoinerId);

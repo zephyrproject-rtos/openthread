@@ -54,16 +54,21 @@
 #include <sys/types.h>
 #include <sys/ucontext.h>
 
-#if OPENTHREAD_POSIX_CONFIG_RCP_SPI_ENABLE
+#if OPENTHREAD_POSIX_CONFIG_RCP_BUS == OT_POSIX_RCP_BUS_SPI
 #include <linux/gpio.h>
 #include <linux/ioctl.h>
 #include <linux/spi/spidev.h>
 
-namespace ot {
-namespace PosixApp {
+using ot::Spinel::SpinelInterface;
 
-SpiInterface::SpiInterface(SpinelInterface::Callbacks &aCallback, SpinelInterface::RxFrameBuffer &aFrameBuffer)
-    : mCallbacks(aCallback)
+namespace ot {
+namespace Posix {
+
+SpiInterface::SpiInterface(SpinelInterface::ReceiveFrameCallback aCallback,
+                           void *                                aCallbackContext,
+                           SpinelInterface::RxFrameBuffer &      aFrameBuffer)
+    : mReceiveFrameCallback(aCallback)
+    , mReceiveFrameContext(aCallbackContext)
     , mRxFrameBuffer(aFrameBuffer)
     , mSpiDevFd(-1)
     , mResetGpioValueFd(-1)
@@ -396,7 +401,7 @@ otError SpiInterface::PushPullSpi(void)
     SuccessOrExit(error = mRxFrameBuffer.SetSkipLength(kSpiFrameHeaderSize));
 
     // Check whether the remaining frame buffer has enough space to store the data to be received.
-    VerifyOrExit(mRxFrameBuffer.GetFrameMaxLength() >= spiTransferBytes + mSpiAlignAllowance);
+    VerifyOrExit(mRxFrameBuffer.GetFrameMaxLength() >= spiTransferBytes + mSpiAlignAllowance, OT_NOOP);
 
     // Point to the start of the reserved buffer.
     spiRxFrameBuffer = mRxFrameBuffer.GetFrame() - kSpiFrameHeaderSize;
@@ -508,7 +513,7 @@ otError SpiInterface::PushPullSpi(void)
             // Upper layer will free the frame buffer.
             discardRxFrame = false;
 
-            mCallbacks.HandleReceivedFrame();
+            mReceiveFrameCallback(mReceiveFrameContext);
         }
     }
 
@@ -658,11 +663,9 @@ void SpiInterface::UpdateFdSet(fd_set &aReadFdSet, fd_set &aWriteFdSet, int &aMa
     }
 }
 
-void SpiInterface::Process(const fd_set &aReadFdSet, const fd_set &aWriteFdSet)
+void SpiInterface::Process(const RadioProcessContext &aContext)
 {
-    OT_UNUSED_VARIABLE(aWriteFdSet);
-
-    if (FD_ISSET(mIntGpioValueFd, &aReadFdSet))
+    if (FD_ISSET(mIntGpioValueFd, aContext.mReadFdSet))
     {
         struct gpioevent_data event;
 
@@ -680,13 +683,17 @@ void SpiInterface::Process(const fd_set &aReadFdSet, const fd_set &aWriteFdSet)
     }
 }
 
-otError SpiInterface::WaitForFrame(const struct timeval &aTimeout)
+otError SpiInterface::WaitForFrame(uint64_t aTimeoutUs)
 {
-    otError        error   = OT_ERROR_NONE;
-    struct timeval timeout = {kSecPerDay, 0};
+    otError        error      = OT_ERROR_NONE;
+    struct timeval spiTimeout = {kSecPerDay, 0};
+    struct timeval timeout;
     fd_set         readFdSet;
     int            ret;
     bool           isDataReady = false;
+
+    timeout.tv_sec  = static_cast<time_t>(aTimeoutUs / US_PER_S);
+    timeout.tv_usec = static_cast<suseconds_t>(aTimeoutUs % US_PER_S);
 
     FD_ZERO(&readFdSet);
 
@@ -695,8 +702,8 @@ otError SpiInterface::WaitForFrame(const struct timeval &aTimeout)
         if ((isDataReady = CheckInterrupt()))
         {
             // Interrupt pin is asserted, set the timeout to be 0.
-            timeout.tv_sec  = 0;
-            timeout.tv_usec = 0;
+            spiTimeout.tv_sec  = 0;
+            spiTimeout.tv_usec = 0;
         }
         else
         {
@@ -708,13 +715,13 @@ otError SpiInterface::WaitForFrame(const struct timeval &aTimeout)
     else
     {
         // In this case we don't have an interrupt, so we revert to SPI polling.
-        timeout.tv_sec  = 0;
-        timeout.tv_usec = kSpiPollPeriodUs;
+        spiTimeout.tv_sec  = 0;
+        spiTimeout.tv_usec = kSpiPollPeriodUs;
     }
 
-    if (timercmp(&aTimeout, &timeout, <))
+    if (timercmp(&spiTimeout, &timeout, <))
     {
-        timeout = aTimeout;
+        timeout = spiTimeout;
     }
 
     ret = select(mIntGpioValueFd + 1, &readFdSet, NULL, NULL, &timeout);
@@ -782,7 +789,7 @@ void SpiInterface::LogStats(void)
     otLogInfoPlat("INFO: mSpiTxFrameCount=%" PRIu64, mSpiTxFrameCount);
     otLogInfoPlat("INFO: mSpiTxFrameByteCount=%" PRIu64, mSpiTxFrameByteCount);
 }
-} // namespace PosixApp
+} // namespace Posix
 } // namespace ot
 
-#endif // OPENTHREAD_POSIX_CONFIG_RCP_SPI_ENABLE
+#endif // OPENTHREAD_POSIX_CONFIG_RCP_BUS == OT_POSIX_RCP_BUS_SPI

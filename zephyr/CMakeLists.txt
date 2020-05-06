@@ -1,5 +1,7 @@
 if(CONFIG_NET_L2_OPENTHREAD)
 
+set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+
 # OpenThread options
 set(OT_BUILD_EXECUTABLES OFF CACHE BOOL "Disable OpenThread samples")
 set(OT_EXTERNAL_MBEDTLS "mbedTLS" CACHE STRING "Specify external mbedtls library")

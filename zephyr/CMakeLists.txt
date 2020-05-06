@@ -2,7 +2,7 @@ if(CONFIG_NET_L2_OPENTHREAD)
 
 # OpenThread options
 set(OT_BUILD_EXECUTABLES OFF CACHE BOOL "Disable OpenThread samples")
-set(OT_BUILTIN_MBEDTLS OFF CACHE BOOL "Use Zephry's mbedTLS")
+set(OT_EXTERNAL_MBEDTLS "mbedTLS" CACHE STRING "Specify external mbedtls library")
 set(OT_BUILTIN_MBEDTLS_MANAGEMENT OFF CACHE BOOL "Use Zephyr's mbedTLS heap")
 set(OT_PLATFORM "zephyr" CACHE STRING "Zephyr as a target platform")
 
@@ -91,25 +91,6 @@ add_definitions(
 )
 
 list(APPEND OT_PRIVATE_INCLUDES $ENV{ZEPHYR_BASE}/subsys/net/lib/openthread/platform)
-
-# mbedTLS
-
-# Obtain Zephyr mbedTLS path
-execute_process(
-COMMAND
-${WEST} list -f {posixpath} mbedtls
-OUTPUT_VARIABLE mbedtls_root_dir
-)
-
-# Trim trailing whitespace.
-string(STRIP ${mbedtls_root_dir} mbedtls_root_dir)
-
-list(APPEND OT_PRIVATE_INCLUDES ${mbedtls_root_dir}/configs)
-list(APPEND OT_PRIVATE_INCLUDES ${mbedtls_root_dir}/include)
-
-add_definitions(
-    -DMBEDTLS_CONFIG_FILE="${CONFIG_MBEDTLS_CFG_FILE}"
-)
 
 # Need to specify build directory as well
 add_subdirectory(.. build)

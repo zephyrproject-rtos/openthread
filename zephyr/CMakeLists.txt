@@ -124,6 +124,6 @@ elseif(CONFIG_OPENTHREAD_MTD)
 list(APPEND ot_libs openthread-mtd)
 endif()
 
-zephyr_link_libraries(${ot_libs})
+zephyr_link_libraries(${ot_libs} -lc)
 
 endif()

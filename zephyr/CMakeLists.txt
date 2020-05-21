@@ -68,6 +68,10 @@ if(CONFIG_OPENTHREAD_COAP)
   set(OT_COAP ON CACHE BOOL "Enable CoAP api")
 endif()
 
+if(CONFIG_OPENTHREAD_REFERENCE_DEVICE)
+  set(OT_REFERENCE_DEVICE ON CACHE BOOL "Enable Thread Certification Reference Device")
+endif()
+
 # Zephyr compiler options
 zephyr_get_compile_options_for_lang_as_string(C   c_options)
 zephyr_get_compile_options_for_lang_as_string(CXX cxx_options)

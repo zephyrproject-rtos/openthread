@@ -56,6 +56,10 @@ if(CONFIG_OPENTHREAD_NCP)
   set(OT_NCP ON CACHE BOOL "Enable Network Co-Processor NCP")
 endif()
 
+if(CONFIG_OPENTHREAD_NCP_VENDOR_HOOK_SOURCE)
+  set(OT_NCP_VENDOR_HOOK_SOURCE ${CONFIG_OPENTHREAD_NCP_VENDOR_HOOK_SOURCE} CACHE STRING "NCP vendor hook source file name")
+endif()
+
 if(CONFIG_OPENTHREAD_RCP)
   set(OT_RCP ON CACHE BOOL "Enable Network Co-Processor RCP")
 endif()

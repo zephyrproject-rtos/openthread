@@ -43,7 +43,9 @@ ROUTER2 = 4
 
 
 class Cert_9_2_15_PendingPartition(thread_cert.TestCase):
-    topology = {
+    SUPPORT_NCP = False
+
+    TOPOLOGY = {
         COMMISSIONER: {
             'active_dataset': {
                 'timestamp': 15,

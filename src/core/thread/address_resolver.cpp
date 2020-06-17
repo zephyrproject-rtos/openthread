@@ -63,7 +63,7 @@ AddressResolver::AddressResolver(Instance &aInstance)
     , mQueryRetryList()
     , mUnusedList()
     , mIcmpHandler(&AddressResolver::HandleIcmpReceive, this)
-    , mTimer(aInstance, &AddressResolver::HandleTimer, this)
+    , mTimer(aInstance, AddressResolver::HandleTimer, this)
 {
     for (CacheEntry *entry = &mCacheEntries[0]; entry < OT_ARRAY_END(mCacheEntries); entry++)
     {
@@ -75,7 +75,7 @@ AddressResolver::AddressResolver(Instance &aInstance)
     Get<Coap::Coap>().AddResource(mAddressQuery);
     Get<Coap::Coap>().AddResource(mAddressNotification);
 
-    Get<Ip6::Icmp>().RegisterHandler(mIcmpHandler);
+    IgnoreError(Get<Ip6::Icmp>().RegisterHandler(mIcmpHandler));
 }
 
 void AddressResolver::Clear(void)
@@ -398,14 +398,13 @@ exit:
     return error;
 }
 
-otError AddressResolver::AddSnoopedCacheEntry(const Ip6::Address &aEid, Mac::ShortAddress aRloc16)
+void AddressResolver::AddSnoopedCacheEntry(const Ip6::Address &aEid, Mac::ShortAddress aRloc16)
 {
-    otError     error           = OT_ERROR_NONE;
     uint16_t    numNonEvictable = 0;
     CacheEntry *entry;
 
     entry = NewCacheEntry(/* aSnoopedEntry */ true);
-    VerifyOrExit(entry != NULL, error = OT_ERROR_NO_BUFS);
+    VerifyOrExit(entry != NULL, OT_NOOP);
 
     for (CacheEntry *snooped = mSnoopedList.GetHead(); snooped != NULL; snooped = snooped->GetNext())
     {
@@ -439,7 +438,7 @@ otError AddressResolver::AddSnoopedCacheEntry(const Ip6::Address &aEid, Mac::Sho
     LogCacheEntryChange(kEntryAdded, kReasonSnoop, *entry);
 
 exit:
-    return error;
+    return;
 }
 
 void AddressResolver::RestartAddressQueries(void)
@@ -465,7 +464,7 @@ void AddressResolver::RestartAddressQueries(void)
 
     for (CacheEntry *entry = mQueryList.GetHead(); entry != NULL; entry = entry->GetNext())
     {
-        SendAddressQuery(entry->GetTarget());
+        IgnoreError(SendAddressQuery(entry->GetTarget()));
 
         entry->SetTimeout(kAddressQueryTimeout);
         entry->SetRetryDelay(kAddressQueryInitialRetryDelay);
@@ -477,7 +476,7 @@ otError AddressResolver::Resolve(const Ip6::Address &aEid, uint16_t &aRloc16)
 {
     otError         error = OT_ERROR_NONE;
     CacheEntry *    entry;
-    CacheEntry *    prev;
+    CacheEntry *    prev = NULL;
     CacheEntryList *list;
 
     entry = FindCacheEntry(aEid, list, prev);
@@ -554,13 +553,13 @@ otError AddressResolver::SendAddressQuery(const Ip6::Address &aEid)
     Coap::Message *  message;
     Ip6::MessageInfo messageInfo;
 
-    VerifyOrExit((message = Get<Coap::Coap>().NewMessage()) != NULL, error = OT_ERROR_NO_BUFS);
+    VerifyOrExit((message = Get<Coap::Coap>().NewPriorityMessage()) != NULL, error = OT_ERROR_NO_BUFS);
 
     message->Init(OT_COAP_TYPE_NON_CONFIRMABLE, OT_COAP_CODE_POST);
     SuccessOrExit(error = message->AppendUriPathOptions(OT_URI_PATH_ADDRESS_QUERY));
     SuccessOrExit(error = message->SetPayloadMarker());
 
-    SuccessOrExit(error = Tlv::AppendTlv(*message, ThreadTlv::kTarget, aEid.mFields.m8, sizeof(aEid)));
+    SuccessOrExit(error = Tlv::AppendTlv(*message, ThreadTlv::kTarget, &aEid, sizeof(aEid)));
 
     messageInfo.GetPeerAddr().SetToRealmLocalAllRoutersMulticast();
 
@@ -604,11 +603,11 @@ void AddressResolver::HandleAddressNotification(Coap::Message &aMessage, const I
 
     VerifyOrExit(aMessage.IsConfirmable() && aMessage.GetCode() == OT_COAP_CODE_POST, OT_NOOP);
 
-    SuccessOrExit(Tlv::ReadTlv(aMessage, ThreadTlv::kTarget, &target, sizeof(target)));
-    SuccessOrExit(Tlv::ReadTlv(aMessage, ThreadTlv::kMeshLocalEid, meshLocalIid, sizeof(meshLocalIid)));
-    SuccessOrExit(Tlv::ReadUint16Tlv(aMessage, ThreadTlv::kRloc16, rloc16));
+    SuccessOrExit(Tlv::FindTlv(aMessage, ThreadTlv::kTarget, &target, sizeof(target)));
+    SuccessOrExit(Tlv::FindTlv(aMessage, ThreadTlv::kMeshLocalEid, meshLocalIid, sizeof(meshLocalIid)));
+    SuccessOrExit(Tlv::FindUint16Tlv(aMessage, ThreadTlv::kRloc16, rloc16));
 
-    switch (Tlv::ReadUint32Tlv(aMessage, ThreadTlv::kLastTransactionTime, lastTransactionTime))
+    switch (Tlv::FindUint32Tlv(aMessage, ThreadTlv::kLastTransactionTime, lastTransactionTime))
     {
     case OT_ERROR_NONE:
         break;
@@ -660,9 +659,9 @@ exit:
     return;
 }
 
-otError AddressResolver::SendAddressError(const Ip6::Address &aTarget,
-                                          const uint8_t *     aMeshLocalIid,
-                                          const Ip6::Address *aDestination)
+void AddressResolver::SendAddressError(const Ip6::Address &aTarget,
+                                       const uint8_t *     aMeshLocalIid,
+                                       const Ip6::Address *aDestination)
 {
     otError          error;
     Coap::Message *  message;
@@ -674,7 +673,7 @@ otError AddressResolver::SendAddressError(const Ip6::Address &aTarget,
     SuccessOrExit(error = message->AppendUriPathOptions(OT_URI_PATH_ADDRESS_ERROR));
     SuccessOrExit(error = message->SetPayloadMarker());
 
-    SuccessOrExit(error = Tlv::AppendTlv(*message, ThreadTlv::kTarget, aTarget.mFields.m8, sizeof(aTarget)));
+    SuccessOrExit(error = Tlv::AppendTlv(*message, ThreadTlv::kTarget, &aTarget, sizeof(aTarget)));
     SuccessOrExit(error = Tlv::AppendTlv(*message, ThreadTlv::kMeshLocalEid, aMeshLocalIid,
                                          Ip6::Address::kInterfaceIdentifierSize));
 
@@ -696,12 +695,15 @@ otError AddressResolver::SendAddressError(const Ip6::Address &aTarget,
 
 exit:
 
-    if (error != OT_ERROR_NONE && message != NULL)
+    if (error != OT_ERROR_NONE)
     {
-        message->Free();
-    }
+        otLogInfoArp("Failed to send address error: %s", otThreadErrorToString(error));
 
-    return error;
+        if (message != NULL)
+        {
+            message->Free();
+        }
+    }
 }
 
 void AddressResolver::HandleAddressError(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
@@ -730,8 +732,8 @@ void AddressResolver::HandleAddressError(Coap::Message &aMessage, const Ip6::Mes
         }
     }
 
-    SuccessOrExit(error = Tlv::ReadTlv(aMessage, ThreadTlv::kTarget, &target, sizeof(target)));
-    SuccessOrExit(error = Tlv::ReadTlv(aMessage, ThreadTlv::kMeshLocalEid, meshLocalIid, sizeof(meshLocalIid)));
+    SuccessOrExit(error = Tlv::FindTlv(aMessage, ThreadTlv::kTarget, &target, sizeof(target)));
+    SuccessOrExit(error = Tlv::FindTlv(aMessage, ThreadTlv::kMeshLocalEid, meshLocalIid, sizeof(meshLocalIid)));
 
     for (const Ip6::NetifUnicastAddress *address = Get<ThreadNetif>().GetUnicastAddresses(); address;
          address                                 = address->GetNext())
@@ -793,7 +795,7 @@ void AddressResolver::HandleAddressQuery(Coap::Message &aMessage, const Ip6::Mes
 
     VerifyOrExit(aMessage.IsNonConfirmable() && aMessage.GetCode() == OT_COAP_CODE_POST, OT_NOOP);
 
-    SuccessOrExit(Tlv::ReadTlv(aMessage, ThreadTlv::kTarget, &target, sizeof(target)));
+    SuccessOrExit(Tlv::FindTlv(aMessage, ThreadTlv::kTarget, &target, sizeof(target)));
 
     otLogInfoArp("Received address query from 0x%04x for target %s", aMessageInfo.GetPeerAddr().GetLocator(),
                  target.ToString().AsCString());
@@ -835,13 +837,13 @@ void AddressResolver::SendAddressQueryResponse(const Ip6::Address &aTarget,
     Coap::Message *  message;
     Ip6::MessageInfo messageInfo;
 
-    VerifyOrExit((message = Get<Coap::Coap>().NewMessage()) != NULL, error = OT_ERROR_NO_BUFS);
+    VerifyOrExit((message = Get<Coap::Coap>().NewPriorityMessage()) != NULL, error = OT_ERROR_NO_BUFS);
 
     message->Init(OT_COAP_TYPE_CONFIRMABLE, OT_COAP_CODE_POST);
     SuccessOrExit(error = message->AppendUriPathOptions(OT_URI_PATH_ADDRESS_NOTIFY));
     SuccessOrExit(error = message->SetPayloadMarker());
 
-    SuccessOrExit(error = Tlv::AppendTlv(*message, ThreadTlv::kTarget, aTarget.mFields.m8, sizeof(aTarget)));
+    SuccessOrExit(error = Tlv::AppendTlv(*message, ThreadTlv::kTarget, &aTarget, sizeof(aTarget)));
     SuccessOrExit(error = Tlv::AppendTlv(*message, ThreadTlv::kMeshLocalEid, aMeshLocalIid,
                                          Ip6::Address::kInterfaceIdentifierSize));
     SuccessOrExit(error = Tlv::AppendUint16Tlv(*message, ThreadTlv::kRloc16, Get<Mle::MleRouter>().GetRloc16()));

@@ -84,15 +84,14 @@ exit:
     mEnabled = false;
 }
 
-otError IndirectSender::AddMessageForSleepyChild(Message &aMessage, Child &aChild)
+void IndirectSender::AddMessageForSleepyChild(Message &aMessage, Child &aChild)
 {
-    otError  error = OT_ERROR_NONE;
     uint16_t childIndex;
 
-    VerifyOrExit(!aChild.IsRxOnWhenIdle(), error = OT_ERROR_INVALID_STATE);
+    OT_ASSERT(!aChild.IsRxOnWhenIdle());
 
     childIndex = Get<ChildTable>().GetChildIndex(aChild);
-    VerifyOrExit(!aMessage.GetChildMask(childIndex), error = OT_ERROR_ALREADY);
+    VerifyOrExit(!aMessage.GetChildMask(childIndex), OT_NOOP);
 
     aMessage.SetChildMask(childIndex);
     mSourceMatchController.IncrementMessageCount(aChild);
@@ -100,7 +99,7 @@ otError IndirectSender::AddMessageForSleepyChild(Message &aMessage, Child &aChil
     RequestMessageUpdate(aChild);
 
 exit:
-    return error;
+    return;
 }
 
 otError IndirectSender::RemoveMessageFromSleepyChild(Message &aMessage, Child &aChild)
@@ -424,7 +423,7 @@ void IndirectSender::PrepareEmptyFrame(Mac::TxFrame &aFrame, Child &aChild, bool
     aFrame.InitMacHeader(fcf, Mac::Frame::kKeyIdMode1 | Mac::Frame::kSecEncMic32);
 
     aFrame.SetDstPanId(Get<Mac::Mac>().GetPanId());
-    aFrame.SetSrcPanId(Get<Mac::Mac>().GetPanId());
+    IgnoreError(aFrame.SetSrcPanId(Get<Mac::Mac>().GetPanId()));
     aFrame.SetDstAddr(macDest);
     aFrame.SetSrcAddr(macSource);
     aFrame.SetPayloadLength(0);
@@ -517,7 +516,7 @@ void IndirectSender::HandleSentFrameToChild(const Mac::TxFrame &aFrame,
 
         if (!aFrame.IsEmpty())
         {
-            aFrame.GetDstAddr(macDest);
+            IgnoreError(aFrame.GetDstAddr(macDest));
             Get<MeshForwarder>().LogMessage(MeshForwarder::kMessageTransmit, *message, &macDest, txError);
         }
 

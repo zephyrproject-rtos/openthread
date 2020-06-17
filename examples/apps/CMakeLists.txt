@@ -26,5 +26,8 @@
 #  POSSIBILITY OF SUCH DAMAGE.
 #
 
-add_subdirectory(cli)
+if(OT_APP_CLI)
+    add_subdirectory(cli)
+endif()
+
 add_subdirectory(ncp)

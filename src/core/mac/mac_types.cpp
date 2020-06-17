@@ -57,16 +57,11 @@ PanId GenerateRandomPanId(void)
 #if !OPENTHREAD_RADIO
 void ExtAddress::GenerateRandom(void)
 {
-    Random::Crypto::FillBuffer(m8, sizeof(ExtAddress));
+    IgnoreError(Random::Crypto::FillBuffer(m8, sizeof(ExtAddress)));
     SetGroup(false);
     SetLocal(true);
 }
 #endif
-
-bool ExtAddress::operator==(const ExtAddress &aOther) const
-{
-    return memcmp(m8, aOther.m8, sizeof(ExtAddress)) == 0;
-}
 
 ExtAddress::InfoString ExtAddress::ToString(void) const
 {
@@ -95,11 +90,6 @@ Address::InfoString Address::ToString(void) const
 {
     return (mType == kTypeExtended) ? GetExtended().ToString()
                                     : (mType == kTypeNone ? InfoString("None") : InfoString("0x%04x", GetShort()));
-}
-
-bool ExtendedPanId::operator==(const ExtendedPanId &aOther) const
-{
-    return memcmp(m8, aOther.m8, sizeof(ExtendedPanId)) == 0;
 }
 
 ExtendedPanId::InfoString ExtendedPanId::ToString(void) const

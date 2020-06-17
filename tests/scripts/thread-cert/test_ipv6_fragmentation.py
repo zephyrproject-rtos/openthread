@@ -38,7 +38,9 @@ ROUTER = 2
 
 
 class TestIPv6Fragmentation(thread_cert.TestCase):
-    topology = {
+    SUPPORT_NCP = False
+
+    TOPOLOGY = {
         LEADER: {
             'mode': 'rsdn',
             'panid': 0xcafe,
@@ -76,9 +78,6 @@ class TestIPv6Fragmentation(thread_cert.TestCase):
         self.nodes[ROUTER].udp_send(1831, mleid_leader, common.UDP_TEST_PORT)
         self.simulator.go(5)
         self.nodes[LEADER].udp_check_rx(1831)
-
-        self.nodes[ROUTER].udp_send(1953, mleid_leader, common.UDP_TEST_PORT,
-                                    False)
 
         self.nodes[ROUTER].udp_stop()
         self.nodes[LEADER].udp_stop()

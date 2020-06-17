@@ -331,6 +331,49 @@ otError otLinkRawSrcMatchClearShortEntries(otInstance *aInstance);
 otError otLinkRawSrcMatchClearExtEntries(otInstance *aInstance);
 
 /**
+ * Update MAC keys and key index.
+ *
+ * @param[in]   aInstance    A pointer to an OpenThread instance.
+ * @param[in]   aKeyIdMode   The key ID mode.
+ * @param[in]   aKeyId       The key index.
+ * @param[in]   aPrevKey     The previous MAC key.
+ * @param[in]   aCurrKey     The current MAC key.
+ * @param[in]   aNextKey     The next MAC key.
+ *
+ * @retval OT_ERROR_NONE             If successful.
+ * @retval OT_ERROR_INVALID_STATE    If the raw link-layer isn't enabled.
+ *
+ */
+otError otLinkRawSetMacKey(otInstance *    aInstance,
+                           uint8_t         aKeyIdMode,
+                           uint8_t         aKeyId,
+                           const otMacKey *aPrevKey,
+                           const otMacKey *aCurrKey,
+                           const otMacKey *aNextKey);
+
+/**
+ * Sets the current MAC frame counter value.
+ *
+ * @param[in]   aInstance         A pointer to an OpenThread instance.
+ * @param[in]   aMacFrameCounter  The MAC frame counter value.
+ *
+ * @retval OT_ERROR_NONE             If successful.
+ * @retval OT_ERROR_INVALID_STATE    If the raw link-layer isn't enabled.
+ *
+ */
+otError otLinkRawSetMacFrameCounter(otInstance *aInstance, uint32_t aMacFrameCounter);
+
+/**
+ * Get current platform time (64bits width) of the radio chip.
+ *
+ * @param[in]  aInstance    A pointer to an OpenThread instance.
+ *
+ * @returns The current radio time in microseconds.
+ *
+ */
+uint64_t otLinkRawGetRadioTime(otInstance *aInstance);
+
+/**
  * @}
  *
  */

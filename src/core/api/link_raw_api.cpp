@@ -37,6 +37,7 @@
 #include <openthread/diag.h>
 #include <openthread/thread.h>
 #include <openthread/platform/diag.h>
+#include <openthread/platform/time.h>
 
 #include "common/debug.hpp"
 #include "common/instance.hpp"
@@ -219,6 +220,29 @@ otError otLinkRawSrcMatchClearExtEntries(otInstance *aInstance)
 
 exit:
     return error;
+}
+
+otError otLinkRawSetMacKey(otInstance *    aInstance,
+                           uint8_t         aKeyIdMode,
+                           uint8_t         aKeyId,
+                           const otMacKey *aPrevKey,
+                           const otMacKey *aCurrKey,
+                           const otMacKey *aNextKey)
+{
+    return static_cast<Instance *>(aInstance)->Get<Mac::LinkRaw>().SetMacKey(
+        aKeyIdMode, aKeyId, *static_cast<const Mac::Key *>(aPrevKey), *static_cast<const Mac::Key *>(aCurrKey),
+        *static_cast<const Mac::Key *>(aNextKey));
+}
+
+otError otLinkRawSetMacFrameCounter(otInstance *aInstance, uint32_t aMacFrameCounter)
+{
+    return static_cast<Instance *>(aInstance)->Get<Mac::LinkRaw>().SetMacFrameCounter(aMacFrameCounter);
+}
+
+uint64_t otLinkRawGetRadioTime(otInstance *aInstance)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    return otPlatTimeGet();
 }
 
 #if OPENTHREAD_RADIO

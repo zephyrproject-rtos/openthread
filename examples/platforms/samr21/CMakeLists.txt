@@ -38,7 +38,7 @@ list(APPEND OT_PLATFORM_DEFINES
 )
 set(OT_PLATFORM_DEFINES ${OT_PLATFORM_DEFINES} PARENT_SCOPE)
 
-list(APPEND OT_PRIVATE_DEFINES "MBEDTLS_USER_CONFIG_FILE=\"samr21-mbedtls-config.h\"")
+target_compile_definitions(ot-config INTERFACE "MBEDTLS_USER_CONFIG_FILE=\"samr21-mbedtls-config.h\"")
 list(APPEND OT_PUBLIC_INCLUDES
     "${PROJECT_SOURCE_DIR}/examples/platforms/samr21/crypto"
 )
@@ -71,6 +71,7 @@ target_link_libraries(openthread-samr21
         samr21-driver
     PRIVATE
         ${OT_MBEDTLS}
+        ot-config
 )
 
 target_link_options(openthread-samr21
@@ -82,19 +83,18 @@ target_link_options(openthread-samr21
 target_compile_definitions(openthread-samr21
     PUBLIC
         ${OT_PLATFORM_DEFINES}
-    PRIVATE
-        ${OT_PRIVATE_DEFINES}
 )
 
 target_compile_options(openthread-samr21
     PRIVATE
+        -Wno-implicit-function-declaration
+        -Wno-expansion-to-defined
         ${OT_CFLAGS}
 )
 
 target_include_directories(openthread-samr21
     PRIVATE
         ${OT_PUBLIC_INCLUDES}
-        ${OT_PRIVATE_INCLUDES}
         ${PROJECT_SOURCE_DIR}/src/core
         ${PROJECT_SOURCE_DIR}/examples/platforms
 )

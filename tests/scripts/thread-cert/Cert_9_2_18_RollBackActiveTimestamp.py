@@ -49,7 +49,9 @@ MTDS = [ED1, SED1]
 
 
 class Cert_9_2_18_RollBackActiveTimestamp(thread_cert.TestCase):
-    topology = {
+    SUPPORT_NCP = False
+
+    TOPOLOGY = {
         COMMISSIONER: {
             'active_dataset': {
                 'timestamp': 1,

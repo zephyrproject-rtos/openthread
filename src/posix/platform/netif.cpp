@@ -58,12 +58,11 @@
 //	If you want mDNS support, then you can't use Apple utun.  I use the non-Apple driver
 //	pretty much exclusively, because mDNS is a requirement.
 
-#define USE_APPLE_UTUN 0
-#define USE_TUN 1
-
-#if USE_TUN && USE_APPLE_UTUN
-#error "You may not use both tun and utun."
-#endif // USE_TUN && USE_APPLE_UTUN
+#if !(defined(OPENTHREAD_POSIX_CONFIG_MACOS_TUN_OPTION) &&                         \
+      ((OPENTHREAD_POSIX_CONFIG_MACOS_TUN_OPTION == OT_POSIX_CONFIG_MACOS_UTUN) || \
+       (OPENTHREAD_POSIX_CONFIG_MACOS_TUN_OPTION == OT_POSIX_CONFIG_MACOS_TUN)))
+#error "Unexpected tunnel driver selection"
+#endif
 
 #endif // defined(__APPLE__)
 
@@ -95,31 +94,39 @@
 #endif // defined(__APPLE__) || defined(__FreeBSD__)
 #include <net/route.h>
 #include <netinet6/in6_var.h>
+#if defined(__APPLE__) || defined(__FreeBSD__)
+// the prf_ra structure is defined inside another structure (in6_prflags), and C++
+//   treats that as out of scope if another structure tries to use it -- this (slightly gross)
+//   workaround makes us dependent on our definition remaining in sync (at least the size of it),
+//   so we add a compile-time check that will fail if the SDK ever changes
 //
-// 	we need the definition of ND6_INFINITE_LIFETIME, but on
-// 	on mac OS, you can't include nd6.h, at least not from C++, because
-//	prf_ra isn't defined.  But it actually IS defined -- just inside
-//	another struct in <netinet6/in6_var.h>, which was just included.
-//
-#if !(defined(__APPLE__) || defined(__FreeBSD__))
+// our definition of the struct:
+struct prf_ra
+{
+    u_char onlink : 1;
+    u_char autonomous : 1;
+    u_char reserved : 6;
+} prf_ra;
+// object that contains the SDK's version of the structure:
+struct in6_prflags compile_time_check_prflags;
+// compile time check to make sure they're the same size:
+extern int
+    compile_time_check_struct_prf_ra[(sizeof(struct prf_ra) == sizeof(compile_time_check_prflags.prf_ra)) ? 1 : -1];
+#endif
+#include <net/if_dl.h>    // struct sockaddr_dl
 #include <netinet6/nd6.h> // ND6_INFINITE_LIFETIME
-#else
-#define ND6_INFINITE_LIFETIME 0xffffffff
-#endif // !(defined(__APPLE__) || defined(__FreeBSD__))
-
-#include <net/if_dl.h> // struct sockaddr_dl
 
 #ifdef __APPLE__
-#if USE_APPLE_UTUN
+#if OPENTHREAD_POSIX_CONFIG_MACOS_TUN_OPTION == OT_POSIX_CONFIG_MACOS_UTUN
 #include <net/if_utun.h>
-#endif // USE_APPLE_UTUN
+#endif
 
-#if USE_TUN
+#if OPENTHREAD_POSIX_CONFIG_MACOS_TUN_OPTION == OT_POSIX_CONFIG_MACOS_TUN
 #include <sys/ioccom.h>
 // FIX ME: include the tun_ioctl.h file (challenging, as it's location depends on where the developer puts it)
 #define TUNSIFHEAD _IOW('t', 96, int)
 #define TUNGIFHEAD _IOR('t', 97, int)
-#endif // USE_TUN
+#endif
 
 #include <sys/kern_control.h>
 #endif // defined(__APPLE__)
@@ -134,6 +141,7 @@
 #include <openthread/instance.h>
 #include <openthread/ip6.h>
 #include <openthread/message.h>
+#include <openthread/platform/misc.h>
 
 #include "common/code_utils.hpp"
 #include "common/logging.hpp"
@@ -148,9 +156,9 @@
 #elif defined(__NetBSD__) || defined(__FreeBSD__)
 #define OPENTHREAD_POSIX_TUN_DEVICE "/dev/tun0"
 #elif defined(__APPLE__)
-#if USE_APPLE_UTUN
+#if OPENTHREAD_POSIX_CONFIG_MACOS_TUN_OPTION == OT_POSIX_CONFIG_MACOS_UTUN
 #define OPENTHREAD_POSIX_TUN_DEVICE // not used - calculated dynamically
-#elif USE_TUN
+#elif OPENTHREAD_POSIX_CONFIG_MACOS_TUN_OPTION == OT_POSIX_CONFIG_MACOS_TUN
 #define OPENTHREAD_POSIX_TUN_DEVICE "/dev/tun0"
 #endif
 #else
@@ -290,6 +298,8 @@ static uint8_t NetmaskToPrefixLength(const struct sockaddr_in6 *netmask)
 
 static void UpdateUnicast(otInstance *aInstance, const otIp6Address &aAddress, uint8_t aPrefixLength, bool aIsAdded)
 {
+    OT_UNUSED_VARIABLE(aInstance);
+
     otError error = OT_ERROR_NONE;
 
     assert(sInstance == aInstance);
@@ -332,8 +342,6 @@ static void UpdateUnicast(otInstance *aInstance, const otIp6Address &aAddress, u
 #if defined(__APPLE__)
         ifr6.ifra_lifetime.ia6t_expire    = ND6_INFINITE_LIFETIME;
         ifr6.ifra_lifetime.ia6t_preferred = ND6_INFINITE_LIFETIME;
-
-        ifr6.ifra_flags |= IN6_IFF_NODAD;
 #endif
 
         err = ioctl(sIpFd, aIsAdded ? SIOCAIFADDR_IN6 : SIOCDIFADDR_IN6, &ifr6);
@@ -358,6 +366,8 @@ exit:
 
 static void UpdateMulticast(otInstance *aInstance, const otIp6Address &aAddress, bool aIsAdded)
 {
+    OT_UNUSED_VARIABLE(aInstance);
+
     struct ipv6_mreq mreq;
     otError          error = OT_ERROR_NONE;
 
@@ -447,7 +457,7 @@ static void processAddressChange(const otIp6Address *aAddress, uint8_t aPrefixLe
 
 static void processStateChange(otChangedFlags aFlags, void *aContext)
 {
-    if (OT_CHANGED_THREAD_NETIF_STATE | aFlags)
+    if (OT_CHANGED_THREAD_NETIF_STATE & aFlags)
     {
         UpdateLink(static_cast<otInstance *>(aContext));
     }
@@ -455,6 +465,8 @@ static void processStateChange(otChangedFlags aFlags, void *aContext)
 
 static void processReceive(otMessage *aMessage, void *aContext)
 {
+    OT_UNUSED_VARIABLE(aContext);
+
     char     packet[kMaxIp6Size + 4];
     otError  error     = OT_ERROR_NONE;
     uint16_t length    = otMessageGetLength(aMessage);
@@ -847,8 +859,6 @@ static void processNetifAddrEvent(otInstance *aInstance, struct rt_msghdr *rtm)
 #if defined(__APPLE__)
                         ifr6.ifra_lifetime.ia6t_expire    = ND6_INFINITE_LIFETIME;
                         ifr6.ifra_lifetime.ia6t_preferred = ND6_INFINITE_LIFETIME;
-
-                        ifr6.ifra_flags |= IN6_IFF_NODAD;
 #endif
 
                         err = ioctl(sIpFd, SIOCDIFADDR_IN6, &ifr6);
@@ -957,7 +967,7 @@ static void processNetifEvent(otInstance *aInstance)
     VerifyOrExit(length > 0, OT_NOOP);
 
 #if defined(__linux__)
-    for (struct nlmsghdr *msg = reinterpret_cast<struct nlmsghdr *>(buffer); NLMSG_OK(msg, length);
+    for (struct nlmsghdr *msg = reinterpret_cast<struct nlmsghdr *>(buffer); NLMSG_OK(msg, static_cast<size_t>(length));
          msg                  = NLMSG_NEXT(msg, length))
     {
 #else
@@ -1197,7 +1207,7 @@ static void platformConfigureTunDevice(otInstance *aInstance,
 }
 #endif
 
-#if defined(__APPLE__) && USE_APPLE_UTUN
+#if defined(__APPLE__) && (OPENTHREAD_POSIX_CONFIG_MACOS_TUN_OPTION == OT_POSIX_CONFIG_MACOS_UTUN)
 static void platformConfigureTunDevice(otInstance *aInstance,
                                        const char *aInterfaceName,
                                        char *      deviceName,
@@ -1252,7 +1262,9 @@ exit:
 }
 #endif
 
-#if defined(__NetBSD__) || (defined(__APPLE__) && USE_TUN) || defined(__FreeBSD__)
+#if defined(__NetBSD__) ||                                                                             \
+    (defined(__APPLE__) && (OPENTHREAD_POSIX_CONFIG_MACOS_TUN_OPTION == OT_POSIX_CONFIG_MACOS_TUN)) || \
+    defined(__FreeBSD__)
 static void platformConfigureTunDevice(otInstance *aInstance,
                                        const char *aInterfaceName,
                                        char *      deviceName,
@@ -1357,7 +1369,7 @@ void platformNetifInit(otInstance *aInstance, const char *aInterfaceName)
     otIcmp6SetEchoMode(aInstance, OT_ICMP6_ECHO_HANDLER_DISABLED);
     otIp6SetReceiveCallback(aInstance, processReceive, aInstance);
     otIp6SetAddressCallback(aInstance, processAddressChange, aInstance);
-    otSetStateChangedCallback(aInstance, processStateChange, aInstance);
+    SuccessOrDie(otSetStateChangedCallback(aInstance, processStateChange, aInstance));
 #if OPENTHREAD_POSIX_MULTICAST_PROMISCUOUS_REQUIRED
     otIp6SetMulticastPromiscuousEnabled(aInstance, true);
 #endif
@@ -1450,4 +1462,20 @@ exit:
     return;
 }
 
+otError otPlatGetNetif(otInstance *aInstance, const char **outNetIfName, unsigned int *outNetIfIndex)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+
+    otError error;
+
+    VerifyOrExit(sTunIndex != 0, error = OT_ERROR_FAILED);
+
+    *outNetIfName  = sTunName;
+    *outNetIfIndex = sTunIndex;
+    error          = OT_ERROR_NONE;
+
+exit:
+
+    return error;
+}
 #endif // OPENTHREAD_CONFIG_PLATFORM_NETIF_ENABLE

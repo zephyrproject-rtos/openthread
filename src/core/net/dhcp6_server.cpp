@@ -135,16 +135,16 @@ void Dhcp6Server::Start(void)
     Ip6::SockAddr sockaddr;
 
     sockaddr.mPort = kDhcpServerPort;
-    mSocket.Open(&Dhcp6Server::HandleUdpReceive, this);
-    mSocket.Bind(sockaddr);
+    IgnoreError(mSocket.Open(&Dhcp6Server::HandleUdpReceive, this));
+    IgnoreError(mSocket.Bind(sockaddr));
 }
 
 void Dhcp6Server::Stop(void)
 {
-    mSocket.Close();
+    IgnoreError(mSocket.Close());
 }
 
-otError Dhcp6Server::AddPrefixAgent(const otIp6Prefix &aIp6Prefix, const Lowpan::Context &aContext)
+void Dhcp6Server::AddPrefixAgent(const otIp6Prefix &aIp6Prefix, const Lowpan::Context &aContext)
 {
     otError      error    = OT_ERROR_NONE;
     PrefixAgent *newEntry = NULL;
@@ -169,7 +169,11 @@ otError Dhcp6Server::AddPrefixAgent(const otIp6Prefix &aIp6Prefix, const Lowpan:
     mPrefixAgentsCount++;
 
 exit:
-    return error;
+
+    if (error != OT_ERROR_NONE)
+    {
+        otLogNoteIp6("Failed to add DHCPv6 prefix agent: %s", otThreadErrorToString(error));
+    }
 }
 
 void Dhcp6Server::HandleUdpReceive(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
@@ -489,6 +493,7 @@ void Dhcp6Server::ApplyMeshLocalPrefix(void)
         if (mPrefixAgents[i].IsValid())
         {
             PrefixAgent *entry = &mPrefixAgents[i];
+
             Get<ThreadNetif>().RemoveUnicastAddress(entry->GetAloc());
             entry->GetAloc().GetAddress().SetPrefix(Get<Mle::MleRouter>().GetMeshLocalPrefix());
             Get<ThreadNetif>().AddUnicastAddress(entry->GetAloc());

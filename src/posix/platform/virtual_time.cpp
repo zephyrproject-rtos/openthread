@@ -51,9 +51,8 @@ static const int kUsPerSecond     = 1000000; ///< Number of microseconds per sec
 static uint64_t sNow        = 0;  ///< Time of simulation.
 static int      sSockFd     = -1; ///< Socket used to communicating with simulator.
 static uint16_t sPortOffset = 0;  ///< Port offset for simulation.
-static int      sNodeId     = 0;  ///< Node id of this simulated device.
 
-void virtualTimeInit(void)
+void virtualTimeInit(uint16_t aNodeId)
 {
     struct sockaddr_in sockaddr;
     char *             offset;
@@ -81,10 +80,7 @@ void virtualTimeInit(void)
         sPortOffset *= kWellKnownNodeId;
     }
 
-    // node id is required for virtual time simulation
-    sNodeId = atoi(getenv("NODE_ID"));
-
-    sockaddr.sin_port        = htons(kBasePort + sPortOffset + sNodeId);
+    sockaddr.sin_port        = htons(kBasePort + sPortOffset + aNodeId);
     sockaddr.sin_addr.s_addr = INADDR_ANY;
 
     sSockFd = SocketWithCloseExec(AF_INET, SOCK_DGRAM, IPPROTO_UDP, kSocketBlock);
@@ -109,7 +105,7 @@ void virtualTimeDeinit(void)
     }
 }
 
-static void virtualTimeSendEvent(struct Event *aEvent, size_t aLength)
+static void virtualTimeSendEvent(struct VirtualTimeEvent *aEvent, size_t aLength)
 {
     ssize_t            rval;
     struct sockaddr_in sockaddr;
@@ -127,11 +123,11 @@ static void virtualTimeSendEvent(struct Event *aEvent, size_t aLength)
     }
 }
 
-void virtualTimeReceiveEvent(struct Event *aEvent)
+void virtualTimeReceiveEvent(struct VirtualTimeEvent *aEvent)
 {
     ssize_t rval = recvfrom(sSockFd, aEvent, sizeof(*aEvent), 0, NULL, NULL);
 
-    if (rval < 0 || (uint16_t)rval < offsetof(struct Event, mData))
+    if (rval < 0 || (uint16_t)rval < offsetof(struct VirtualTimeEvent, mData))
     {
         DieNowWithMessage("recvfrom", (rval < 0) ? OT_EXIT_ERROR_ERRNO : OT_EXIT_FAILURE);
     }
@@ -141,18 +137,18 @@ void virtualTimeReceiveEvent(struct Event *aEvent)
 
 void virtualTimeSendSleepEvent(const struct timeval *aTimeout)
 {
-    struct Event event;
+    struct VirtualTimeEvent event;
 
     event.mDelay      = (uint64_t)aTimeout->tv_sec * kUsPerSecond + (uint64_t)aTimeout->tv_usec;
     event.mEvent      = OT_SIM_EVENT_ALARM_FIRED;
     event.mDataLength = 0;
 
-    virtualTimeSendEvent(&event, offsetof(struct Event, mData));
+    virtualTimeSendEvent(&event, offsetof(struct VirtualTimeEvent, mData));
 }
 
 void virtualTimeSendRadioSpinelWriteEvent(const uint8_t *aData, uint16_t aLength)
 {
-    struct Event event;
+    struct VirtualTimeEvent event;
 
     event.mDelay      = 0;
     event.mEvent      = OT_SIM_EVENT_RADIO_SPINEL_WRITE;
@@ -160,7 +156,7 @@ void virtualTimeSendRadioSpinelWriteEvent(const uint8_t *aData, uint16_t aLength
 
     memcpy(event.mData, aData, aLength);
 
-    virtualTimeSendEvent(&event, offsetof(struct Event, mData) + event.mDataLength);
+    virtualTimeSendEvent(&event, offsetof(struct VirtualTimeEvent, mData) + event.mDataLength);
 }
 
 void virtualTimeUpdateFdSet(fd_set *        aReadFdSet,
@@ -185,7 +181,7 @@ void virtualTimeProcess(otInstance *  aInstance,
                         const fd_set *aWriteFdSet,
                         const fd_set *aErrorFdSet)
 {
-    struct Event event;
+    struct VirtualTimeEvent event;
 
     memset(&event, 0, sizeof(event));
 

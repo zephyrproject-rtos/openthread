@@ -39,6 +39,7 @@
 #include <openthread/link_raw.h>
 
 #include "common/locator.hpp"
+#include "common/non_copyable.hpp"
 #include "mac/mac_frame.hpp"
 #include "mac/sub_mac.hpp"
 
@@ -51,7 +52,7 @@ namespace Mac {
  * This class defines the raw link-layer object.
  *
  */
-class LinkRaw : public InstanceLocator
+class LinkRaw : public InstanceLocator, private NonCopyable
 {
     friend class ot::Instance;
 
@@ -242,6 +243,36 @@ public:
      *
      */
     otError SetExtAddress(const ExtAddress &aExtAddress);
+
+    /**
+     * This method updates MAC keys and key index.
+     *
+     * @param[in]   aKeyIdMode        The key ID mode.
+     * @param[in]   aKeyId            The key index.
+     * @param[in]   aPrevKey          The previous MAC key.
+     * @param[in]   aCurrKey          The current MAC key.
+     * @param[in]   aNextKey          The next MAC key.
+     *
+     * @retval OT_ERROR_NONE             If successful.
+     * @retval OT_ERROR_INVALID_STATE    If the raw link-layer isn't enabled.
+     *
+     */
+    otError SetMacKey(uint8_t    aKeyIdMode,
+                      uint8_t    aKeyId,
+                      const Key &aPrevKey,
+                      const Key &aCurrKey,
+                      const Key &aNextKey);
+
+    /**
+     * This method sets the current MAC frame counter value.
+     *
+     * @param[in] aMacFrameCounter  The MAC frame counter value.
+     *
+     * @retval OT_ERROR_NONE             If successful.
+     * @retval OT_ERROR_INVALID_STATE    If the raw link-layer isn't enabled.
+     *
+     */
+    otError SetMacFrameCounter(uint32_t aMacFrameCounter);
 
     /**
      * This method records the status of a frame transmission attempt and is mainly used for logging failures.

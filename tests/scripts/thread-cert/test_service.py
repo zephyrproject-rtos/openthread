@@ -49,7 +49,9 @@ SRV_1_SERVER_DATA = 'qux'
 
 
 class Test_Service(thread_cert.TestCase):
-    topology = {
+    SUPPORT_NCP = False
+
+    TOPOLOGY = {
         LEADER: {
             'channel': 12,
             'mode': 'rsdn',

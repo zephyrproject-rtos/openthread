@@ -59,9 +59,14 @@ SubMac::SubMac(Instance &aInstance)
     , mCallbacks(aInstance)
     , mPcapCallback(NULL)
     , mPcapCallbackContext(NULL)
-    , mTimer(aInstance, &SubMac::HandleTimer, this)
+    , mFrameCounter(0)
+    , mKeyId(0)
+    , mTimer(aInstance, SubMac::HandleTimer, this)
 {
     mExtAddress.Clear();
+    mPrevKey.Clear();
+    mCurrKey.Clear();
+    mNextKey.Clear();
 }
 
 otRadioCaps SubMac::GetCaps(void) const
@@ -70,25 +75,29 @@ otRadioCaps SubMac::GetCaps(void) const
 
 #if OPENTHREAD_RADIO || OPENTHREAD_CONFIG_LINK_RAW_ENABLE
 
-#if OPENTHREAD_CONFIG_SOFTWARE_ACK_TIMEOUT_ENABLE
+#if OPENTHREAD_CONFIG_MAC_SOFTWARE_ACK_TIMEOUT_ENABLE
     caps |= OT_RADIO_CAPS_ACK_TIMEOUT;
 #endif
 
-#if OPENTHREAD_CONFIG_SOFTWARE_CSMA_BACKOFF_ENABLE
+#if OPENTHREAD_CONFIG_MAC_SOFTWARE_CSMA_BACKOFF_ENABLE
     caps |= OT_RADIO_CAPS_CSMA_BACKOFF;
 #endif
 
-#if OPENTHREAD_CONFIG_SOFTWARE_RETRANSMIT_ENABLE
+#if OPENTHREAD_CONFIG_MAC_SOFTWARE_RETRANSMIT_ENABLE
     caps |= OT_RADIO_CAPS_TRANSMIT_RETRIES;
 #endif
 
-#if OPENTHREAD_CONFIG_SOFTWARE_ENERGY_SCAN_ENABLE
+#if OPENTHREAD_CONFIG_MAC_SOFTWARE_ENERGY_SCAN_ENABLE
     caps |= OT_RADIO_CAPS_ENERGY_SCAN;
+#endif
+
+#if OPENTHREAD_CONFIG_MAC_SOFTWARE_TX_SECURITY_ENABLE
+    caps |= OT_RADIO_CAPS_TRANSMIT_SEC;
 #endif
 
 #else
     caps = OT_RADIO_CAPS_ACK_TIMEOUT | OT_RADIO_CAPS_CSMA_BACKOFF | OT_RADIO_CAPS_TRANSMIT_RETRIES |
-           OT_RADIO_CAPS_ENERGY_SCAN;
+           OT_RADIO_CAPS_ENERGY_SCAN | OT_RADIO_CAPS_TRANSMIT_SEC;
 #endif
 
     return caps;
@@ -193,6 +202,11 @@ void SubMac::HandleReceiveDone(RxFrame *aFrame, otError aError)
         mPcapCallback(aFrame, false, mPcapCallbackContext);
     }
 
+    if (!ShouldHandleTransmitSecurity() && aFrame != NULL && aFrame->mInfo.mRxInfo.mAckedWithSecEnhAck)
+    {
+        UpdateFrameCounter(aFrame->mInfo.mRxInfo.mAckFrameCounter);
+    }
+
     mCallbacks.ReceiveDone(aFrame, aError);
 }
 
@@ -214,12 +228,49 @@ otError SubMac::Send(void)
         break;
     }
 
+    ProcessTransmitSecurity();
     mCsmaBackoffs    = 0;
     mTransmitRetries = 0;
     StartCsmaBackoff();
 
 exit:
     return error;
+}
+
+void SubMac::ProcessTransmitSecurity(void)
+{
+    const ExtAddress *extAddress = NULL;
+    uint8_t           keyIdMode;
+
+    VerifyOrExit(ShouldHandleTransmitSecurity(), OT_NOOP);
+    VerifyOrExit(mTransmitFrame.GetSecurityEnabled(), OT_NOOP);
+    VerifyOrExit(!mTransmitFrame.IsSecurityProcessed(), OT_NOOP);
+
+    SuccessOrExit(mTransmitFrame.GetKeyIdMode(keyIdMode));
+    VerifyOrExit(keyIdMode == Frame::kKeyIdMode1, OT_NOOP);
+
+    mTransmitFrame.SetAesKey(GetCurrentMacKey());
+
+    if (!mTransmitFrame.IsARetransmission())
+    {
+        uint32_t frameCounter = GetFrameCounter();
+
+        mTransmitFrame.SetKeyId(mKeyId);
+        mTransmitFrame.SetFrameCounter(frameCounter);
+        UpdateFrameCounter(frameCounter + 1);
+    }
+
+    extAddress = &GetExtAddress();
+
+#if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
+    // Transmit security will be processed after time IE content is updated.
+    VerifyOrExit(mTransmitFrame.GetTimeIeOffset() == 0, OT_NOOP);
+#endif
+
+    mTransmitFrame.ProcessTransmitAesCcm(*extAddress);
+
+exit:
+    return;
 }
 
 void SubMac::StartCsmaBackoff(void)
@@ -241,11 +292,11 @@ void SubMac::StartCsmaBackoff(void)
 
     if (mRxOnWhenBackoff)
     {
-        Get<Radio>().Receive(mTransmitFrame.GetChannel());
+        IgnoreError(Get<Radio>().Receive(mTransmitFrame.GetChannel()));
     }
     else
     {
-        Get<Radio>().Sleep();
+        IgnoreError(Get<Radio>().Sleep());
     }
 
 #if OPENTHREAD_CONFIG_PLATFORM_USEC_TIMER_ENABLE
@@ -337,6 +388,19 @@ void SubMac::HandleTransmitDone(TxFrame &aFrame, RxFrame *aAckFrame, otError aEr
         OT_UNREACHABLE_CODE(ExitNow());
     }
 
+    if (!ShouldHandleTransmitSecurity() && aFrame.GetSecurityEnabled())
+    {
+        uint8_t  keyIdMode;
+        uint32_t frameCounter = 0;
+
+        IgnoreError(aFrame.GetKeyIdMode(keyIdMode));
+        if (keyIdMode == Frame::kKeyIdMode1)
+        {
+            OT_ASSERT(aFrame.GetFrameCounter(frameCounter) == OT_ERROR_NONE);
+            UpdateFrameCounter(frameCounter);
+        }
+    }
+
     // Determine whether a CSMA retry is required.
 
     if (!ccaSuccess && ShouldHandleCsmaBackOff() && mCsmaBackoffs < aFrame.GetMaxCsmaBackoffs())
@@ -400,7 +464,7 @@ otError SubMac::EnergyScan(uint8_t aScanChannel, uint16_t aScanDuration)
 
     if (RadioSupportsEnergyScan())
     {
-        Get<Radio>().EnergyScan(aScanChannel, aScanDuration);
+        IgnoreError(Get<Radio>().EnergyScan(aScanChannel, aScanDuration));
         SetState(kStateEnergyScan);
     }
     else if (ShouldHandleEnergyScan())
@@ -471,7 +535,7 @@ void SubMac::HandleTimer(void)
 
     case kStateTransmit:
         otLogDebgMac("Ack timer timed out");
-        Get<Radio>().Receive(mTransmitFrame.GetChannel());
+        IgnoreError(Get<Radio>().Receive(mTransmitFrame.GetChannel()));
         HandleTransmitDone(mTransmitFrame, NULL, OT_ERROR_NO_ACK);
         break;
 
@@ -482,6 +546,24 @@ void SubMac::HandleTimer(void)
     default:
         break;
     }
+}
+
+bool SubMac::ShouldHandleTransmitSecurity(void) const
+{
+    bool swTxSecurity = true;
+
+    VerifyOrExit(!RadioSupportsTransmitSecurity(), swTxSecurity = false);
+
+#if OPENTHREAD_CONFIG_LINK_RAW_ENABLE
+    VerifyOrExit(Get<LinkRaw>().IsEnabled(), OT_NOOP);
+#endif
+
+#if OPENTHREAD_CONFIG_LINK_RAW_ENABLE || OPENTHREAD_RADIO
+    swTxSecurity = OPENTHREAD_CONFIG_MAC_SOFTWARE_TX_SECURITY_ENABLE;
+#endif
+
+exit:
+    return swTxSecurity;
 }
 
 bool SubMac::ShouldHandleCsmaBackOff(void) const
@@ -495,7 +577,7 @@ bool SubMac::ShouldHandleCsmaBackOff(void) const
 #endif
 
 #if OPENTHREAD_CONFIG_LINK_RAW_ENABLE || OPENTHREAD_RADIO
-    swCsma = OPENTHREAD_CONFIG_SOFTWARE_CSMA_BACKOFF_ENABLE;
+    swCsma = OPENTHREAD_CONFIG_MAC_SOFTWARE_CSMA_BACKOFF_ENABLE;
 #endif
 
 exit:
@@ -513,7 +595,7 @@ bool SubMac::ShouldHandleAckTimeout(void) const
 #endif
 
 #if OPENTHREAD_CONFIG_LINK_RAW_ENABLE || OPENTHREAD_RADIO
-    swAckTimeout = OPENTHREAD_CONFIG_SOFTWARE_ACK_TIMEOUT_ENABLE;
+    swAckTimeout = OPENTHREAD_CONFIG_MAC_SOFTWARE_ACK_TIMEOUT_ENABLE;
 #endif
 
 exit:
@@ -531,7 +613,7 @@ bool SubMac::ShouldHandleRetries(void) const
 #endif
 
 #if OPENTHREAD_CONFIG_LINK_RAW_ENABLE || OPENTHREAD_RADIO
-    swRetries = OPENTHREAD_CONFIG_SOFTWARE_RETRANSMIT_ENABLE;
+    swRetries = OPENTHREAD_CONFIG_MAC_SOFTWARE_RETRANSMIT_ENABLE;
 #endif
 
 exit:
@@ -549,7 +631,7 @@ bool SubMac::ShouldHandleEnergyScan(void) const
 #endif
 
 #if OPENTHREAD_CONFIG_LINK_RAW_ENABLE || OPENTHREAD_RADIO
-    swEnergyScan = OPENTHREAD_CONFIG_SOFTWARE_ENERGY_SCAN_ENABLE;
+    swEnergyScan = OPENTHREAD_CONFIG_MAC_SOFTWARE_ENERGY_SCAN_ENABLE;
 #endif
 
 exit:
@@ -563,6 +645,56 @@ void SubMac::SetState(State aState)
         otLogDebgMac("RadioState: %s -> %s", StateToString(mState), StateToString(aState));
         mState = aState;
     }
+}
+
+void SubMac::SetMacKey(uint8_t    aKeyIdMode,
+                       uint8_t    aKeyId,
+                       const Key &aPrevKey,
+                       const Key &aCurrKey,
+                       const Key &aNextKey)
+{
+    switch (aKeyIdMode)
+    {
+    case Frame::kKeyIdMode0:
+    case Frame::kKeyIdMode2:
+        break;
+    case Frame::kKeyIdMode1:
+        mKeyId   = aKeyId;
+        mPrevKey = aPrevKey;
+        mCurrKey = aCurrKey;
+        mNextKey = aNextKey;
+        break;
+
+    default:
+        OT_ASSERT(false);
+        break;
+    }
+
+    VerifyOrExit(!ShouldHandleTransmitSecurity(), OT_NOOP);
+
+    Get<Radio>().SetMacKey(aKeyIdMode, aKeyId, aPrevKey, aCurrKey, aNextKey);
+
+exit:
+    return;
+}
+
+void SubMac::UpdateFrameCounter(uint32_t aFrameCounter)
+{
+    mFrameCounter = aFrameCounter;
+
+    mCallbacks.FrameCounterUpdated(aFrameCounter);
+}
+
+void SubMac::SetFrameCounter(uint32_t aFrameCounter)
+{
+    mFrameCounter = aFrameCounter;
+
+    VerifyOrExit(!ShouldHandleTransmitSecurity(), OT_NOOP);
+
+    Get<Radio>().SetMacFrameCounter(aFrameCounter);
+
+exit:
+    return;
 }
 
 // LCOV_EXCL_START

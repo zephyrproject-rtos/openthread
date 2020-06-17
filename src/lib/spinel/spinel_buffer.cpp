@@ -403,7 +403,7 @@ otError Buffer::InFrameFeedMessage(otMessage *aMessage)
     SuccessOrExit(error = InFrameBeginSegment());
 
     // Enqueue the message in the current write frame queue.
-    SuccessOrExit(error = otMessageQueueEnqueue(&mWriteFrameMessageQueue, aMessage));
+    otMessageQueueEnqueue(&mWriteFrameMessageQueue, aMessage);
 
     // End/Close the current segment marking the flag that it contains an associated message.
     InFrameEndSegment(kSegmentHeaderMessageIndicatorFlag);
@@ -745,7 +745,7 @@ uint8_t Buffer::OutFrameReadByte(void)
             // If there is no message, move to next segment (if any).
             if (error != OT_ERROR_NONE)
             {
-                OutFramePrepareSegment();
+                IgnoreError(OutFramePrepareSegment());
             }
         }
 
@@ -766,7 +766,7 @@ uint8_t Buffer::OutFrameReadByte(void)
             // If no more bytes in the message, move to next segment (if any).
             if (error != OT_ERROR_NONE)
             {
-                OutFramePrepareSegment();
+                IgnoreError(OutFramePrepareSegment());
             }
         }
 #endif

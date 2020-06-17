@@ -64,7 +64,7 @@ void LeaderBase::Reset(void)
     mVersion       = Random::NonCrypto::GetUint8();
     mStableVersion = Random::NonCrypto::GetUint8();
     mLength        = 0;
-    Get<ot::Notifier>().Signal(OT_CHANGED_THREAD_NETDATA);
+    Get<ot::Notifier>().Signal(kEventThreadNetdataChanged);
 }
 
 otError LeaderBase::GetServiceId(uint32_t       aEnterpriseNumber,
@@ -444,7 +444,7 @@ otError LeaderBase::SetNetworkData(uint8_t        aVersion,
 
     otDumpDebgNetData("set network data", mTlvs, mLength);
 
-    Get<ot::Notifier>().Signal(OT_CHANGED_THREAD_NETDATA);
+    Get<ot::Notifier>().Signal(kEventThreadNetdataChanged);
 
 exit:
     return error;
@@ -470,7 +470,7 @@ otError LeaderBase::SetCommissioningData(const uint8_t *aValue, uint8_t aValueLe
     }
 
     mVersion++;
-    Get<ot::Notifier>().Signal(OT_CHANGED_THREAD_NETDATA);
+    Get<ot::Notifier>().Signal(kEventThreadNetdataChanged);
 
 exit:
     return error;
@@ -517,16 +517,15 @@ exit:
     return rval;
 }
 
-otError LeaderBase::RemoveCommissioningData(void)
+void LeaderBase::RemoveCommissioningData(void)
 {
-    otError               error = OT_ERROR_NONE;
-    CommissioningDataTlv *tlv   = GetCommissioningData();
+    CommissioningDataTlv *tlv = GetCommissioningData();
 
-    VerifyOrExit(tlv != NULL, error = OT_ERROR_NOT_FOUND);
+    VerifyOrExit(tlv != NULL, OT_NOOP);
     RemoveTlv(tlv);
 
 exit:
-    return error;
+    return;
 }
 
 } // namespace NetworkData

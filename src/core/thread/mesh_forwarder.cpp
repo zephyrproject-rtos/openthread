@@ -57,8 +57,8 @@ namespace ot {
 
 MeshForwarder::MeshForwarder(Instance &aInstance)
     : InstanceLocator(aInstance)
-    , mDiscoverTimer(aInstance, &MeshForwarder::HandleDiscoverTimer, this)
-    , mUpdateTimer(aInstance, &MeshForwarder::HandleUpdateTimer, this)
+    , mDiscoverTimer(aInstance, MeshForwarder::HandleDiscoverTimer, this)
+    , mUpdateTimer(aInstance, MeshForwarder::HandleUpdateTimer, this)
     , mMessageNextOffset(0)
     , mSendMessage(NULL)
     , mMeshSource()
@@ -148,7 +148,7 @@ void MeshForwarder::RemoveMessage(Message &aMessage)
 #if OPENTHREAD_FTD
         for (ChildTable::Iterator iter(GetInstance(), Child::kInStateAnyExceptInvalid); !iter.IsDone(); iter++)
         {
-            IgnoreReturnValue(mIndirectSender.RemoveMessageFromSleepyChild(aMessage, *iter.GetChild()));
+            IgnoreError(mIndirectSender.RemoveMessageFromSleepyChild(aMessage, *iter.GetChild()));
         }
 #endif
 
@@ -476,11 +476,14 @@ otError MeshForwarder::HandleFrameRequest(Mac::TxFrame &aFrame)
         // there is a pending indirect supervision message in the send
         // queue for it. The message would be then converted to a
         // direct tx.
+
+        // Fall through
+#endif
+
+    default:
         mMessageNextOffset = mSendMessage->GetLength();
         error              = OT_ERROR_ABORT;
         ExitNow();
-
-#endif
     }
 
     aFrame.SetIsARetransmission(false);
@@ -520,16 +523,7 @@ start:
     // Initialize MAC header
     fcf = Mac::Frame::kFcfFrameData;
 
-#if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
-    if (aMessage.IsTimeSync())
-    {
-        fcf |= Mac::Frame::kFcfFrameVersion2015 | Mac::Frame::kFcfIePresent;
-    }
-    else
-#endif
-    {
-        fcf |= Mac::Frame::kFcfFrameVersion2006;
-    }
+    Get<Mac::Mac>().UpdateFrameControlField(aMessage.IsTimeSync(), fcf);
 
     fcf |= (aMacDest.IsShort()) ? Mac::Frame::kFcfDstAddrShort : Mac::Frame::kFcfDstAddrExt;
     fcf |= (aMacSource.IsShort()) ? Mac::Frame::kFcfSrcAddrShort : Mac::Frame::kFcfSrcAddrExt;
@@ -606,30 +600,12 @@ start:
 
     aFrame.InitMacHeader(fcf, secCtl);
     aFrame.SetDstPanId(dstpan);
-    aFrame.SetSrcPanId(Get<Mac::Mac>().GetPanId());
+    IgnoreError(aFrame.SetSrcPanId(Get<Mac::Mac>().GetPanId()));
     aFrame.SetDstAddr(aMacDest);
     aFrame.SetSrcAddr(aMacSource);
 
-#if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
-    if (aMessage.IsTimeSync())
-    {
-        Mac::TimeIe * ie;
-        uint8_t *     cur = NULL;
-        Mac::HeaderIe ieList[2];
-
-        ieList[0].Init();
-        ieList[0].SetId(Mac::Frame::kHeaderIeVendor);
-        ieList[0].SetLength(sizeof(Mac::TimeIe));
-        ieList[1].Init();
-        ieList[1].SetId(Mac::Frame::kHeaderIeTermination2);
-        ieList[1].SetLength(0);
-        aFrame.AppendHeaderIe(ieList, 2);
-
-        cur = aFrame.GetHeaderIe(Mac::Frame::kHeaderIeVendor);
-        ie  = reinterpret_cast<Mac::TimeIe *>(cur + sizeof(Mac::HeaderIe));
-        ie->Init();
-    }
-
+#if OPENTHREAD_CONFIG_MAC_HEADER_IE_SUPPORT
+    IgnoreError(Get<Mac::Mac>().AppendHeaderIe(aMessage.IsTimeSync(), aFrame));
 #endif
 
     payload = aFrame.GetPayload();
@@ -770,11 +746,11 @@ start:
         payload += fragmentHeaderLength;
         headerLength += fragmentHeaderLength;
 
-        fragmentLength = (aFrame.GetMaxPayloadLength() - headerLength) & ~0x7;
+        fragmentLength = aFrame.GetMaxPayloadLength() - headerLength;
 
         if (payloadLength > fragmentLength)
         {
-            payloadLength = fragmentLength;
+            payloadLength = (fragmentLength & ~0x7);
         }
 
         // Copy IPv6 Payload
@@ -839,7 +815,7 @@ void MeshForwarder::HandleSentFrame(Mac::TxFrame &aFrame, otError aError)
 
     if (!aFrame.IsEmpty())
     {
-        aFrame.GetDstAddr(macDest);
+        IgnoreError(aFrame.GetDstAddr(macDest));
         neighbor = UpdateNeighborOnSentFrame(aFrame, aError, macDest);
     }
 
@@ -1005,7 +981,7 @@ void MeshForwarder::HandleReceivedFrame(Mac::RxFrame &aFrame)
     SuccessOrExit(error = aFrame.GetSrcAddr(macSource));
     SuccessOrExit(error = aFrame.GetDstAddr(macDest));
 
-    aFrame.GetSrcPanId(linkInfo.mPanId);
+    IgnoreError(aFrame.GetSrcPanId(linkInfo.mPanId));
     linkInfo.mChannel      = aFrame.GetChannel();
     linkInfo.mRss          = aFrame.GetRssi();
     linkInfo.mLqi          = aFrame.GetLqi();
@@ -1165,7 +1141,7 @@ exit:
         if (message->GetOffset() >= message->GetLength())
         {
             mReassemblyList.Dequeue(*message);
-            HandleDatagram(*message, aLinkInfo, aMacSource);
+            IgnoreError(HandleDatagram(*message, aLinkInfo, aMacSource));
         }
     }
     else
@@ -1255,9 +1231,9 @@ otError MeshForwarder::FrameToMessage(const uint8_t *     aFrame,
                                       const Mac::Address &aMacDest,
                                       Message *&          aMessage)
 {
-    otError error = OT_ERROR_NONE;
-    int     headerLength;
-    uint8_t priority;
+    otError           error = OT_ERROR_NONE;
+    int               headerLength;
+    Message::Priority priority;
 
     error = GetFramePriority(aFrame, aFrameLength, aMacSource, aMacDest, priority);
     SuccessOrExit(error);
@@ -1314,7 +1290,7 @@ exit:
 
     if (error == OT_ERROR_NONE)
     {
-        HandleDatagram(*message, aLinkInfo, aMacSource);
+        IgnoreError(HandleDatagram(*message, aLinkInfo, aMacSource));
     }
     else
     {
@@ -1347,21 +1323,37 @@ otError MeshForwarder::GetFramePriority(const uint8_t *     aFrame,
                                         uint16_t            aFrameLength,
                                         const Mac::Address &aMacSource,
                                         const Mac::Address &aMacDest,
-                                        uint8_t &           aPriority)
+                                        Message::Priority & aPriority)
 {
-    otError        error = OT_ERROR_NONE;
-    Ip6::Header    ip6Header;
-    Ip6::UdpHeader udpHeader;
-    uint8_t        headerLength;
-    bool           nextHeaderCompressed;
+    otError         error = OT_ERROR_NONE;
+    Ip6::Header     ip6Header;
+    Ip6::UdpHeader  udpHeader;
+    Ip6::IcmpHeader icmpHeader;
+    uint8_t         headerLength;
+    bool            nextHeaderCompressed;
 
     SuccessOrExit(error = DecompressIp6Header(aFrame, aFrameLength, aMacSource, aMacDest, ip6Header, headerLength,
                                               nextHeaderCompressed));
     aPriority = Ip6::Ip6::DscpToPriority(ip6Header.GetDscp());
-    VerifyOrExit(ip6Header.GetNextHeader() == Ip6::kProtoUdp, OT_NOOP);
 
     aFrame += headerLength;
     aFrameLength -= headerLength;
+
+    if (ip6Header.GetNextHeader() == Ip6::kProtoIcmp6 && aFrameLength)
+    {
+        // Just check the first byte which is an ICMPv6 type.
+        memcpy(&icmpHeader, aFrame, sizeof(icmpHeader.mType));
+
+        // Only ICMPv6 error messages are prioritized.
+        if (icmpHeader.IsError())
+        {
+            aPriority = Message::kPriorityNet;
+        }
+
+        ExitNow();
+    }
+
+    VerifyOrExit(ip6Header.GetNextHeader() == Ip6::kProtoUdp, OT_NOOP);
 
     if (nextHeaderCompressed)
     {

@@ -137,23 +137,16 @@ case ${host_os} in
 
     *darwin*)
         OPENTHREAD_TARGET=darwin
-        OPENTHREAD_TARGET_DEFINES="-DOPENTHREAD_TARGET_DARWIN"
         ;;
 
     *linux*)
         OPENTHREAD_TARGET=linux
-        OPENTHREAD_TARGET_DEFINES="-DOPENTHREAD_TARGET_LINUX"
         ;;
 
 esac
 
-AC_SUBST(OPENTHREAD_TARGET_DARWIN)
 AM_CONDITIONAL([OPENTHREAD_TARGET_DARWIN], [test "${OPENTHREAD_TARGET}" = "darwin"])
-
-AC_SUBST(OPENTHREAD_TARGET_LINUX)
 AM_CONDITIONAL([OPENTHREAD_TARGET_LINUX], [test "${OPENTHREAD_TARGET}" = "linux"])
-
-AC_SUBST(OPENTHREAD_TARGET_DEFINES)
 
 #
 # Checks for build host programs
@@ -233,8 +226,8 @@ AC_PROG_LIBTOOL
 #   -Wall                        CC, CXX
 #
 
-PROSPECTIVE_CFLAGS="-Wall -Wextra -Wshadow -Wundef -Werror -Wno-error=undef -std=c99 -pedantic-errors"
-PROSPECTIVE_CXXFLAGS="-Wall -Wextra -Wshadow -Wundef -Werror -Wno-error=undef -std=gnu++98 -Wno-c++14-compat -fno-exceptions"
+PROSPECTIVE_CFLAGS="-Wall -Wextra -Wshadow -Wundef -Wcast-align -Werror -Wno-error=undef -std=c99 -pedantic-errors"
+PROSPECTIVE_CXXFLAGS="-Wall -Wextra -Wshadow -Wundef -Wcast-align -Werror -Wno-error=undef -std=c++11 -Wno-c++14-compat -fno-exceptions -pedantic-errors"
 
 AC_CACHE_CHECK([whether $CC is Clang],
     [nl_cv_clang],
@@ -788,14 +781,14 @@ AC_MSG_CHECKING([whether to build examples])
 AC_ARG_WITH(examples,
     [AS_HELP_STRING([--with-examples=TARGET],
         [Build example applications for one of: simulation, cc1352, cc2538, cc2650, cc2652, efr32mg12, efr32mg13, efr32mg21,
-         gp712, jn5189, kw41z, nrf52811, nrf52833, nrf52840, qpg6095, samr21 @<:@default=no@:>@.
+         gp712, jn5189, k32w061, kw41z, nrf52811, nrf52833, nrf52840, qpg6095, samr21 @<:@default=no@:>@.
          Note that building example applications also builds the associated OpenThread platform libraries
          and any third_party libraries needed to support the examples.])],
     [
         case "${with_examples}" in
         no)
             ;;
-        simulation|cc1352|cc2538|cc2650|cc2652|efr32mg12|efr32mg13|efr32mg21|gp712|jn5189|kw41z|nrf52811|nrf52833|nrf52840|qpg6095|samr21)
+        simulation|cc1352|cc2538|cc2650|cc2652|efr32mg12|efr32mg13|efr32mg21|gp712|jn5189|k32w061|kw41z|nrf52811|nrf52833|nrf52840|qpg6095|samr21)
             ;;
         *)
             AC_MSG_RESULT(ERROR)
@@ -817,6 +810,7 @@ AM_CONDITIONAL([OPENTHREAD_EXAMPLES_EFR32MG13], [test "${with_examples}" = "efr3
 AM_CONDITIONAL([OPENTHREAD_EXAMPLES_EFR32MG21], [test "${with_examples}" = "efr32mg21"])
 AM_CONDITIONAL([OPENTHREAD_EXAMPLES_GP712],     [test "${with_examples}" = "gp712"])
 AM_CONDITIONAL([OPENTHREAD_EXAMPLES_JN5189],    [test "${with_examples}" = "jn5189"])
+AM_CONDITIONAL([OPENTHREAD_EXAMPLES_K32W061],   [test "${with_examples}" = "k32w061"])
 AM_CONDITIONAL([OPENTHREAD_EXAMPLES_KW41Z],     [test "${with_examples}" = "kw41z"])
 AM_CONDITIONAL([OPENTHREAD_EXAMPLES_NRF52811],  [test "${with_examples}" = "nrf52811"])
 AM_CONDITIONAL([OPENTHREAD_EXAMPLES_NRF52833],  [test "${with_examples}" = "nrf52833"])
@@ -900,6 +894,7 @@ AM_CONDITIONAL([OPENTHREAD_PLATFORM_SAMR21],    [test "${with_platform}" = "samr
 AM_CONDITIONAL([OPENTHREAD_PLATFORM_SIMULATION],[test "${with_platform}" = "simulation"])
 
 AM_CONDITIONAL([OPENTHREAD_PLATFORM_NRF528XX], [test OPENTHREAD_PLATFORM_NRF52811 || test OPENTHREAD_PLATFORM_NRF52833 || test OPENTHREAD_PLATFORM_NRF52840])
+AM_CONDITIONAL([OPENTHREAD_PLATFORM_K32W], [test OPENTHREAD_PLATFORM_K32W061 || test OPENTHREAD_PLATFORM_JN5189])
 
 AM_COND_IF([OPENTHREAD_PLATFORM_POSIX], CPPFLAGS="${CPPFLAGS} -DOPENTHREAD_PLATFORM_POSIX=1", CPPFLAGS="${CPPFLAGS} -DOPENTHREAD_PLATFORM_POSIX=0")
 
@@ -1056,7 +1051,7 @@ examples/platforms/efr32mg21/sleepy-demo/Makefile
 examples/platforms/efr32mg21/sleepy-demo/sleepy-demo-ftd/Makefile
 examples/platforms/efr32mg21/sleepy-demo/sleepy-demo-mtd/Makefile
 examples/platforms/gp712/Makefile
-examples/platforms/jn5189/Makefile
+examples/platforms/k32w/Makefile
 examples/platforms/kw41z/Makefile
 examples/platforms/nrf528xx/Makefile
 examples/platforms/qpg6095/Makefile

@@ -41,6 +41,7 @@
 #include "common/instance.hpp"
 #include "common/locator-getters.hpp"
 #include "common/logging.hpp"
+#include "common/string.hpp"
 #include "meshcop/meshcop.hpp"
 #include "radio/radio.hpp"
 #include "thread/thread_netif.hpp"
@@ -61,7 +62,7 @@ Joiner::Joiner(Instance &aInstance)
     , mContext(NULL)
     , mJoinerRouterIndex(0)
     , mFinalizeMessage(NULL)
-    , mTimer(aInstance, &Joiner::HandleTimer, this)
+    , mTimer(aInstance, Joiner::HandleTimer, this)
     , mJoinerEntrust(OT_URI_PATH_JOINER_ENTRUST, &Joiner::HandleJoinerEntrust, this)
 {
     memset(mJoinerRouters, 0, sizeof(mJoinerRouters));
@@ -79,7 +80,7 @@ void Joiner::SetState(otJoinerState aState)
     otJoinerState oldState = mState;
     OT_UNUSED_VARIABLE(oldState);
 
-    SuccessOrExit(Get<Notifier>().Update(mState, aState, OT_CHANGED_JOINER_STATE));
+    SuccessOrExit(Get<Notifier>().Update(mState, aState, kEventJoinerStateChanged));
 
     otLogInfoMeshCoP("JoinerState: %s -> %s", JoinerStateToString(oldState), JoinerStateToString(aState));
 exit:
@@ -101,6 +102,8 @@ otError Joiner::Start(const char *     aPskd,
     otLogInfoMeshCoP("Joiner starting");
 
     VerifyOrExit(mState == OT_JOINER_STATE_IDLE, error = OT_ERROR_BUSY);
+
+    VerifyOrExit(IsPskdValid(aPskd), error = OT_ERROR_INVALID_ARGS);
 
     // Use random-generated extended address.
     randomAddress.GenerateRandom();
@@ -158,7 +161,7 @@ void Joiner::Finish(otError aError)
     case OT_JOINER_STATE_ENTRUST:
     case OT_JOINER_STATE_JOINED:
         Get<Coap::CoapSecure>().Disconnect();
-        Get<Ip6::Filter>().RemoveUnsecurePort(kJoinerUdpPort);
+        IgnoreError(Get<Ip6::Filter>().RemoveUnsecurePort(kJoinerUdpPort));
         mTimer.Stop();
 
         // Fall through
@@ -248,19 +251,11 @@ exit:
 void Joiner::SaveDiscoveredJoinerRouter(const otActiveScanResult &aResult)
 {
     uint8_t       priority;
-    bool          doesAllowAny = true;
-    JoinerRouter *end          = OT_ARRAY_END(mJoinerRouters);
+    bool          doesAllowAny;
+    JoinerRouter *end = OT_ARRAY_END(mJoinerRouters);
     JoinerRouter *entry;
 
-    // Check whether Steering Data allows any joiner (it is all 0xff).
-    for (uint8_t i = 0; i < aResult.mSteeringData.mLength; i++)
-    {
-        if (aResult.mSteeringData.m8[i] != 0xff)
-        {
-            doesAllowAny = false;
-            break;
-        }
-    }
+    doesAllowAny = static_cast<const SteeringData &>(aResult.mSteeringData).PermitsAllJoiners();
 
     otLogInfoMeshCoP("Joiner discover network: %s, pan:0x%04x, port:%d, chan:%d, rssi:%d, allow-any:%s",
                      static_cast<const Mac::ExtAddress &>(aResult.mExtAddress).ToString().AsCString(), aResult.mPanId,
@@ -502,7 +497,7 @@ void Joiner::HandleJoinerFinalizeResponse(Coap::Message &         aMessage,
                      aMessage.GetCode() == OT_COAP_CODE_CHANGED,
                  OT_NOOP);
 
-    SuccessOrExit(Tlv::ReadUint8Tlv(aMessage, Tlv::kState, state));
+    SuccessOrExit(Tlv::FindUint8Tlv(aMessage, Tlv::kState, state));
 
     SetState(OT_JOINER_STATE_ENTRUST);
     mTimer.Start(kReponseTimeout);
@@ -515,7 +510,7 @@ void Joiner::HandleJoinerFinalizeResponse(Coap::Message &         aMessage,
 
 exit:
     Get<Coap::CoapSecure>().Disconnect();
-    Get<Ip6::Filter>().RemoveUnsecurePort(kJoinerUdpPort);
+    IgnoreError(Get<Ip6::Filter>().RemoveUnsecurePort(kJoinerUdpPort));
 }
 
 void Joiner::HandleJoinerEntrust(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
@@ -538,7 +533,7 @@ void Joiner::HandleJoinerEntrust(Coap::Message &aMessage, const Ip6::MessageInfo
 
     memset(&dataset, 0, sizeof(dataset));
 
-    SuccessOrExit(error = Tlv::ReadTlv(aMessage, Tlv::kNetworkMasterKey, &dataset.mMasterKey, sizeof(MasterKey)));
+    SuccessOrExit(error = Tlv::FindTlv(aMessage, Tlv::kNetworkMasterKey, &dataset.mMasterKey, sizeof(MasterKey)));
     dataset.mComponents.mIsMasterKeyPresent = true;
 
     dataset.mChannel                      = Get<Mac::Mac>().GetPanChannel();
@@ -547,7 +542,7 @@ void Joiner::HandleJoinerEntrust(Coap::Message &aMessage, const Ip6::MessageInfo
     dataset.mPanId                      = Get<Mac::Mac>().GetPanId();
     dataset.mComponents.mIsPanIdPresent = true;
 
-    Get<MeshCoP::ActiveDataset>().Save(dataset);
+    IgnoreError(Get<MeshCoP::ActiveDataset>().Save(dataset));
 
     otLogInfoMeshCoP("Joiner successful!");
 

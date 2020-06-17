@@ -37,7 +37,9 @@ ROUTER = 2
 
 
 class TestCoaps(thread_cert.TestCase):
-    topology = {
+    SUPPORT_NCP = False
+
+    TOPOLOGY = {
         LEADER: {
             'mode': 'rsdn',
             'panid': 0xface,

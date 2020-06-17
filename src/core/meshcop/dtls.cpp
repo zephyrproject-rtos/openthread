@@ -61,7 +61,7 @@ Dtls::Dtls(Instance &aInstance, bool aLayerTwoSecurity)
     , mState(kStateClosed)
     , mPskLength(0)
     , mVerifyPeerCertificate(true)
-    , mTimer(aInstance, &Dtls::HandleTimer, this)
+    , mTimer(aInstance, Dtls::HandleTimer, this)
     , mTimerIntermediate(0)
     , mTimerSet(false)
     , mLayerTwoSecurity(aLayerTwoSecurity)
@@ -174,7 +174,7 @@ void Dtls::HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageI
 
         sockAddr.mAddress = aMessageInfo.GetPeerAddr();
         sockAddr.mPort    = aMessageInfo.GetPeerPort();
-        mSocket.Connect(sockAddr);
+        IgnoreError(mSocket.Connect(sockAddr));
 
         mPeerAddress.SetPeerAddr(aMessageInfo.GetPeerAddr());
         mPeerAddress.SetPeerPort(aMessageInfo.GetPeerPort());
@@ -202,7 +202,7 @@ void Dtls::HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageI
 #ifdef MBEDTLS_SSL_SRV_C
     if (mState == MeshCoP::Dtls::kStateConnecting)
     {
-        SetClientId(mPeerAddress.GetPeerAddr().mFields.m8, sizeof(mPeerAddress.GetPeerAddr().mFields));
+        IgnoreError(SetClientId(mPeerAddress.GetPeerAddr().mFields.m8, sizeof(mPeerAddress.GetPeerAddr().mFields)));
     }
 #endif
 
@@ -414,7 +414,7 @@ void Dtls::Close(void)
     mTransportContext  = NULL;
     mTimerSet          = false;
 
-    mSocket.Close();
+    IgnoreError(mSocket.Close());
     mTimer.Stop();
 }
 
@@ -427,7 +427,7 @@ void Dtls::Disconnect(void)
     mTimer.Start(kGuardTimeNewConnectionMilli);
 
     new (&mPeerAddress) Ip6::MessageInfo();
-    mSocket.Connect(Ip6::SockAddr());
+    IgnoreError(mSocket.Connect(Ip6::SockAddr()));
 
     FreeMbedtls();
 
@@ -902,7 +902,7 @@ void Dtls::HandleMbedtlsDebug(void *ctx, int level, const char *, int, const cha
     }
 }
 
-otError Dtls::HandleDtlsSend(const uint8_t *aBuf, uint16_t aLength, uint8_t aMessageSubType)
+otError Dtls::HandleDtlsSend(const uint8_t *aBuf, uint16_t aLength, Message::SubType aMessageSubType)
 {
     otError      error   = OT_ERROR_NONE;
     ot::Message *message = NULL;

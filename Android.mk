@@ -137,6 +137,8 @@ LOCAL_EXPORT_C_INCLUDE_DIRS     := \
     $(NULL)
 
 LOCAL_CPPFLAGS                                                              := \
+    -std=c++11                                                                 \
+    -pedantic-errors                                                           \
     -Wno-non-virtual-dtor                                                      \
     $(NULL)
 
@@ -281,6 +283,7 @@ LOCAL_SRC_FILES                                          := \
     src/posix/platform/misc.cpp                             \
     src/posix/platform/netif.cpp                            \
     src/posix/platform/radio.cpp                            \
+    src/posix/platform/radio_url.cpp                        \
     src/posix/platform/settings.cpp                         \
     src/posix/platform/spi_interface.cpp                    \
     src/posix/platform/system.cpp                           \
@@ -341,6 +344,8 @@ LOCAL_CFLAGS                                                                := \
     $(NULL)
 
 LOCAL_CPPFLAGS                                                              := \
+    -std=c++11                                                                 \
+    -pedantic-errors                                                           \
     -Wno-non-virtual-dtor                                                      \
     $(NULL)
 
@@ -384,6 +389,8 @@ LOCAL_CFLAGS                                                                := \
     $(NULL)
 
 LOCAL_CPPFLAGS                                                              := \
+    -std=c++11                                                                 \
+    -pedantic-errors                                                           \
     -Wno-non-virtual-dtor                                                      \
     $(NULL)
 
@@ -421,6 +428,8 @@ LOCAL_CFLAGS                                                                := \
     $(NULL)
 
 LOCAL_CPPFLAGS                                                              := \
+    -std=c++11                                                                 \
+    -pedantic-errors                                                           \
     -Wno-non-virtual-dtor                                                      \
     $(NULL)
 
@@ -461,6 +470,8 @@ LOCAL_CFLAGS                                                                := \
     $(NULL)
 
 LOCAL_CPPFLAGS                                                              := \
+    -std=c++11                                                                 \
+    -pedantic-errors                                                           \
     -Wno-non-virtual-dtor                                                      \
     $(NULL)
 

@@ -62,6 +62,10 @@ override CXXFLAGS  := $(filter-out -Wshadow,$(CXXFLAGS))
 override CFLAGS    := $(filter-out -Wundef,$(CFLAGS))
 override CXXFLAGS  := $(filter-out -Wundef,$(CXXFLAGS))
 
+# Do not enable -Wcast-align for Silicon Labs SDK sources
+override CFLAGS    := $(filter-out -Wcast-align,$(CFLAGS))
+override CXXFLAGS  := $(filter-out -Wcast-align,$(CXXFLAGS))
+
 EFR32_BOARD_DIR = $(shell echo $(BOARD) | tr A-Z a-z)
 
 SDK_SRC_DIR = $(top_srcdir)/third_party/silabs/gecko_sdk_suite/v2.7
@@ -164,6 +168,8 @@ SILABS_COMMON_SOURCES                                                           
     gecko_sdk_suite/v2.7/util/third_party/mbedtls/sl_crypto/src/crypto_aes.c              \
     gecko_sdk_suite/v2.7/util/third_party/mbedtls/sl_crypto/src/crypto_ecp.c              \
     gecko_sdk_suite/v2.7/util/third_party/mbedtls/sl_crypto/src/crypto_management.c       \
+    gecko_sdk_suite/v2.7/util/third_party/mbedtls/sl_crypto/src/crypto_sha.c              \
+    gecko_sdk_suite/v2.7/util/third_party/mbedtls/sl_crypto/src/shax.c                    \
     $(NULL)
 
 SILABS_EFR32MG12_SOURCES                                                                          = \
@@ -182,9 +188,14 @@ SILABS_EFR32MG21_SOURCES                                                        
     gecko_sdk_suite/v2.7/platform/Device/SiliconLabs/EFR32MG21/Source/system_efr32mg21.c        \
     gecko_sdk_suite/v2.7/platform/Device/SiliconLabs/EFR32MG21/Source/GCC/startup_efr32mg21.c   \
     gecko_sdk_suite/v2.7/platform/emlib/src/em_se.c                                             \
-    gecko_sdk_suite/v2.7/util/third_party/mbedtls/sl_crypto/src/se_trng.c                       \
     gecko_sdk_suite/v2.7/util/third_party/mbedtls/sl_crypto/src/se_aes.c                        \
+    gecko_sdk_suite/v2.7/util/third_party/mbedtls/sl_crypto/src/se_ccm.c                        \
+    gecko_sdk_suite/v2.7/util/third_party/mbedtls/sl_crypto/src/se_cmac.c                       \
+    gecko_sdk_suite/v2.7/util/third_party/mbedtls/sl_crypto/src/se_ecp.c                        \
+    gecko_sdk_suite/v2.7/util/third_party/mbedtls/sl_crypto/src/se_jpake.c                      \
     gecko_sdk_suite/v2.7/util/third_party/mbedtls/sl_crypto/src/se_management.c                 \
+    gecko_sdk_suite/v2.7/util/third_party/mbedtls/sl_crypto/src/se_sha.c                        \
+    gecko_sdk_suite/v2.7/util/third_party/mbedtls/sl_crypto/src/se_trng.c                       \
     $(NULL)
 
 libsilabs_efr32mg12_sdk_a_CPPFLAGS                                                            = \

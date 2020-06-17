@@ -38,6 +38,7 @@
 
 #include <openthread/coap.h>
 
+#include "common/clearable.hpp"
 #include "common/code_utils.hpp"
 #include "common/encoding.hpp"
 #include "common/message.hpp"
@@ -628,10 +629,8 @@ private:
      * This structure represents a HelpData used by this CoAP message.
      *
      */
-    struct HelpData
+    struct HelpData : public Clearable<HelpData>
     {
-        void Clear(void) { memset(this, 0, sizeof(*this)); }
-
         Header   mHeader;
         uint16_t mOptionLast;
         uint16_t mHeaderOffset; ///< The byte offset for the CoAP Header
@@ -640,7 +639,7 @@ private:
 
     const HelpData &GetHelpData(void) const
     {
-        OT_STATIC_ASSERT(sizeof(mBuffer.mHead.mInfo) + sizeof(HelpData) + kHelpDataAlignment <= sizeof(mBuffer),
+        OT_STATIC_ASSERT(sizeof(mBuffer.mHead.mMetadata) + sizeof(HelpData) + kHelpDataAlignment <= sizeof(mBuffer),
                          "Insufficient buffer size for CoAP processing!");
 
         return *static_cast<const HelpData *>(OT_ALIGN(mBuffer.mHead.mData, kHelpDataAlignment));
@@ -678,11 +677,8 @@ public:
      *
      * @param[in]  aMessage  The message to add.
      *
-     * @retval OT_ERROR_NONE     Successfully added the message to the queue.
-     * @retval OT_ERROR_ALREADY  The message is already enqueued in a queue.
-     *
      */
-    otError Enqueue(Message &aMessage) { return Enqueue(aMessage, kQueuePositionTail); }
+    void Enqueue(Message &aMessage) { Enqueue(aMessage, kQueuePositionTail); }
 
     /**
      * This method adds a message at a given position (head/tail) of the queue.
@@ -690,25 +686,16 @@ public:
      * @param[in]  aMessage  The message to add.
      * @param[in]  aPosition The position (head or tail) where to add the message.
      *
-     * @retval OT_ERROR_NONE     Successfully added the message to the queue.
-     * @retval OT_ERROR_ALREADY  The message is already enqueued in a queue.
-     *
      */
-    otError Enqueue(Message &aMessage, QueuePosition aPosition)
-    {
-        return ot::MessageQueue::Enqueue(aMessage, aPosition);
-    }
+    void Enqueue(Message &aMessage, QueuePosition aPosition) { ot::MessageQueue::Enqueue(aMessage, aPosition); }
 
     /**
      * This method removes a message from the queue.
      *
      * @param[in]  aMessage  The message to remove.
      *
-     * @retval OT_ERROR_NONE       Successfully removed the message from the queue.
-     * @retval OT_ERROR_NOT_FOUND  The message is not enqueued in a queue.
-     *
      */
-    otError Dequeue(Message &aMessage) { return ot::MessageQueue::Dequeue(aMessage); }
+    void Dequeue(Message &aMessage) { ot::MessageQueue::Dequeue(aMessage); }
 };
 
 /**

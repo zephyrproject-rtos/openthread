@@ -28,6 +28,7 @@
 #
 
 import os
+import sys
 import unittest
 
 import config
@@ -50,11 +51,27 @@ EXTENDED_ADDRESS_BASE = 0x166e0a0000000000
 """Extended address base to keep U/L bit 1. The value is borrowed from Thread Test Harness."""
 
 
-class TestCase(unittest.TestCase):
+class NcpSupportMixin():
+    """ The mixin to check whether a test case supports NCP.
+    """
+
+    SUPPORT_NCP = True
+
+    def __init__(self, *args, **kwargs):
+        if os.getenv('NODE_TYPE', 'sim') == 'ncp-sim' and not self.SUPPORT_NCP:
+            # 77 means skip this test case in automake tests
+            sys.exit(77)
+
+        super().__init__(*args, **kwargs)
+
+
+class TestCase(NcpSupportMixin, unittest.TestCase):
     """The base class for all thread certification test cases.
 
     The `topology` member of sub-class is used to create test topology.
     """
+
+    TOPOLOGY = None
 
     def setUp(self):
         """Create simulator, nodes and apply configurations.
@@ -65,7 +82,7 @@ class TestCase(unittest.TestCase):
         self.nodes = {}
 
         initial_topology = {}
-        for i, params in self.topology.items():
+        for i, params in self.TOPOLOGY.items():
             if params:
                 params = dict(DEFAULT_PARAMS, **params)
             else:

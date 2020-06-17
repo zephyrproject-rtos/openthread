@@ -263,10 +263,10 @@ void DataPollHandler::HandleSentFrame(const Mac::TxFrame &aFrame, otError aError
                 uint32_t frameCounter;
                 uint8_t  keyId;
 
-                aFrame.GetFrameCounter(frameCounter);
+                IgnoreError(aFrame.GetFrameCounter(frameCounter));
                 aChild.SetIndirectFrameCounter(frameCounter);
 
-                aFrame.GetKeyId(keyId);
+                IgnoreError(aFrame.GetKeyId(keyId));
                 aChild.SetIndirectKeyId(keyId);
             }
 

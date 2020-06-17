@@ -49,7 +49,7 @@ class ThreadNetif;
 
 namespace MeshCoP {
 
-class BorderAgent : public InstanceLocator
+class BorderAgent : public InstanceLocator, public Notifier::Receiver
 {
 public:
     /**
@@ -93,8 +93,8 @@ public:
     void ApplyMeshLocalPrefix(void);
 
 private:
-    static void HandleStateChanged(Notifier::Callback &aCallback, otChangedFlags aFlags);
-    void        HandleStateChanged(otChangedFlags aFlags);
+    static void HandleNotifierEvents(Notifier::Receiver &aReceiver, Events aEvents);
+    void        HandleNotifierEvents(Events aEvents);
 
     static void HandleConnected(bool aConnected, void *aContext)
     {
@@ -105,9 +105,9 @@ private:
     template <Coap::Resource BorderAgent::*aResource>
     static void HandleRequest(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
     {
-        static_cast<BorderAgent *>(aContext)->ForwardToLeader(
+        IgnoreError(static_cast<BorderAgent *>(aContext)->ForwardToLeader(
             *static_cast<Coap::Message *>(aMessage), *static_cast<const Ip6::MessageInfo *>(aMessageInfo),
-            (static_cast<BorderAgent *>(aContext)->*aResource).GetUriPath(), false, false);
+            (static_cast<BorderAgent *>(aContext)->*aResource).GetUriPath(), false, false));
     }
 
     static void HandleTimeout(Timer &aTimer);
@@ -162,8 +162,6 @@ private:
 
     TimerMilli         mTimer;
     otBorderAgentState mState;
-
-    Notifier::Callback mNotifierCallback;
 };
 
 } // namespace MeshCoP

@@ -38,7 +38,9 @@ ED1 = 4
 
 
 class Cert_9_2_13_EnergyScan(thread_cert.TestCase):
-    topology = {
+    SUPPORT_NCP = False
+
+    TOPOLOGY = {
         COMMISSIONER: {
             'mode': 'rsdn',
             'panid': 0xface,

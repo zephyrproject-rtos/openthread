@@ -37,12 +37,10 @@ set_target_properties(
 )
 
 target_compile_definitions(openthread-cli-ftd PRIVATE
-    ${OT_PRIVATE_DEFINES}
     OPENTHREAD_FTD=1
 )
 
 target_compile_definitions(openthread-cli-mtd PRIVATE
-    ${OT_PRIVATE_DEFINES}
     OPENTHREAD_MTD=1
 )
 
@@ -55,7 +53,6 @@ target_compile_options(openthread-cli-mtd PRIVATE
 )
 
 set(COMMON_INCLUDES
-    ${OT_PRIVATE_INCLUDES}
     ${PROJECT_SOURCE_DIR}/src
     ${PROJECT_SOURCE_DIR}/src/core
 )
@@ -84,6 +81,7 @@ target_link_libraries(openthread-cli-ftd
         openthread-ftd
     PRIVATE
         ${OT_MBEDTLS}
+        ot-config
 )
 
 target_link_libraries(openthread-cli-mtd
@@ -91,4 +89,5 @@ target_link_libraries(openthread-cli-mtd
         openthread-mtd
     PRIVATE
         ${OT_MBEDTLS}
+        ot-config
 )

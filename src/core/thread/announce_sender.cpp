@@ -57,18 +57,13 @@ AnnounceSenderBase::AnnounceSenderBase(Instance &aInstance, Timer::Handler aHand
 {
 }
 
-otError AnnounceSenderBase::SendAnnounce(Mac::ChannelMask aChannelMask,
-                                         uint8_t          aCount,
-                                         uint32_t         aPeriod,
-                                         uint16_t         aJitter)
+void AnnounceSenderBase::SendAnnounce(Mac::ChannelMask aChannelMask, uint8_t aCount, uint32_t aPeriod, uint16_t aJitter)
 {
-    otError error = OT_ERROR_NONE;
-
-    VerifyOrExit(aPeriod != 0, error = OT_ERROR_INVALID_ARGS);
-    VerifyOrExit(aJitter < aPeriod, error = OT_ERROR_INVALID_ARGS);
+    VerifyOrExit(aPeriod != 0, OT_NOOP);
+    VerifyOrExit(aJitter < aPeriod, OT_NOOP);
 
     aChannelMask.Intersect(Get<Mac::Mac>().GetSupportedChannelMask());
-    VerifyOrExit(!aChannelMask.IsEmpty(), error = OT_ERROR_INVALID_ARGS);
+    VerifyOrExit(!aChannelMask.IsEmpty(), OT_NOOP);
 
     mChannelMask = aChannelMask;
     mCount       = aCount;
@@ -78,8 +73,11 @@ otError AnnounceSenderBase::SendAnnounce(Mac::ChannelMask aChannelMask,
 
     mTimer.Start(Random::NonCrypto::AddJitter(mPeriod, mJitter));
 
+    otLogInfoMle("Starting periodic MLE Announcements tx, mask %s, count %u, period %u, jitter %u",
+                 aChannelMask.ToString().AsCString(), aCount, aPeriod, aJitter);
+
 exit:
-    return error;
+    return;
 }
 
 void AnnounceSenderBase::HandleTimer(void)
@@ -113,8 +111,8 @@ exit:
 #if OPENTHREAD_CONFIG_ANNOUNCE_SENDER_ENABLE
 
 AnnounceSender::AnnounceSender(Instance &aInstance)
-    : AnnounceSenderBase(aInstance, &AnnounceSender::HandleTimer)
-    , mNotifierCallback(aInstance, HandleStateChanged, this)
+    : AnnounceSenderBase(aInstance, AnnounceSender::HandleTimer)
+    , Notifier::Receiver(aInstance, AnnounceSender::HandleNotifierEvents)
 {
 }
 
@@ -167,9 +165,6 @@ void AnnounceSender::CheckState(void)
 
     SendAnnounce(channelMask, 0, period, kMaxJitter);
 
-    otLogInfoMle("Starting periodic MLE Announcements tx, period %u, mask %s", period,
-                 channelMask.ToString().AsCString());
-
 exit:
     return;
 }
@@ -180,14 +175,14 @@ void AnnounceSender::Stop(void)
     otLogInfoMle("Stopping periodic MLE Announcements tx");
 }
 
-void AnnounceSender::HandleStateChanged(Notifier::Callback &aCallback, otChangedFlags aFlags)
+void AnnounceSender::HandleNotifierEvents(Notifier::Receiver &aReceiver, Events aEvents)
 {
-    aCallback.GetOwner<AnnounceSender>().HandleStateChanged(aFlags);
+    static_cast<AnnounceSender &>(aReceiver).HandleNotifierEvents(aEvents);
 }
 
-void AnnounceSender::HandleStateChanged(otChangedFlags aFlags)
+void AnnounceSender::HandleNotifierEvents(Events aEvents)
 {
-    if ((aFlags & OT_CHANGED_THREAD_ROLE) != 0)
+    if (aEvents.Contains(kEventThreadRoleChanged))
     {
         CheckState();
     }

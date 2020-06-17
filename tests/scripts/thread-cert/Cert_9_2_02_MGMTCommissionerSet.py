@@ -40,7 +40,9 @@ LEADER = 2
 
 
 class Cert_9_2_02_MGMTCommissionerSet(thread_cert.TestCase):
-    topology = {
+    SUPPORT_NCP = False
+
+    TOPOLOGY = {
         COMMISSIONER: {
             'mode': 'rsdn',
             'panid': 0xface,

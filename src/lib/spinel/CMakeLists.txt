@@ -37,14 +37,12 @@ set_target_properties(
 )
 
 target_compile_definitions(openthread-spinel-ncp PRIVATE
-    ${OT_PRIVATE_DEFINES}
     OPENTHREAD_FTD=1
     OPENTHREAD_CONFIG_NCP_UART_ENABLE=1
     PUBLIC OPENTHREAD_SPINEL_CONFIG_OPENTHREAD_MESSAGE_ENABLE=1
 )
 
 target_compile_definitions(openthread-spinel-rcp PRIVATE
-    ${OT_PRIVATE_DEFINES}
     OPENTHREAD_RADIO=1
     OPENTHREAD_CONFIG_NCP_UART_ENABLE=1
     PUBLIC OPENTHREAD_SPINEL_CONFIG_OPENTHREAD_MESSAGE_ENABLE=0
@@ -59,7 +57,6 @@ target_compile_options(openthread-spinel-rcp PRIVATE
 )
 
 set(COMMON_INCLUDES
-    ${OT_PRIVATE_INCLUDES}
     ${PROJECT_SOURCE_DIR}/src
     ${PROJECT_SOURCE_DIR}/src/core
 )
@@ -76,3 +73,6 @@ target_include_directories(openthread-spinel-rcp PUBLIC ${OT_PUBLIC_INCLUDES} PR
 
 target_sources(openthread-spinel-ncp PRIVATE ${COMMON_SOURCES})
 target_sources(openthread-spinel-rcp PRIVATE ${COMMON_SOURCES})
+
+target_link_libraries(openthread-spinel-ncp PRIVATE ot-config)
+target_link_libraries(openthread-spinel-rcp PRIVATE ot-config)

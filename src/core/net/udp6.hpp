@@ -107,16 +107,13 @@ public:
     /**
      * This method returns a new UDP message with sufficient header space reserved.
      *
-     * @note If @p aSettings is 'NULL', the link layer security is enabled and the message priority is set to
-     * OT_MESSAGE_PRIORITY_NORMAL by default.
-     *
      * @param[in]  aReserved  The number of header bytes to reserve after the UDP header.
-     * @param[in]  aSettings  A pointer to the message settings or NULL to set default settings.
+     * @param[in]  aSettings  The message settings (default is used if not provided).
      *
      * @returns A pointer to the message or NULL if no buffers are available.
      *
      */
-    Message *NewMessage(uint16_t aReserved, const otMessageSettings *aSettings = NULL);
+    Message *NewMessage(uint16_t aReserved, const Message::Settings &aSettings = Message::Settings::GetDefault());
 
     /**
      * This method opens the UDP socket.
@@ -273,12 +270,12 @@ public:
      * This method returns a new UDP message with sufficient header space reserved.
      *
      * @param[in]  aReserved  The number of header bytes to reserve after the UDP header.
-     * @param[in]  aPriority  The priority of the message.
+     * @param[in]  aSettings  The message settings.
      *
      * @returns A pointer to the message or NULL if no buffers are available.
      *
      */
-    Message *NewMessage(uint16_t aReserved, const otMessageSettings *aSettings = NULL);
+    Message *NewMessage(uint16_t aReserved, const Message::Settings &aSettings = Message::Settings::GetDefault());
 
     /**
      * This method sends an IPv6 datagram.
@@ -324,7 +321,13 @@ public:
     void UpdateChecksum(Message &aMessage, uint16_t aChecksum);
 
 #if OPENTHREAD_CONFIG_PLATFORM_UDP_ENABLE
-    otUdpSocket *GetUdpSockets(void) { return mSockets.GetHead(); }
+    /**
+     * This method returns the head of UDP Sockets list.
+     *
+     * @returns A pointer to the head of UDP Socket linked list.
+     *
+     */
+    UdpSocket *GetUdpSockets(void) { return mSockets.GetHead(); }
 #endif
 
 #if OPENTHREAD_CONFIG_UDP_FORWARD_ENABLE
@@ -340,7 +343,7 @@ public:
         mUdpForwarder        = aForwarder;
         mUdpForwarderContext = aContext;
     }
-#endif // OPENTHREAD_CONFIG_UDP_FORWARD_ENABLE
+#endif
 
 private:
     enum

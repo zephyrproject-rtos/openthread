@@ -48,6 +48,7 @@ namespace ot {
 
 EnergyScanServer::EnergyScanServer(Instance &aInstance)
     : InstanceLocator(aInstance)
+    , Notifier::Receiver(aInstance, EnergyScanServer::HandleNotifierEvents)
     , mChannelMask(0)
     , mChannelMaskCurrent(0)
     , mPeriod(0)
@@ -55,8 +56,7 @@ EnergyScanServer::EnergyScanServer(Instance &aInstance)
     , mCount(0)
     , mActive(false)
     , mScanResultsLength(0)
-    , mTimer(aInstance, &EnergyScanServer::HandleTimer, this)
-    , mNotifierCallback(aInstance, &EnergyScanServer::HandleStateChanged, this)
+    , mTimer(aInstance, EnergyScanServer::HandleTimer, this)
     , mEnergyScan(OT_URI_PATH_ENERGY_SCAN, &EnergyScanServer::HandleRequest, this)
 {
     Get<Coap::Coap>().AddResource(mEnergyScan);
@@ -78,9 +78,9 @@ void EnergyScanServer::HandleRequest(Coap::Message &aMessage, const Ip6::Message
 
     VerifyOrExit(aMessage.GetCode() == OT_COAP_CODE_POST, OT_NOOP);
 
-    SuccessOrExit(Tlv::ReadUint8Tlv(aMessage, MeshCoP::Tlv::kCount, count));
-    SuccessOrExit(Tlv::ReadUint16Tlv(aMessage, MeshCoP::Tlv::kPeriod, period));
-    SuccessOrExit(Tlv::ReadUint16Tlv(aMessage, MeshCoP::Tlv::kScanDuration, scanDuration));
+    SuccessOrExit(Tlv::FindUint8Tlv(aMessage, MeshCoP::Tlv::kCount, count));
+    SuccessOrExit(Tlv::FindUint16Tlv(aMessage, MeshCoP::Tlv::kPeriod, period));
+    SuccessOrExit(Tlv::FindUint16Tlv(aMessage, MeshCoP::Tlv::kScanDuration, scanDuration));
 
     VerifyOrExit((mask = MeshCoP::ChannelMaskTlv::GetChannelMask(aMessage)) != 0, OT_NOOP);
 
@@ -118,7 +118,7 @@ void EnergyScanServer::HandleTimer(void)
     {
         // grab the lowest channel to scan
         uint32_t channelMask = mChannelMaskCurrent & ~(mChannelMaskCurrent - 1);
-        Get<Mac::Mac>().EnergyScan(channelMask, mScanDuration, HandleScanResult, this);
+        IgnoreError(Get<Mac::Mac>().EnergyScan(channelMask, mScanDuration, HandleScanResult, this));
     }
     else
     {
@@ -168,7 +168,7 @@ exit:
     return;
 }
 
-otError EnergyScanServer::SendReport(void)
+void EnergyScanServer::SendReport(void)
 {
     otError                 error = OT_ERROR_NONE;
     MeshCoP::ChannelMaskTlv channelMask;
@@ -199,24 +199,27 @@ otError EnergyScanServer::SendReport(void)
 
 exit:
 
-    if (error != OT_ERROR_NONE && message != NULL)
+    if (error != OT_ERROR_NONE)
     {
-        message->Free();
+        otLogInfoMeshCoP("Failed to send scan results: %s", otThreadErrorToString(error));
+
+        if (message != NULL)
+        {
+            message->Free();
+        }
     }
 
     mActive = false;
-
-    return error;
 }
 
-void EnergyScanServer::HandleStateChanged(Notifier::Callback &aCallback, otChangedFlags aFlags)
+void EnergyScanServer::HandleNotifierEvents(Notifier::Receiver &aReceiver, Events aEvents)
 {
-    aCallback.GetOwner<EnergyScanServer>().HandleStateChanged(aFlags);
+    static_cast<EnergyScanServer &>(aReceiver).HandleNotifierEvents(aEvents);
 }
 
-void EnergyScanServer::HandleStateChanged(otChangedFlags aFlags)
+void EnergyScanServer::HandleNotifierEvents(Events aEvents)
 {
-    if ((aFlags & OT_CHANGED_THREAD_NETDATA) != 0 && !mActive &&
+    if (aEvents.Contains(kEventThreadNetdataChanged) && !mActive &&
         Get<NetworkData::Leader>().GetCommissioningData() == NULL)
     {
         mActive = false;

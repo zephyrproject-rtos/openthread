@@ -131,22 +131,22 @@ void ThreadNetif::Up(void)
     // Enable the MAC just in case it was disabled while the Interface was down.
     Get<Mac::Mac>().SetEnabled(true);
 #if OPENTHREAD_CONFIG_CHANNEL_MONITOR_ENABLE
-    Get<Utils::ChannelMonitor>().Start();
+    IgnoreError(Get<Utils::ChannelMonitor>().Start());
 #endif
     Get<MeshForwarder>().Start();
 
     mIsUp = true;
 
     SubscribeAllNodesMulticast();
-    Get<Mle::MleRouter>().Enable();
-    Get<Coap::Coap>().Start(kCoapUdpPort);
+    IgnoreError(Get<Mle::MleRouter>().Enable());
+    IgnoreError(Get<Coap::Coap>().Start(kCoapUdpPort));
 #if OPENTHREAD_CONFIG_DNS_CLIENT_ENABLE
-    Get<Dns::Client>().Start();
+    IgnoreError(Get<Dns::Client>().Start());
 #endif
 #if OPENTHREAD_CONFIG_SNTP_CLIENT_ENABLE
-    Get<Sntp::Client>().Start();
+    IgnoreError(Get<Sntp::Client>().Start());
 #endif
-    Get<Notifier>().Signal(OT_CHANGED_THREAD_NETIF_STATE);
+    Get<Notifier>().Signal(kEventThreadNetifStateChanged);
 
 exit:
     return;
@@ -157,16 +157,16 @@ void ThreadNetif::Down(void)
     VerifyOrExit(mIsUp, OT_NOOP);
 
 #if OPENTHREAD_CONFIG_DNS_CLIENT_ENABLE
-    Get<Dns::Client>().Stop();
+    IgnoreError(Get<Dns::Client>().Stop());
 #endif
 #if OPENTHREAD_CONFIG_SNTP_CLIENT_ENABLE
-    Get<Sntp::Client>().Stop();
+    IgnoreError(Get<Sntp::Client>().Stop());
 #endif
 #if OPENTHREAD_CONFIG_DTLS_ENABLE
     Get<Coap::CoapSecure>().Stop();
 #endif
-    Get<Coap::Coap>().Stop();
-    Get<Mle::MleRouter>().Disable();
+    IgnoreError(Get<Coap::Coap>().Stop());
+    IgnoreError(Get<Mle::MleRouter>().Disable());
     RemoveAllExternalUnicastAddresses();
     UnsubscribeAllExternalMulticastAddresses();
     UnsubscribeAllRoutersMulticast();
@@ -175,9 +175,9 @@ void ThreadNetif::Down(void)
     mIsUp = false;
     Get<MeshForwarder>().Stop();
 #if OPENTHREAD_CONFIG_CHANNEL_MONITOR_ENABLE
-    Get<Utils::ChannelMonitor>().Stop();
+    IgnoreError(Get<Utils::ChannelMonitor>().Stop());
 #endif
-    Get<Notifier>().Signal(OT_CHANGED_THREAD_NETIF_STATE);
+    Get<Notifier>().Signal(kEventThreadNetifStateChanged);
 
 exit:
     return;
@@ -204,6 +204,11 @@ otError ThreadNetif::TmfFilter(const Coap::Message &aMessage, const Ip6::Message
     OT_UNUSED_VARIABLE(aMessage);
 
     return static_cast<ThreadNetif *>(aContext)->IsTmfMessage(aMessageInfo) ? OT_ERROR_NONE : OT_ERROR_NOT_TMF;
+}
+
+bool ThreadNetif::IsOnMesh(const Ip6::Address &aAddress) const
+{
+    return Get<NetworkData::Leader>().IsOnMesh(aAddress);
 }
 
 bool ThreadNetif::IsTmfMessage(const Ip6::MessageInfo &aMessageInfo)

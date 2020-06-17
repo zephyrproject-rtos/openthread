@@ -41,6 +41,8 @@
 #if OPENTHREAD_POSIX_CONFIG_RCP_PTY_ENABLE
 #if defined(__APPLE__) || defined(__NetBSD__)
 #include <util.h>
+#elif defined(__FreeBSD__)
+#include <libutil.h>
 #else
 #include <pty.h>
 #endif
@@ -136,30 +138,30 @@ HdlcInterface::HdlcInterface(SpinelInterface::ReceiveFrameCallback aCallback,
 {
 }
 
-otError HdlcInterface::Init(const otPlatformConfig &aPlatformConfig)
+otError HdlcInterface::Init(Arguments &aArguments)
 {
     otError     error = OT_ERROR_NONE;
     struct stat st;
 
     VerifyOrExit(mSockFd == -1, error = OT_ERROR_ALREADY);
 
-    VerifyOrDie(stat(aPlatformConfig.mRadioFile, &st) == 0, OT_EXIT_INVALID_ARGUMENTS);
+    VerifyOrDie(stat(aArguments.GetPath(), &st) == 0, OT_EXIT_INVALID_ARGUMENTS);
 
     if (S_ISCHR(st.st_mode))
     {
-        mSockFd = OpenFile(aPlatformConfig.mRadioFile, aPlatformConfig.mRadioConfig);
+        mSockFd = OpenFile(aArguments.GetPath(), aArguments);
         VerifyOrExit(mSockFd != -1, error = OT_ERROR_INVALID_ARGS);
     }
 #if OPENTHREAD_POSIX_CONFIG_RCP_PTY_ENABLE
     else if (S_ISREG(st.st_mode))
     {
-        mSockFd = ForkPty(aPlatformConfig.mRadioFile, aPlatformConfig.mRadioConfig);
+        mSockFd = ForkPty(aArguments.GetPath(), aArguments.GetValue("forkpty-arg"));
         VerifyOrExit(mSockFd != -1, error = OT_ERROR_INVALID_ARGS);
     }
 #endif // OPENTHREAD_POSIX_CONFIG_RCP_PTY_ENABLE
     else
     {
-        otLogCritPlat("Radio file '%s' not supported", aPlatformConfig.mRadioFile);
+        otLogCritPlat("Radio file '%s' not supported", aArguments.GetPath());
         ExitNow(error = OT_ERROR_INVALID_ARGS);
     }
 
@@ -258,7 +260,7 @@ otError HdlcInterface::WaitForFrame(uint64_t aTimeoutUs)
     otError        error = OT_ERROR_NONE;
     struct timeval timeout;
 #if OPENTHREAD_POSIX_VIRTUAL_TIME
-    struct Event event;
+    struct VirtualTimeEvent event;
 
     timeout.tv_sec  = static_cast<time_t>(aTimeoutUs / US_PER_S);
     timeout.tv_usec = static_cast<suseconds_t>(aTimeoutUs % US_PER_S);
@@ -405,7 +407,7 @@ exit:
     return error;
 }
 
-int HdlcInterface::OpenFile(const char *aFile, const char *aConfig)
+int HdlcInterface::OpenFile(const char *aFile, Arguments &aArguments)
 {
     int fd   = -1;
     int rval = 0;
@@ -420,11 +422,11 @@ int HdlcInterface::OpenFile(const char *aFile, const char *aConfig)
     if (isatty(fd))
     {
         struct termios tios;
+        const char *   value;
+        speed_t        speed;
 
-        unsigned int speed  = 115200;
-        int          cstopb = 1;
-        char         parity = 'N';
-        char         flow   = 'N';
+        int      stopBit  = 1;
+        uint32_t baudrate = 115200;
 
         VerifyOrExit((rval = tcgetattr(fd, &tios)) == 0, OT_NOOP);
 
@@ -432,29 +434,29 @@ int HdlcInterface::OpenFile(const char *aFile, const char *aConfig)
 
         tios.c_cflag = CS8 | HUPCL | CREAD | CLOCAL;
 
-        // example: 115200N1H
-        if (aConfig != NULL)
+        if ((value = aArguments.GetValue("uart-parity")) != NULL)
         {
-            sscanf(aConfig, "%u%c%d%c", &speed, &parity, &cstopb, &flow);
+            if (strncmp(value, "odd", 3) == 0)
+            {
+                tios.c_cflag |= PARENB;
+                tios.c_cflag |= PARODD;
+            }
+            else if (strncmp(value, "even", 4) == 0)
+            {
+                tios.c_cflag |= PARENB;
+            }
+            else
+            {
+                DieNow(OT_EXIT_INVALID_ARGUMENTS);
+            }
         }
 
-        switch (parity)
+        if ((value = aArguments.GetValue("uart-stop")) != NULL)
         {
-        case 'N':
-            break;
-        case 'E':
-            tios.c_cflag |= PARENB;
-            break;
-        case 'O':
-            tios.c_cflag |= (PARENB | PARODD);
-            break;
-        default:
-            // not supported
-            DieNow(OT_EXIT_INVALID_ARGUMENTS);
-            break;
+            stopBit = atoi(value);
         }
 
-        switch (cstopb)
+        switch (stopBit)
         {
         case 1:
             tios.c_cflag &= static_cast<unsigned long>(~CSTOPB);
@@ -467,7 +469,12 @@ int HdlcInterface::OpenFile(const char *aFile, const char *aConfig)
             break;
         }
 
-        switch (speed)
+        if ((value = aArguments.GetValue("uart-baudrate")))
+        {
+            baudrate = static_cast<uint32_t>(atoi(value));
+        }
+
+        switch (baudrate)
         {
         case 9600:
             speed = B9600;
@@ -554,17 +561,9 @@ int HdlcInterface::OpenFile(const char *aFile, const char *aConfig)
             break;
         }
 
-        switch (flow)
+        if (aArguments.GetValue("uart-flow-control") != NULL)
         {
-        case 'N':
-            break;
-        case 'H':
             tios.c_cflag |= CRTSCTS;
-            break;
-        default:
-            // not supported
-            DieNow(OT_EXIT_INVALID_ARGUMENTS);
-            break;
         }
 
         VerifyOrExit((rval = cfsetspeed(&tios, static_cast<speed_t>(speed))) == 0, perror("cfsetspeed"));
@@ -603,7 +602,14 @@ int HdlcInterface::ForkPty(const char *aCommand, const char *aArguments)
         const int kMaxCommand = 255;
         char      cmd[kMaxCommand];
 
-        rval = snprintf(cmd, sizeof(cmd), "exec %s %s", aCommand, aArguments);
+        if (aArguments == NULL)
+        {
+            rval = snprintf(cmd, sizeof(cmd), "exec %s", aCommand);
+        }
+        else
+        {
+            rval = snprintf(cmd, sizeof(cmd), "exec %s %s", aCommand, aArguments);
+        }
         VerifyOrExit(rval > 0 && static_cast<size_t>(rval) < sizeof(cmd),
                      fprintf(stderr, "NCP file and configuration is too long!");
                      rval = -1);

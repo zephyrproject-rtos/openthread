@@ -35,13 +35,9 @@ target_include_directories(openthread-platform
     PUBLIC
         ${OT_PUBLIC_INCLUDES}
         ${PROJECT_SOURCE_DIR}/src/
-    PRIVATE
-        ${OT_PRIVATE_INCLUDES}
 )
 
-target_compile_definitions(openthread-platform PRIVATE
-    ${OT_PRIVATE_DEFINES}
-)
+target_link_libraries(openthread-platform PRIVATE ot-config)
 
 target_compile_options(openthread-platform PRIVATE
     ${OT_CFLAGS}

@@ -40,6 +40,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "common/non_copyable.hpp"
 #include "utils/static_assert.hpp"
 
 namespace ot {
@@ -93,7 +94,8 @@ public:
      */
     uint16_t GetNext(void) const
     {
-        return *reinterpret_cast<const uint16_t *>(reinterpret_cast<const uint8_t *>(this) + sizeof(mSize) + mSize);
+        return *reinterpret_cast<const uint16_t *>(
+            reinterpret_cast<const void *>(reinterpret_cast<const uint8_t *>(this) + sizeof(mSize) + mSize));
     }
 
     /**
@@ -106,7 +108,8 @@ public:
      */
     void SetNext(uint16_t aNext)
     {
-        *reinterpret_cast<uint16_t *>(reinterpret_cast<uint8_t *>(this) + sizeof(mSize) + mSize) = aNext;
+        *reinterpret_cast<uint16_t *>(
+            reinterpret_cast<void *>(reinterpret_cast<uint8_t *>(this) + sizeof(mSize) + mSize)) = aNext;
     }
 
     /**
@@ -173,7 +176,7 @@ private:
  *     +--------------------------------------------------------------------------+
  *
  */
-class Heap
+class Heap : private NonCopyable
 {
 public:
     /**

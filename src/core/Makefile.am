@@ -267,6 +267,8 @@ libopenthread_radio_a_SOURCES              = \
     common/string.cpp                        \
     common/tasklet.cpp                       \
     common/timer.cpp                         \
+    crypto/aes_ccm.cpp                       \
+    crypto/aes_ecb.cpp                       \
     diags/factory_diags.cpp                  \
     mac/link_raw.cpp                         \
     mac/mac_frame.cpp                        \
@@ -317,10 +319,12 @@ HEADERS_COMMON                             = \
     coap/coap.hpp                            \
     coap/coap_message.hpp                    \
     coap/coap_secure.hpp                     \
+    common/clearable.hpp                     \
     common/code_utils.hpp                    \
     common/crc16.hpp                         \
     common/debug.hpp                         \
     common/encoding.hpp                      \
+    common/equatable.hpp                     \
     common/extension.hpp                     \
     common/instance.hpp                      \
     common/linked_list.hpp                   \
@@ -329,6 +333,7 @@ HEADERS_COMMON                             = \
     common/logging.hpp                       \
     common/message.hpp                       \
     common/new.hpp                           \
+    common/non_copyable.hpp                  \
     common/notifier.hpp                      \
     common/random.hpp                        \
     common/random_manager.hpp                \

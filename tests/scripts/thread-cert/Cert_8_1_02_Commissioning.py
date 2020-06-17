@@ -36,7 +36,9 @@ JOINER = 2
 
 
 class Cert_8_1_02_Commissioning(thread_cert.TestCase):
-    topology = {
+    SUPPORT_NCP = False
+
+    TOPOLOGY = {
         COMMISSIONER: {
             'masterkey': 'deadbeefdeadbeefdeadbeefdeadbeef',
             'mode': 'rsdn',
@@ -57,10 +59,10 @@ class Cert_8_1_02_Commissioning(thread_cert.TestCase):
         self.nodes[COMMISSIONER].commissioner_start()
         self.simulator.go(3)
         self.nodes[COMMISSIONER].commissioner_add_joiner(
-            self.nodes[JOINER].get_eui64(), 'OPENTHREAD')
+            self.nodes[JOINER].get_eui64(), 'PSKD01')
 
         self.nodes[JOINER].interface_up()
-        self.nodes[JOINER].joiner_start('DAERHTNEPO')
+        self.nodes[JOINER].joiner_start('10DKSP')
         self.simulator.go(10)
         self.assertNotEqual(
             self.nodes[JOINER].get_masterkey(),

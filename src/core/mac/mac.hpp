@@ -206,23 +206,15 @@ public:
     /**
      * This method requests a direct data frame transmission.
      *
-     * @retval OT_ERROR_NONE           Frame transmission request is scheduled successfully.
-     * @retval OT_ERROR_ALREADY        MAC is busy sending earlier transmission request.
-     * @retval OT_ERROR_INVALID_STATE  The MAC layer is not enabled.
-     *
      */
-    otError RequestDirectFrameTransmission(void);
+    void RequestDirectFrameTransmission(void);
 
 #if OPENTHREAD_FTD
     /**
      * This method requests an indirect data frame transmission.
      *
-     * @retval OT_ERROR_NONE           Frame transmission request is scheduled successfully.
-     * @retval OT_ERROR_ALREADY        MAC is busy sending earlier transmission request.
-     * @retval OT_ERROR_INVALID_STATE  The MAC layer is not enabled.
-     *
      */
-    otError RequestIndirectFrameTransmission(void);
+    void RequestIndirectFrameTransmission(void);
 #endif
 
     /**
@@ -671,6 +663,34 @@ public:
      */
     bool IsEnabled(void) const { return mEnabled; }
 
+#if OPENTHREAD_CONFIG_MAC_HEADER_IE_SUPPORT
+    /**
+     * This method appends header IEs to a TX-frame according to its
+     * frame control field and if time sync is enabled.
+     *
+     * @param[in]      aIsTimeSync  A boolean indicates if time sync is being used.
+     * @param[in,out]  aFrame       A reference to the TX-frame to which the IEs will be appended.
+     *
+     * @retval OT_ERROR_NONE       If append header IEs successfully.
+     * @retval OT_ERROR_NOT_FOUND  If cannot find header IE position in the frame.
+     *
+     */
+    static otError AppendHeaderIe(bool aIsTimeSync, TxFrame &aFrame);
+#endif
+
+    /**
+     * This method updates frame control field.
+     *
+     * If the frame would contain header IEs, IE present field would be set.
+     * If this is a csl transmission frame or header IE is present in this frame,
+     * the version should be set to 2015. Otherwise, the version would be set to 2006.
+     *
+     * @param[in]   aIsTimeSync  A boolean indicates if time sync is being used.
+     * @param[out]  aFcf         A reference to the frame control field to set.
+     *
+     */
+    static void UpdateFrameControlField(bool aIsTimeSync, uint16_t &aFcf);
+
 private:
     enum
     {
@@ -717,19 +737,7 @@ private:
     };
 #endif // OPENTHREAD_CONFIG_MAC_RETRY_SUCCESS_HISTOGRAM_ENABLE
 
-    /**
-     * This method processes transmit security on the frame which is going to be sent.
-     *
-     * This method prepares the frame, fills Mac auxiliary header, and perform AES CCM immediately in most cases
-     * (depends on @p aProcessAesCcm). If aProcessAesCcm is False, it probably means that some content in the frame
-     * will be updated just before transmission, so AES CCM will be performed after that (before transmission).
-     *
-     * @param[in]  aFrame          A reference to the MAC frame buffer which is going to be sent.
-     * @param[in]  aProcessAesCcm  TRUE to perform AES CCM immediately, FALSE otherwise.
-     *
-     */
-    void ProcessTransmitSecurity(TxFrame &aFrame, bool aProcessAesCcm);
-
+    void    ProcessTransmitSecurity(TxFrame &aFrame);
     otError ProcessReceiveSecurity(RxFrame &aFrame, const Address &aSrcAddr, Neighbor *aNeighbor);
     void    UpdateIdleMode(void);
     void    StartOperation(Operation aOperation);
@@ -765,7 +773,7 @@ private:
 
     static const char *OperationToString(Operation aOperation);
 
-    static const uint8_t         sMode2Key[];
+    static const otMacKey        sMode2Key;
     static const otExtAddress    sMode2ExtAddress;
     static const otExtendedPanId sExtendedPanidInit;
     static const char            sNetworkNameInit[];

@@ -57,7 +57,7 @@ namespace NetworkData {
 
 Leader::Leader(Instance &aInstance)
     : LeaderBase(aInstance)
-    , mTimer(aInstance, &Leader::HandleTimer, this)
+    , mTimer(aInstance, Leader::HandleTimer, this)
     , mServerData(OT_URI_PATH_SERVER_DATA, &Leader::HandleServerData, this)
     , mCommissioningDataGet(OT_URI_PATH_COMMISSIONER_GET, &Leader::HandleCommissioningGet, this)
     , mCommissioningDataSet(OT_URI_PATH_COMMISSIONER_SET, &Leader::HandleCommissioningSet, this)
@@ -120,7 +120,7 @@ void Leader::IncrementVersions(bool aIncludeStable)
     }
 
     mVersion++;
-    Get<ot::Notifier>().Signal(OT_CHANGED_THREAD_NETDATA);
+    Get<ot::Notifier>().Signal(kEventThreadNetdataChanged);
 }
 
 void Leader::RemoveBorderRouter(uint16_t aRloc16, MatchMode aMatchMode)
@@ -146,7 +146,7 @@ void Leader::HandleServerData(Coap::Message &aMessage, const Ip6::MessageInfo &a
 
     VerifyOrExit(aMessageInfo.GetPeerAddr().IsIidRoutingLocator(), OT_NOOP);
 
-    switch (Tlv::ReadUint16Tlv(aMessage, ThreadTlv::kRloc16, rloc16))
+    switch (Tlv::FindUint16Tlv(aMessage, ThreadTlv::kRloc16, rloc16))
     {
     case OT_ERROR_NONE:
         RemoveBorderRouter(rloc16, kMatchModeRloc16);
@@ -157,7 +157,7 @@ void Leader::HandleServerData(Coap::Message &aMessage, const Ip6::MessageInfo &a
         ExitNow();
     }
 
-    if (ThreadTlv::GetTlv(aMessage, ThreadTlv::kThreadNetworkData, sizeof(networkData), networkData) == OT_ERROR_NONE)
+    if (ThreadTlv::FindTlv(aMessage, ThreadTlv::kThreadNetworkData, sizeof(networkData), networkData) == OT_ERROR_NONE)
     {
         VerifyOrExit(networkData.IsValid(), OT_NOOP);
         RegisterNetworkData(aMessageInfo.GetPeerAddr().GetLocator(), networkData.GetTlvs(), networkData.GetLength());
@@ -264,7 +264,7 @@ void Leader::HandleCommissioningSet(Coap::Message &aMessage, const Ip6::MessageI
         }
     }
 
-    SetCommissioningData(tlvs, static_cast<uint8_t>(length));
+    IgnoreError(SetCommissioningData(tlvs, static_cast<uint8_t>(length)));
 
     state = MeshCoP::StateTlv::kAccept;
 
@@ -287,7 +287,7 @@ void Leader::HandleCommissioningGet(Coap::Message &aMessage, const Ip6::MessageI
     uint16_t length = 0;
     uint16_t offset;
 
-    SuccessOrExit(Tlv::GetValueOffset(aMessage, MeshCoP::Tlv::kGet, offset, length));
+    SuccessOrExit(Tlv::FindTlvValueOffset(aMessage, MeshCoP::Tlv::kGet, offset, length));
     aMessage.SetOffset(offset);
 
 exit:
@@ -346,7 +346,7 @@ void Leader::SendCommissioningGetResponse(const Coap::Message &   aRequest,
     if (message->GetLength() == message->GetOffset())
     {
         // no payload, remove coap payload marker
-        message->SetLength(message->GetLength() - 1);
+        IgnoreError(message->SetLength(message->GetLength() - 1));
     }
 
     SuccessOrExit(error = Get<Coap::Coap>().SendMessage(*message, aMessageInfo));
@@ -416,7 +416,11 @@ otError Leader::Validate(const uint8_t *aTlvs, uint8_t aTlvsLength, uint16_t aRl
 
     for (const NetworkDataTlv *cur = reinterpret_cast<const NetworkDataTlv *>(aTlvs); cur < end; cur = cur->GetNext())
     {
+        uint8_t offset;
+
         VerifyOrExit((cur + 1) <= end && cur->GetNext() <= end, error = OT_ERROR_PARSE);
+
+        offset = static_cast<uint8_t>(reinterpret_cast<const uint8_t *>(cur) - aTlvs);
 
         switch (cur->GetType())
         {
@@ -427,7 +431,7 @@ otError Leader::Validate(const uint8_t *aTlvs, uint8_t aTlvsLength, uint16_t aRl
             VerifyOrExit(prefix->IsValid(), error = OT_ERROR_PARSE);
 
             // Ensure there is no duplicate Prefix TLVs with same prefix.
-            VerifyOrExit(prefix == FindPrefix(prefix->GetPrefix(), prefix->GetPrefixLength(), aTlvs, aTlvsLength),
+            VerifyOrExit(FindPrefix(prefix->GetPrefix(), prefix->GetPrefixLength(), aTlvs, offset) == NULL,
                          error = OT_ERROR_PARSE);
 
             SuccessOrExit(error = ValidatePrefix(*prefix, aRloc16));
@@ -442,8 +446,8 @@ otError Leader::Validate(const uint8_t *aTlvs, uint8_t aTlvsLength, uint16_t aRl
 
             // Ensure there is no duplicate Service TLV with same
             // Enterprise Number and Service Data.
-            VerifyOrExit(service == FindService(service->GetEnterpriseNumber(), service->GetServiceData(),
-                                                service->GetServiceDataLength(), aTlvs, aTlvsLength),
+            VerifyOrExit(FindService(service->GetEnterpriseNumber(), service->GetServiceData(),
+                                     service->GetServiceDataLength(), aTlvs, offset) == NULL,
                          error = OT_ERROR_PARSE);
 
             SuccessOrExit(error = ValidateService(*service, aRloc16));
@@ -701,7 +705,7 @@ exit:
     return status;
 }
 
-otError Leader::RegisterNetworkData(uint16_t aRloc16, const uint8_t *aTlvs, uint8_t aTlvsLength)
+void Leader::RegisterNetworkData(uint16_t aRloc16, const uint8_t *aTlvs, uint8_t aTlvsLength)
 {
     otError               error = OT_ERROR_NONE;
     const NetworkDataTlv *end   = reinterpret_cast<const NetworkDataTlv *>(aTlvs + aTlvsLength);
@@ -740,7 +744,11 @@ otError Leader::RegisterNetworkData(uint16_t aRloc16, const uint8_t *aTlvs, uint
     otDumpDebgNetData("add done", mTlvs, mLength);
 
 exit:
-    return error;
+
+    if (error != OT_ERROR_NONE)
+    {
+        otLogNoteNetData("Failed to register network data: %s", otThreadErrorToString(error));
+    }
 }
 
 otError Leader::AddPrefix(const PrefixTlv &aPrefix, ChangedFlags &aChangedFlags)

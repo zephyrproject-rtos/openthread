@@ -50,6 +50,7 @@
 
 #include "common/logging.hpp"
 
+#include "radio_url.hpp"
 #include "lib/platform/exit_code.h"
 
 /**
@@ -82,7 +83,7 @@ enum
 };
 
 OT_TOOL_PACKED_BEGIN
-struct Event
+struct VirtualTimeEvent
 {
     uint64_t mDelay;
     uint8_t  mEvent;
@@ -162,7 +163,7 @@ void platformAlarmAdvanceNow(uint64_t aDelta);
  * @param[in]  aPlatformConfig  Platform configuration structure.
  *
  */
-void platformRadioInit(const otPlatformConfig *aPlatformConfig);
+void platformRadioInit(otPosixRadioArguments *aArguments);
 
 /**
  * This function shuts down the radio service used by OpenThread.
@@ -274,8 +275,10 @@ void platformNetifProcess(const fd_set *aReadFdSet, const fd_set *aWriteFdSet, c
 /**
  * This function initialize virtual time simulation.
  *
+ * @params[in]  aNodeId     Node id of this simulated device.
+ *
  */
-void virtualTimeInit(void);
+void virtualTimeInit(uint16_t aNodeId);
 
 /**
  * This function deinitialize virtual time simulation.
@@ -328,7 +331,7 @@ void virtualTimeSendRadioSpinelWriteEvent(const uint8_t *aData, uint16_t aLength
  * @param[out]  aEvent  A pointer to the event receiving the event.
  *
  */
-void virtualTimeReceiveEvent(struct Event *aEvent);
+void virtualTimeReceiveEvent(struct VirtualTimeEvent *aEvent);
 
 /**
  * This function sends sleep event through virtual time simulation.
@@ -345,7 +348,7 @@ void virtualTimeSendSleepEvent(const struct timeval *aTimeout);
  * @param[in]   aEvent      A pointer to the current event.
  *
  */
-void virtualTimeRadioSpinelProcess(otInstance *aInstance, const struct Event *aEvent);
+void virtualTimeRadioSpinelProcess(otInstance *aInstance, const struct VirtualTimeEvent *aEvent);
 
 /**
  * This function initializes platform UDP driver.

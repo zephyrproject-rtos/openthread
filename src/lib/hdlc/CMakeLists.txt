@@ -42,12 +42,9 @@ target_include_directories(openthread-hdlc
         ${OT_PUBLIC_INCLUDES}
     PRIVATE
         ${PROJECT_SOURCE_DIR}/src/core
-        ${OT_PRIVATE_INCLUDES}
 )
 
-target_compile_definitions(openthread-hdlc PRIVATE
-    ${OT_PRIVATE_DEFINES}
-)
+target_link_libraries(openthread-hdlc PRIVATE ot-config)
 
 target_compile_options(openthread-hdlc PRIVATE
     ${OT_CFLAGS}

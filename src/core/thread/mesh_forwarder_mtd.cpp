@@ -39,27 +39,24 @@ namespace ot {
 
 otError MeshForwarder::SendMessage(Message &aMessage)
 {
-    otError error;
-
     aMessage.SetDirectTransmission();
     aMessage.SetOffset(0);
     aMessage.SetDatagramTag(0);
 
-    SuccessOrExit(error = mSendQueue.Enqueue(aMessage));
+    mSendQueue.Enqueue(aMessage);
     mScheduleTransmissionTask.Post();
 
-exit:
-    return error;
+    return OT_ERROR_NONE;
 }
 
-otError MeshForwarder::EvictMessage(uint8_t aPriority)
+otError MeshForwarder::EvictMessage(Message::Priority aPriority)
 {
     otError  error = OT_ERROR_NOT_FOUND;
     Message *message;
 
     VerifyOrExit((message = mSendQueue.GetTail()) != NULL, OT_NOOP);
 
-    if (message->GetPriority() < aPriority)
+    if (message->GetPriority() < static_cast<uint8_t>(aPriority))
     {
         RemoveMessage(*message);
         ExitNow(error = OT_ERROR_NONE);

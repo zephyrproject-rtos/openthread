@@ -45,6 +45,7 @@
 #include "common/debug.hpp"
 #include "common/linked_list.hpp"
 #include "common/locator.hpp"
+#include "common/non_copyable.hpp"
 #include "common/tasklet.hpp"
 #include "common/time.hpp"
 
@@ -79,12 +80,12 @@ public:
     static const uint32_t kMaxDelay = (Time::kMaxDuration >> 1);
 
     /**
-     * This function pointer is called when the timer expires.
+     * This type defines a function reference which is invoked when the timer expires.
      *
      * @param[in]  aTimer    A reference to the expired timer instance.
      *
      */
-    typedef void (*Handler)(Timer &aTimer);
+    typedef void (&Handler)(Timer &aTimer);
 
     /**
      * This constructor creates a timer instance.
@@ -251,7 +252,7 @@ private:
  * This class implements the base timer scheduler.
  *
  */
-class TimerScheduler : public InstanceLocator
+class TimerScheduler : public InstanceLocator, private NonCopyable
 {
     friend class Timer;
 

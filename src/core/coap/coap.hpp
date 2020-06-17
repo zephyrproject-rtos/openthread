@@ -38,6 +38,7 @@
 #include "common/linked_list.hpp"
 #include "common/locator.hpp"
 #include "common/message.hpp"
+#include "common/non_copyable.hpp"
 #include "common/timer.hpp"
 #include "net/ip6.hpp"
 #include "net/netif.hpp"
@@ -268,7 +269,7 @@ private:
  * This class implements the CoAP client and server.
  *
  */
-class CoapBase : public InstanceLocator
+class CoapBase : public InstanceLocator, private NonCopyable
 {
     friend class ResponsesQueue;
 
@@ -307,11 +308,8 @@ public:
      *
      * @param[in]  aResource  A reference to the resource.
      *
-     * @retval OT_ERROR_NONE     Successfully added @p aResource.
-     * @retval OT_ERROR_ALREADY  The @p aResource was already added.
-     *
      */
-    otError AddResource(Resource &aResource);
+    void AddResource(Resource &aResource);
 
     /**
      * This method removes a resource from the CoAP server.
@@ -332,15 +330,23 @@ public:
     /**
      * This method creates a new message with a CoAP header.
      *
-     * @note If @p aSettings is 'NULL', the link layer security is enabled and the message priority is set to
-     * OT_MESSAGE_PRIORITY_NORMAL by default.
-     *
-     * @param[in]  aSettings  A pointer to the message settings or NULL to set default settings.
+     * @param[in]  aSettings  The message settings.
      *
      * @returns A pointer to the message or NULL if failed to allocate message.
      *
      */
-    Message *NewMessage(const otMessageSettings *aSettings = NULL);
+    Message *NewMessage(const Message::Settings &aSettings = Message::Settings::GetDefault());
+
+    /**
+     * This method creates a new message with a CoAP header that has Network Control priority level.
+     *
+     * @returns A pointer to the message or NULL if failed to allocate message.
+     *
+     */
+    Message *NewPriorityMessage(void)
+    {
+        return NewMessage(Message::Settings(Message::kWithLinkSecurity, Message::kPriorityNet));
+    }
 
     /**
      * This method sends a CoAP message with custom transmission parameters.
@@ -561,7 +567,7 @@ private:
     void ProcessReceivedRequest(Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
     void ProcessReceivedResponse(Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
 
-    otError SendCopy(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
+    void    SendCopy(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
     otError SendEmptyMessage(Message::Type aType, const Message &aRequest, const Ip6::MessageInfo &aMessageInfo);
 
     otError Send(ot::Message &aMessage, const Ip6::MessageInfo &aMessageInfo);

@@ -198,6 +198,8 @@ void otPlatRadioGetIeeeEui64(otInstance *aInstance, uint8_t *aIeeeEui64)
 
 void otPlatRadioSetPanId(otInstance *aInstance, otPanId aPanid)
 {
+    OT_UNUSED_VARIABLE(aInstance);
+
     assert(aInstance != NULL);
 
     sPanid = aPanid;
@@ -206,6 +208,8 @@ void otPlatRadioSetPanId(otInstance *aInstance, otPanId aPanid)
 
 void otPlatRadioSetExtendedAddress(otInstance *aInstance, const otExtAddress *aExtAddress)
 {
+    OT_UNUSED_VARIABLE(aInstance);
+
     assert(aInstance != NULL);
 
     ReverseExtAddress(&sExtAddress, aExtAddress);
@@ -213,6 +217,8 @@ void otPlatRadioSetExtendedAddress(otInstance *aInstance, const otExtAddress *aE
 
 void otPlatRadioSetShortAddress(otInstance *aInstance, otShortAddress aAddress)
 {
+    OT_UNUSED_VARIABLE(aInstance);
+
     assert(aInstance != NULL);
 
     sShortAddress = aAddress;
@@ -220,6 +226,8 @@ void otPlatRadioSetShortAddress(otInstance *aInstance, otShortAddress aAddress)
 
 void otPlatRadioSetPromiscuous(otInstance *aInstance, bool aEnable)
 {
+    OT_UNUSED_VARIABLE(aInstance);
+
     assert(aInstance != NULL);
 
     sPromiscuous = aEnable;
@@ -359,6 +367,8 @@ exit:
 
 otError otPlatRadioSleep(otInstance *aInstance)
 {
+    OT_UNUSED_VARIABLE(aInstance);
+
     assert(aInstance != NULL);
 
     otError error = OT_ERROR_INVALID_STATE;
@@ -374,6 +384,8 @@ otError otPlatRadioSleep(otInstance *aInstance)
 
 otError otPlatRadioReceive(otInstance *aInstance, uint8_t aChannel)
 {
+    OT_UNUSED_VARIABLE(aInstance);
+
     assert(aInstance != NULL);
 
     otError error = OT_ERROR_INVALID_STATE;
@@ -391,6 +403,9 @@ otError otPlatRadioReceive(otInstance *aInstance, uint8_t aChannel)
 
 otError otPlatRadioTransmit(otInstance *aInstance, otRadioFrame *aRadio)
 {
+    OT_UNUSED_VARIABLE(aInstance);
+    OT_UNUSED_VARIABLE(aRadio);
+
     assert(aInstance != NULL);
     assert(aRadio != NULL);
 
@@ -407,6 +422,8 @@ otError otPlatRadioTransmit(otInstance *aInstance, otRadioFrame *aRadio)
 
 otRadioFrame *otPlatRadioGetTransmitBuffer(otInstance *aInstance)
 {
+    OT_UNUSED_VARIABLE(aInstance);
+
     assert(aInstance != NULL);
 
     return &sTransmitFrame;
@@ -414,6 +431,8 @@ otRadioFrame *otPlatRadioGetTransmitBuffer(otInstance *aInstance)
 
 int8_t otPlatRadioGetRssi(otInstance *aInstance)
 {
+    OT_UNUSED_VARIABLE(aInstance);
+
     assert(aInstance != NULL);
 
     int8_t   rssi    = SIM_LOW_RSSI_SAMPLE;
@@ -439,6 +458,8 @@ exit:
 
 otRadioCaps otPlatRadioGetCaps(otInstance *aInstance)
 {
+    OT_UNUSED_VARIABLE(aInstance);
+
     assert(aInstance != NULL);
 
     return OT_RADIO_CAPS_NONE;
@@ -446,6 +467,8 @@ otRadioCaps otPlatRadioGetCaps(otInstance *aInstance)
 
 bool otPlatRadioGetPromiscuous(otInstance *aInstance)
 {
+    OT_UNUSED_VARIABLE(aInstance);
+
     assert(aInstance != NULL);
 
     return sPromiscuous;
@@ -711,28 +734,40 @@ void radioTransmit(struct RadioMessage *aMessage, const struct otRadioFrame *aFr
 
 void radioSendAck(void)
 {
-    sAckFrame.mLength    = IEEE802154_ACK_LENGTH;
-    sAckMessage.mPsdu[0] = IEEE802154_FRAME_TYPE_ACK;
-
     if (
 #if OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2
+        // Determine if frame pending should be set
         (otMacFrameIsData(&sReceiveFrame) || otMacFrameIsDataRequest(&sReceiveFrame))
 #else
         otMacFrameIsDataRequest(&sReceiveFrame)
 #endif
         && HasFramePending(&sReceiveFrame))
     {
-        sAckMessage.mPsdu[0] |= IEEE802154_FRAME_PENDING;
         sReceiveFrame.mInfo.mRxInfo.mAckedWithFramePending = true;
     }
 
-    sAckMessage.mPsdu[1] = 0;
-    sAckMessage.mPsdu[2] = otMacFrameGetSequence(&sReceiveFrame);
+#if OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2
+    // Use enh-ack for 802.15.4-2015 frames
+    if (otMacFrameIsVersion2015(&sReceiveFrame))
+    {
+        otEXPECT(otMacFrameGenerateEnhAck(&sReceiveFrame, sReceiveFrame.mInfo.mRxInfo.mAckedWithFramePending, NULL, 0,
+                                          &sAckFrame) == OT_ERROR_NONE);
+    }
+    else
+#endif
+    {
+        otMacFrameGenerateImmAck(&sReceiveFrame, sReceiveFrame.mInfo.mRxInfo.mAckedWithFramePending, &sAckFrame);
+    }
 
     sAckMessage.mChannel = sReceiveFrame.mChannel;
 
     radioComputeCrc(&sAckMessage, sAckFrame.mLength);
     radioTransmit(&sAckMessage, &sAckFrame);
+
+#if OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2
+exit:
+#endif
+    return;
 }
 
 void radioProcessFrame(otInstance *aInstance)
@@ -743,6 +778,7 @@ void radioProcessFrame(otInstance *aInstance)
     sReceiveFrame.mInfo.mRxInfo.mLqi  = OT_RADIO_LQI_NONE;
 
     sReceiveFrame.mInfo.mRxInfo.mAckedWithFramePending = false;
+    sReceiveFrame.mInfo.mRxInfo.mAckedWithSecEnhAck    = false;
 
     otEXPECT(sPromiscuous == false);
 
@@ -774,6 +810,8 @@ exit:
 
 void otPlatRadioEnableSrcMatch(otInstance *aInstance, bool aEnable)
 {
+    OT_UNUSED_VARIABLE(aInstance);
+
     assert(aInstance != NULL);
 
     sSrcMatchEnabled = aEnable;
@@ -781,6 +819,10 @@ void otPlatRadioEnableSrcMatch(otInstance *aInstance, bool aEnable)
 
 otError otPlatRadioEnergyScan(otInstance *aInstance, uint8_t aScanChannel, uint16_t aScanDuration)
 {
+    OT_UNUSED_VARIABLE(aInstance);
+    OT_UNUSED_VARIABLE(aScanChannel);
+    OT_UNUSED_VARIABLE(aScanDuration);
+
     assert(aInstance != NULL);
     assert(aScanChannel >= SIM_RADIO_CHANNEL_MIN && aScanChannel <= SIM_RADIO_CHANNEL_MAX);
     assert(aScanDuration > 0);
@@ -790,6 +832,8 @@ otError otPlatRadioEnergyScan(otInstance *aInstance, uint8_t aScanChannel, uint1
 
 otError otPlatRadioGetTransmitPower(otInstance *aInstance, int8_t *aPower)
 {
+    OT_UNUSED_VARIABLE(aInstance);
+
     assert(aInstance != NULL);
 
     *aPower = sTxPower;
@@ -799,6 +843,8 @@ otError otPlatRadioGetTransmitPower(otInstance *aInstance, int8_t *aPower)
 
 otError otPlatRadioSetTransmitPower(otInstance *aInstance, int8_t aPower)
 {
+    OT_UNUSED_VARIABLE(aInstance);
+
     assert(aInstance != NULL);
 
     sTxPower = aPower;
@@ -808,6 +854,8 @@ otError otPlatRadioSetTransmitPower(otInstance *aInstance, int8_t aPower)
 
 otError otPlatRadioGetCcaEnergyDetectThreshold(otInstance *aInstance, int8_t *aThreshold)
 {
+    OT_UNUSED_VARIABLE(aInstance);
+
     assert(aInstance != NULL);
 
     *aThreshold = sCcaEdThresh;
@@ -817,6 +865,8 @@ otError otPlatRadioGetCcaEnergyDetectThreshold(otInstance *aInstance, int8_t *aT
 
 otError otPlatRadioSetCcaEnergyDetectThreshold(otInstance *aInstance, int8_t aThreshold)
 {
+    OT_UNUSED_VARIABLE(aInstance);
+
     assert(aInstance != NULL);
 
     sCcaEdThresh = aThreshold;
@@ -826,6 +876,8 @@ otError otPlatRadioSetCcaEnergyDetectThreshold(otInstance *aInstance, int8_t aTh
 
 int8_t otPlatRadioGetReceiveSensitivity(otInstance *aInstance)
 {
+    OT_UNUSED_VARIABLE(aInstance);
+
     assert(aInstance != NULL);
 
     return SIM_RECEIVE_SENSITIVITY;
@@ -841,6 +893,8 @@ otRadioState otPlatRadioGetState(otInstance *aInstance)
 #if OPENTHREAD_CONFIG_PLATFORM_RADIO_COEX_ENABLE
 otError otPlatRadioSetCoexEnabled(otInstance *aInstance, bool aEnabled)
 {
+    OT_UNUSED_VARIABLE(aInstance);
+
     assert(aInstance != NULL);
 
     sRadioCoexEnabled = aEnabled;
@@ -849,6 +903,8 @@ otError otPlatRadioSetCoexEnabled(otInstance *aInstance, bool aEnabled)
 
 bool otPlatRadioIsCoexEnabled(otInstance *aInstance)
 {
+    OT_UNUSED_VARIABLE(aInstance);
+
     assert(aInstance != NULL);
 
     return sRadioCoexEnabled;
@@ -856,6 +912,8 @@ bool otPlatRadioIsCoexEnabled(otInstance *aInstance)
 
 otError otPlatRadioGetCoexMetrics(otInstance *aInstance, otRadioCoexMetrics *aCoexMetrics)
 {
+    OT_UNUSED_VARIABLE(aInstance);
+
     otError error = OT_ERROR_NONE;
 
     assert(aInstance != NULL);

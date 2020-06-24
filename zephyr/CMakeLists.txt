@@ -76,6 +76,97 @@ if(CONFIG_OPENTHREAD_REFERENCE_DEVICE)
   set(OT_REFERENCE_DEVICE ON CACHE BOOL "Enable Thread Certification Reference Device")
 endif()
 
+if(CONFIG_OPENTHREAD_BACKBONE_ROUTER)
+  set(OT_BACKBONE_ROUTER ON CACHE BOOL "Enable backbone router functionality")
+endif()
+
+if(CONFIG_OPENTHREAD_CHANNEL_MANAGER)
+  set(OT_CHANNEL_MANAGER ON CACHE BOOL "Enable channel manager support")
+endif()
+
+if(CONFIG_OPENTHREAD_CHANNEL_MONITOR)
+  set(OT_CHANNEL_MONITOR ON CACHE BOOL "Enable channel monitor support")
+endif()
+
+if(CONFIG_OPENTHREAD_CHILD_SUPERVISION)
+  set(OT_CHILD_SUPERVISION ON CACHE BOOL "Enable child supervision support")
+endif()
+
+if(CONFIG_OPENTHREAD_COAPS)
+  set(OT_COAPS ON CACHE BOOL "Enable secure coap api support")
+endif()
+
+if(CONFIG_OPENTHREAD_DNS_CLIENT)
+  set(OT_DNS_CLIENT ON CACHE BOOL "Enable DNS client support")
+endif()
+
+if(CONFIG_OPENTHREAD_ECDSA)
+  set(OT_ECDSA ON CACHE BOOL "Enable ECDSA support")
+endif()
+
+if(CONFIG_OPENTHREAD_DUA)
+  set(OT_DUA ON CACHE BOOL "Enable Domain Unicast Address feature for Thread 1.2")
+endif()
+
+if(CONFIG_OPENTHREAD_EXTERNAL_HEAP)
+  set(OT_EXTERNAL_HEAP ON CACHE BOOL "Enable external heap support")
+endif()
+
+if(CONFIG_OPENTHREAD_IP6_FRAGM)
+  set(OT_IP6_FRAGM ON CACHE BOOL "Enable ipv6 fragmentation support")
+endif()
+
+if(CONFIG_OPENTHREAD_LEGACY)
+  set(OT_LEGACY ON CACHE BOOL "Enable legacy network support")
+endif()
+
+if(CONFIG_OPENTHREAD_LOG_LEVEL_DYNAMIC)
+  set(OT_LOG_LEVEL_DYNAMIC ON CACHE BOOL "Enable dynamic log level control")
+endif()
+
+if(CONFIG_OPENTHREAD_MAC_FILTER)
+  set(OT_MAC_FILTER ON CACHE BOOL "Enable mac filter support")
+endif()
+
+if(CONFIG_OPENTHREAD_MTD_NETDIAG)
+  set(OT_MTD_NETDIAG ON CACHE BOOL "Enable TMF network diagnostics on MTDs")
+endif()
+
+if(CONFIG_OPENTHREAD_MULTIPLE_INSTANCE)
+  set(OT_MULTIPLE_INSTANCE ON CACHE BOOL "Enable multiple instances")
+endif()
+
+if(CONFIG_OPENTHREAD_PLATFORM_NETIF)
+  set(OT_PLATFORM_NETIF ON CACHE BOOL "Enable platform netif support")
+endif()
+
+if(CONFIG_OPENTHREAD_PLATFORM_UDP)
+  set(OT_PLATFORM_UDP ON CACHE BOOL "Enable platform UDP support")
+endif()
+
+if(CONFIG_OPENTHREAD_OTNS)
+  set(OT_OTNS ON CACHE BOOL "Enable OTNS support")
+endif()
+
+if(CONFIG_OPENTHREAD_SETTINGS_RAM)
+  set(OT_SETTINGS_RAM ON CACHE BOOL "Enable volatile-only storage of settings")
+endif()
+
+if(CONFIG_OPENTHREAD_SNTP_CLIENT)
+  set(OT_SNTP_CLIENT ON CACHE BOOL "Enable SNTP Client support")
+endif()
+
+if(CONFIG_OPENTHREAD_TIME_SYNC)
+  set(OT_TIME_SYNC ON CACHE BOOL "Enable the time synchronization service feature")
+endif()
+
+if(CONFIG_OPENTHREAD_FULL_LOGS)
+  set(OT_FULL_LOGS ON CACHE BOOL "Enable full logs")
+endif()
+
+string(REPLACE " " ";" OT_PARAM_LIST " ${CONFIG_OPENTHREAD_CUSTOM_PARAMETERS}")
+list(APPEND OT_PRIVATE_DEFINES ${OT_PARAM_LIST})
+
 # Zephyr compiler options
 zephyr_get_compile_options_for_lang_as_string(C   c_options)
 zephyr_get_compile_options_for_lang_as_string(CXX cxx_options)

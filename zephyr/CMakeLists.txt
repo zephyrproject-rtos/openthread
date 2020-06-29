@@ -167,6 +167,12 @@ endif()
 string(REPLACE " " ";" OT_PARAM_LIST " ${CONFIG_OPENTHREAD_CUSTOM_PARAMETERS}")
 list(APPEND OT_PRIVATE_DEFINES ${OT_PARAM_LIST})
 
+# Zephyr logging options
+
+if(CONFIG_LOG_BACKEND_SPINEL)
+  list(APPEND OT_PRIVATE_DEFINES "OPENTHREAD_CONFIG_LOG_OUTPUT=OPENTHREAD_CONFIG_LOG_OUTPUT_NCP_SPINEL")
+endif()
+
 # Zephyr compiler options
 zephyr_get_compile_options_for_lang_as_string(C   c_options)
 zephyr_get_compile_options_for_lang_as_string(CXX cxx_options)

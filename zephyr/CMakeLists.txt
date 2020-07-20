@@ -4,9 +4,15 @@ set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
 
 # OpenThread options
 set(OT_BUILD_EXECUTABLES OFF CACHE BOOL "Disable OpenThread samples")
-set(OT_EXTERNAL_MBEDTLS "mbedTLS" CACHE STRING "Specify external mbedtls library")
 set(OT_BUILTIN_MBEDTLS_MANAGEMENT OFF CACHE BOOL "Use Zephyr's mbedTLS heap")
 set(OT_PLATFORM "zephyr" CACHE STRING "Zephyr as a target platform")
+
+set(
+    OT_EXTERNAL_MBEDTLS
+    ${CONFIG_OPENTHREAD_MBEDTLS_TARGET}
+    CACHE STRING
+    "Specify external mbedtls library"
+)
 
 if(CONFIG_OPENTHREAD_COMMISSIONER)
   set(OT_COMMISSIONER ON CACHE BOOL "Enable Commissioner")

@@ -83,7 +83,15 @@ set_target_properties(
         CXX_STANDARD 11
 )
 
-target_link_libraries(openthread-posix PUBLIC openthread-platform PRIVATE ot-config util)
+target_link_libraries(openthread-posix
+    PUBLIC
+        openthread-platform
+    PRIVATE
+        openthread-url
+        ot-config
+        util
+        $<$<STREQUAL:${CMAKE_SYSTEM_NAME},Linux>:rt>
+)
 
 target_compile_definitions(openthread-posix
     PUBLIC

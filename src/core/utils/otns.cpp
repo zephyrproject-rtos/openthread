@@ -103,10 +103,12 @@ void Otns::HandleNotifierEvents(Events aEvents)
         EmitStatus("parid=%x", Get<Mle::Mle>().GetLeaderData().GetPartitionId());
     }
 
+#if OPENTHREAD_CONFIG_JOINER_ENABLE
     if (aEvents.Contains(kEventJoinerStateChanged))
     {
         EmitStatus("joiner_state=%d", Get<MeshCoP::Joiner>().GetState());
     }
+#endif
 }
 
 void Otns::EmitNeighborChange(otNeighborTableEvent aEvent, Neighbor &aNeighbor)
@@ -126,6 +128,35 @@ void Otns::EmitNeighborChange(otNeighborTableEvent aEvent, Neighbor &aNeighbor)
         EmitStatus("child_removed=%s", aNeighbor.GetExtAddress().ToString().AsCString());
         break;
     }
+}
+
+void Otns::EmitTransmit(const Mac::TxFrame &aFrame)
+{
+    Mac::Address dst;
+    uint16_t     frameControlField = aFrame.GetFrameControlField();
+    uint8_t      channel           = aFrame.GetChannel();
+    uint8_t      sequence          = aFrame.GetSequence();
+
+    IgnoreError(aFrame.GetDstAddr(dst));
+
+    if (dst.IsShort())
+    {
+        EmitStatus("transmit=%d,%04x,%d,%04x", channel, frameControlField, sequence, dst.GetShort());
+    }
+    else if (dst.IsExtended())
+    {
+        EmitStatus("transmit=%d,%04x,%d,%s", channel, frameControlField, sequence, dst.ToString().AsCString());
+    }
+    else
+    {
+        EmitStatus("transmit=%d,%04x,%d", channel, frameControlField, sequence);
+    }
+}
+
+void Otns::EmitDeviceMode(Mle::DeviceMode aMode)
+{
+    EmitStatus("mode=%s%s%s%s", aMode.IsRxOnWhenIdle() ? "r" : "", aMode.IsSecureDataRequest() ? "s" : "",
+               aMode.IsFullThreadDevice() ? "d" : "", aMode.IsFullNetworkData() ? "n" : "");
 }
 
 } // namespace Utils

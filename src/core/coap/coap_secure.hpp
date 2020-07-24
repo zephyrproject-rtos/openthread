@@ -33,6 +33,7 @@
 
 #include "coap/coap.hpp"
 #include "meshcop/dtls.hpp"
+#include "meshcop/meshcop.hpp"
 
 #include <openthread/coap_secure.h>
 
@@ -96,7 +97,11 @@ public:
      * @param[in]  aContext   A pointer to arbitrary context information.
      *
      */
-    void SetConnectedCallback(ConnectedCallback aCallback, void *aContext);
+    void SetConnectedCallback(ConnectedCallback aCallback, void *aContext)
+    {
+        mConnectedCallback = aCallback;
+        mConnectedContext  = aContext;
+    }
 
     /**
      * This method stops the secure CoAP agent.
@@ -158,7 +163,15 @@ public:
      * @retval OT_ERROR_INVALID_ARGS  The PSK is invalid.
      *
      */
-    otError SetPsk(const uint8_t *aPsk, uint8_t aPskLength);
+    otError SetPsk(const uint8_t *aPsk, uint8_t aPskLength) { return mDtls.SetPsk(aPsk, aPskLength); }
+
+    /**
+     * This method sets the PSK.
+     *
+     * @param[in]  aPskd  A Joiner PSKd.
+     *
+     */
+    void SetPsk(const MeshCoP::JoinerPskd &aPskd);
 
 #if OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE
 
@@ -195,7 +208,10 @@ public:
     void SetCertificate(const uint8_t *aX509Cert,
                         uint32_t       aX509Length,
                         const uint8_t *aPrivateKey,
-                        uint32_t       aPrivateKeyLength);
+                        uint32_t       aPrivateKeyLength)
+    {
+        mDtls.SetCertificate(aX509Cert, aX509Length, aPrivateKey, aPrivateKeyLength);
+    }
 
     /**
      * This method sets the trusted top level CAs. It is needed for validate the certificate of the peer.
@@ -206,7 +222,10 @@ public:
      * @param[in]  aX509CaCertChainLength   The length of chain.
      *
      */
-    void SetCaCertificateChain(const uint8_t *aX509CaCertificateChain, uint32_t aX509CaCertChainLength);
+    void SetCaCertificateChain(const uint8_t *aX509CaCertificateChain, uint32_t aX509CaCertChainLength)
+    {
+        mDtls.SetCaCertificateChain(aX509CaCertificateChain, aX509CaCertChainLength);
+    }
 #endif // MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED
 
 #ifdef MBEDTLS_BASE64_C
@@ -223,7 +242,10 @@ public:
      * @retval OT_ERROR_NO_BUFS  Can't allocate memory for certificate.
      *
      */
-    otError GetPeerCertificateBase64(unsigned char *aPeerCert, size_t *aCertLength, size_t aCertBufferSize);
+    otError GetPeerCertificateBase64(unsigned char *aPeerCert, size_t *aCertLength, size_t aCertBufferSize)
+    {
+        return mDtls.GetPeerCertificateBase64(aPeerCert, aCertLength, aCertBufferSize);
+    }
 #endif // MBEDTLS_BASE64_C
 
     /**
@@ -233,7 +255,11 @@ public:
      * @param[in]  aContext      A pointer to arbitrary context information.
      *
      */
-    void SetClientConnectedCallback(ConnectedCallback aCallback, void *aContext);
+    void SetClientConnectedCallback(ConnectedCallback aCallback, void *aContext)
+    {
+        mConnectedCallback = aCallback;
+        mConnectedContext  = aContext;
+    }
 
     /**
      * This method sets the authentication mode for the CoAP secure connection. It disables or enables the verification
@@ -242,7 +268,7 @@ public:
      * @param[in]  aVerifyPeerCertificate  true, if the peer certificate should be verified
      *
      */
-    void SetSslAuthMode(bool aVerifyPeerCertificate);
+    void SetSslAuthMode(bool aVerifyPeerCertificate) { mDtls.SetSslAuthMode(aVerifyPeerCertificate); }
 
 #endif // OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE
 
@@ -250,7 +276,7 @@ public:
      * This method sends a CoAP message over secure DTLS connection.
      *
      * If a response for a request is expected, respective function and context information should be provided.
-     * If no response is expected, these arguments should be NULL pointers.
+     * If no response is expected, these arguments should be nullptr pointers.
      * If Message Id was not set in the header (equal to 0), this function will assign unique Message Id to the message.
      *
      * @param[in]  aMessage      A reference to the message to send.
@@ -262,13 +288,13 @@ public:
      * @retval OT_ERROR_INVALID_STATE  DTLS connection was not initialized.
      *
      */
-    otError SendMessage(Message &aMessage, ResponseHandler aHandler = NULL, void *aContext = NULL);
+    otError SendMessage(Message &aMessage, ResponseHandler aHandler = nullptr, void *aContext = nullptr);
 
     /**
      * This method sends a CoAP message over secure DTLS connection.
      *
      * If a response for a request is expected, respective function and context information should be provided.
-     * If no response is expected, these arguments should be NULL pointers.
+     * If no response is expected, these arguments should be nullptr pointers.
      * If Message Id was not set in the header (equal to 0), this function will assign unique Message Id to the message.
      *
      * @param[in]  aMessage      A reference to the message to send.
@@ -283,8 +309,8 @@ public:
      */
     otError SendMessage(Message &               aMessage,
                         const Ip6::MessageInfo &aMessageInfo,
-                        ResponseHandler         aHandler = NULL,
-                        void *                  aContext = NULL);
+                        ResponseHandler         aHandler = nullptr,
+                        void *                  aContext = nullptr);
 
     /**
      * This method is used to pass UDP messages to the secure CoAP server.
@@ -304,7 +330,7 @@ public:
      * @return DTLS session's message info.
      *
      */
-    const Ip6::MessageInfo &GetPeerAddress(void) const { return mDtls.GetPeerAddress(); }
+    const Ip6::MessageInfo &GetMessageInfo(void) const { return mDtls.GetMessageInfo(); }
 
 private:
     static otError Send(CoapBase &aCoapBase, ot::Message &aMessage, const Ip6::MessageInfo &aMessageInfo)

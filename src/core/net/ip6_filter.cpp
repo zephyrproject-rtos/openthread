@@ -55,11 +55,11 @@ Filter::Filter(void)
 
 bool Filter::Accept(Message &aMessage) const
 {
-    bool      rval = false;
-    Header    ip6;
-    UdpHeader udp;
-    TcpHeader tcp;
-    uint16_t  dstport;
+    bool        rval = false;
+    Header      ip6;
+    Udp::Header udp;
+    Tcp::Header tcp;
+    uint16_t    dstport;
 
     // Allow all received IPv6 datagrams with link security enabled
     if (aMessage.IsLinkSecurityEnabled())
@@ -108,9 +108,9 @@ bool Filter::Accept(Message &aMessage) const
     }
 
     // Check against allowed unsecure port list
-    for (int i = 0; i < kMaxUnsecurePorts; i++)
+    for (uint16_t unsecurePort : mUnsecurePorts)
     {
-        if (mUnsecurePorts[i] != 0 && mUnsecurePorts[i] == dstport)
+        if (unsecurePort != 0 && unsecurePort == dstport)
         {
             ExitNow(rval = true);
         }
@@ -126,19 +126,19 @@ otError Filter::AddUnsecurePort(uint16_t aPort)
 
     VerifyOrExit(aPort != 0, error = OT_ERROR_INVALID_ARGS);
 
-    for (int i = 0; i < kMaxUnsecurePorts; i++)
+    for (uint16_t unsecurePort : mUnsecurePorts)
     {
-        if (mUnsecurePorts[i] == aPort)
+        if (unsecurePort == aPort)
         {
             ExitNow();
         }
     }
 
-    for (int i = 0; i < kMaxUnsecurePorts; i++)
+    for (uint16_t &unsecurePort : mUnsecurePorts)
     {
-        if (mUnsecurePorts[i] == 0)
+        if (unsecurePort == 0)
         {
-            mUnsecurePorts[i] = aPort;
+            unsecurePort = aPort;
             otLogInfoIp6("Added unsecure port %d", aPort);
             ExitNow();
         }
@@ -184,9 +184,9 @@ bool Filter::IsUnsecurePort(uint16_t aPort)
 {
     bool found = false;
 
-    for (int i = 0; i < kMaxUnsecurePorts; i++)
+    for (uint16_t unsecurePort : mUnsecurePorts)
     {
-        if (mUnsecurePorts[i] == aPort)
+        if (unsecurePort == aPort)
         {
             found = true;
             break;

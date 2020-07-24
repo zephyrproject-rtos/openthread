@@ -192,11 +192,11 @@ otError Dataset::Process(uint8_t aArgsLength, char *aArgs[])
         ExitNow(error = Print(sDataset));
     }
 
-    for (size_t i = 0; i < OT_ARRAY_LENGTH(sCommands); i++)
+    for (const Command &command : sCommands)
     {
-        if (strcmp(aArgs[0], sCommands[i].mName) == 0)
+        if (strcmp(aArgs[0], command.mName) == 0)
         {
-            error = (this->*sCommands[i].mCommand)(aArgsLength - 1, aArgs + 1);
+            error = (this->*command.mCommand)(aArgsLength - 1, aArgs + 1);
             break;
         }
     }
@@ -210,9 +210,9 @@ otError Dataset::ProcessHelp(uint8_t aArgsLength, char *aArgs[])
     OT_UNUSED_VARIABLE(aArgsLength);
     OT_UNUSED_VARIABLE(aArgs);
 
-    for (size_t i = 0; i < OT_ARRAY_LENGTH(sCommands); i++)
+    for (const Command &command : sCommands)
     {
-        mInterpreter.mServer->OutputFormat("%s\r\n", sCommands[i].mName);
+        mInterpreter.mServer->OutputFormat("%s\r\n", command.mName);
     }
 
     return OT_ERROR_NONE;
@@ -690,13 +690,13 @@ otError Dataset::ProcessMgmtGetCommand(uint8_t aArgsLength, char *aArgs[])
     {
         SuccessOrExit(error = otDatasetSendMgmtActiveGet(mInterpreter.mInstance, &datasetComponents, tlvs,
                                                          static_cast<uint8_t>(length),
-                                                         destAddrSpecified ? &address : NULL));
+                                                         destAddrSpecified ? &address : nullptr));
     }
     else if (strcmp(aArgs[0], "pending") == 0)
     {
         SuccessOrExit(error = otDatasetSendMgmtPendingGet(mInterpreter.mInstance, &datasetComponents, tlvs,
                                                           static_cast<uint8_t>(length),
-                                                          destAddrSpecified ? &address : NULL));
+                                                          destAddrSpecified ? &address : nullptr));
     }
     else
     {

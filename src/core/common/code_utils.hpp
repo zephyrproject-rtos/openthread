@@ -34,13 +34,9 @@
 #ifndef CODE_UTILS_HPP_
 #define CODE_UTILS_HPP_
 
-#include "openthread-core-config.h"
-
 #include <stdbool.h>
 
 #include <openthread/error.h>
-
-#include "utils/static_assert.hpp"
 
 /**
  * This macro calculates the number of elements in an array.

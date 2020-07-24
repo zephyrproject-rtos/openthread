@@ -493,10 +493,10 @@ public:
     /**
      * This constructor initializes the object.
      *
-     * @param[in]  aNetif    A reference to the network interface that SNTP client should be assigned to.
+     * @param[in]  aInstance     A reference to the OpenThread instance.
      *
      */
-    explicit Client(Ip6::Netif &aNetif);
+    explicit Client(Instance &aInstance);
 
     /**
      * This method starts the SNTP client.
@@ -583,7 +583,7 @@ private:
     static void HandleUdpReceive(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
     void        HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
 
-    Ip6::UdpSocket mSocket;
+    Ip6::Udp::Socket mSocket;
 
     MessageQueue mPendingQueries;
     TimerMilli   mRetransmissionTimer;

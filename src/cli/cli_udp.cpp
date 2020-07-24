@@ -60,9 +60,9 @@ otError UdpExample::ProcessHelp(uint8_t aArgsLength, char *aArgs[])
     OT_UNUSED_VARIABLE(aArgsLength);
     OT_UNUSED_VARIABLE(aArgs);
 
-    for (size_t i = 0; i < OT_ARRAY_LENGTH(sCommands); i++)
+    for (const Command &command : sCommands)
     {
-        mInterpreter.mServer->OutputFormat("%s\r\n", sCommands[i].mName);
+        mInterpreter.mServer->OutputFormat("%s\r\n", command.mName);
     }
 
     return OT_ERROR_NONE;
@@ -86,7 +86,7 @@ otError UdpExample::ProcessBind(uint8_t aArgsLength, char *aArgs[])
 
     sockaddr.mPort = static_cast<uint16_t>(value);
 
-    error = otUdpBind(&mSocket, &sockaddr);
+    error = otUdpBind(mInterpreter.mInstance, &mSocket, &sockaddr);
 
 exit:
     return error;
@@ -110,7 +110,7 @@ otError UdpExample::ProcessConnect(uint8_t aArgsLength, char *aArgs[])
 
     sockaddr.mPort = static_cast<uint16_t>(value);
 
-    error = otUdpConnect(&mSocket, &sockaddr);
+    error = otUdpConnect(mInterpreter.mInstance, &mSocket, &sockaddr);
 
 exit:
     return error;
@@ -121,7 +121,7 @@ otError UdpExample::ProcessClose(uint8_t aArgsLength, char *aArgs[])
     OT_UNUSED_VARIABLE(aArgsLength);
     OT_UNUSED_VARIABLE(aArgs);
 
-    return otUdpClose(&mSocket);
+    return otUdpClose(mInterpreter.mInstance, &mSocket);
 }
 
 otError UdpExample::ProcessOpen(uint8_t aArgsLength, char *aArgs[])
@@ -136,7 +136,7 @@ otError UdpExample::ProcessSend(uint8_t aArgsLength, char *aArgs[])
 {
     otError       error = OT_ERROR_NONE;
     otMessageInfo messageInfo;
-    otMessage *   message       = NULL;
+    otMessage *   message       = nullptr;
     uint8_t       curArg        = 0;
     uint16_t      payloadLength = 0;
     PayloadType   payloadType   = kTypeText;
@@ -179,8 +179,8 @@ otError UdpExample::ProcessSend(uint8_t aArgsLength, char *aArgs[])
         }
     }
 
-    message = otUdpNewMessage(mInterpreter.mInstance, NULL);
-    VerifyOrExit(message != NULL, error = OT_ERROR_NO_BUFS);
+    message = otUdpNewMessage(mInterpreter.mInstance, nullptr);
+    VerifyOrExit(message != nullptr, error = OT_ERROR_NO_BUFS);
 
     switch (payloadType)
     {
@@ -218,11 +218,11 @@ otError UdpExample::ProcessSend(uint8_t aArgsLength, char *aArgs[])
     }
     }
 
-    error = otUdpSend(&mSocket, message, &messageInfo);
+    error = otUdpSend(mInterpreter.mInstance, &mSocket, message, &messageInfo);
 
 exit:
 
-    if (error != OT_ERROR_NONE && message != NULL)
+    if (error != OT_ERROR_NONE && message != nullptr)
     {
         otMessageFree(message);
     }
@@ -264,16 +264,16 @@ otError UdpExample::Process(uint8_t aArgsLength, char *aArgs[])
 
     if (aArgsLength < 1)
     {
-        IgnoreError(ProcessHelp(0, NULL));
+        IgnoreError(ProcessHelp(0, nullptr));
         error = OT_ERROR_INVALID_ARGS;
     }
     else
     {
-        for (size_t i = 0; i < OT_ARRAY_LENGTH(sCommands); i++)
+        for (const Command &command : sCommands)
         {
-            if (strcmp(aArgs[0], sCommands[i].mName) == 0)
+            if (strcmp(aArgs[0], command.mName) == 0)
             {
-                error = (this->*sCommands[i].mCommand)(aArgsLength - 1, aArgs + 1);
+                error = (this->*command.mCommand)(aArgsLength - 1, aArgs + 1);
                 break;
             }
         }

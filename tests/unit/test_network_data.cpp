@@ -53,9 +53,9 @@ void PrintExternalRouteConfig(const ExternalRouteConfig &aConfig)
 {
     printf("\nprefix:");
 
-    for (uint8_t i = 0; i < 16; i++)
+    for (uint8_t b : aConfig.mPrefix.mPrefix.mFields.m8)
     {
-        printf("%02x", aConfig.mPrefix.mPrefix.mFields.m8[i]);
+        printf("%02x", b);
     }
 
     printf(", length:%d, rloc16:%04x, preference:%d, stable:%d, nexthop:%d", aConfig.mPrefix.mLength, aConfig.mRloc16,
@@ -78,7 +78,7 @@ void TestNetworkDataIterator(void)
     ExternalRouteConfig config;
 
     instance = testInitInstance();
-    VerifyOrQuit(instance != NULL, "Null OpenThread instance\n");
+    VerifyOrQuit(instance != nullptr, "Null OpenThread instance\n");
 
     {
         const uint8_t kNetworkData[] = {0x08, 0x04, 0x0B, 0x02, 0x00, 0x00, 0x03, 0x14, 0x00, 0x40,
@@ -110,11 +110,11 @@ void TestNetworkDataIterator(void)
         printf("\nTest #1: Network data 1");
         printf("\n-------------------------------------------------");
 
-        for (uint8_t i = 0; i < OT_ARRAY_LENGTH(routes); i++)
+        for (const auto &route : routes)
         {
             SuccessOrQuit(netData.GetNextExternalRoute(iter, config), "GetNextExternalRoute() failed");
             PrintExternalRouteConfig(config);
-            VerifyOrQuit(CompareExternalRouteConfig(config, routes[i]) == true,
+            VerifyOrQuit(CompareExternalRouteConfig(config, route) == true,
                          "external route config does not match expectation");
         }
     }
@@ -160,11 +160,11 @@ void TestNetworkDataIterator(void)
         printf("\nTest #2: Network data 2");
         printf("\n-------------------------------------------------");
 
-        for (uint8_t i = 0; i < OT_ARRAY_LENGTH(routes); i++)
+        for (const auto &route : routes)
         {
             SuccessOrQuit(netData.GetNextExternalRoute(iter, config), "GetNextExternalRoute() failed");
             PrintExternalRouteConfig(config);
-            VerifyOrQuit(CompareExternalRouteConfig(config, routes[i]) == true,
+            VerifyOrQuit(CompareExternalRouteConfig(config, route) == true,
                          "external route config does not match expectation");
         }
     }

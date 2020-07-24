@@ -124,6 +124,22 @@ public:
      */
     static void EmitNeighborChange(otNeighborTableEvent aEvent, Neighbor &aNeighbor);
 
+    /**
+     * This function emits a transmit event to OTNS.
+     *
+     * @param[in]  aFrame  The frame of the transmission.
+     *
+     */
+    static void EmitTransmit(const Mac::TxFrame &aFrame);
+
+    /**
+     * This function emits the device mode to OTNS.
+     *
+     * @param[in] aMode The device mode.
+     *
+     */
+    static void EmitDeviceMode(Mle::DeviceMode aMode);
+
 private:
     static void EmitStatus(const char *aFmt, ...);
 

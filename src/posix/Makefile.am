@@ -55,10 +55,15 @@ CPPFLAGS_COMMON                                                        = \
 LIBTOOLFLAGS_COMMON = --preserve-dup-deps
 
 LDADD_COMMON                                                           = \
-    $(top_builddir)/src/lib/platform/libopenthread-platform.a            \
     $(top_builddir)/src/posix/platform/libopenthread-posix.a             \
     -lutil                                                               \
     $(NULL)
+
+if OPENTHREAD_TARGET_LINUX
+LDADD_COMMON                                                          += \
+    -lrt                                                                 \
+    $(NULL)
+endif
 
 if OPENTHREAD_ENABLE_BUILTIN_MBEDTLS
 LDADD_COMMON                                                          += \

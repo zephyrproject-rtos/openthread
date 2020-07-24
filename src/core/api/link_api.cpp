@@ -116,7 +116,7 @@ otError otLinkSetExtendedAddress(otInstance *aInstance, const otExtAddress *aExt
     otError   error    = OT_ERROR_NONE;
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    OT_ASSERT(aExtAddress != NULL);
+    OT_ASSERT(aExtAddress != nullptr);
     VerifyOrExit(instance.Get<Mle::MleRouter>().IsDisabled(), error = OT_ERROR_INVALID_STATE);
 
     instance.Get<Mac::Mac>().SetExtAddress(*static_cast<const Mac::ExtAddress *>(aExtAddress));
@@ -222,32 +222,32 @@ otMacFilterAddressMode otLinkFilterGetAddressMode(otInstance *aInstance)
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    return instance.Get<Mac::Filter>().GetAddressMode();
+    return static_cast<otMacFilterAddressMode>(instance.Get<Mac::Filter>().GetMode());
 }
 
-otError otLinkFilterSetAddressMode(otInstance *aInstance, otMacFilterAddressMode aMode)
+void otLinkFilterSetAddressMode(otInstance *aInstance, otMacFilterAddressMode aMode)
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    return instance.Get<Mac::Filter>().SetAddressMode(aMode);
+    instance.Get<Mac::Filter>().SetMode(static_cast<Mac::Filter::Mode>(aMode));
 }
 
 otError otLinkFilterAddAddress(otInstance *aInstance, const otExtAddress *aExtAddress)
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    OT_ASSERT(aExtAddress != NULL);
+    OT_ASSERT(aExtAddress != nullptr);
 
     return instance.Get<Mac::Filter>().AddAddress(*static_cast<const Mac::ExtAddress *>(aExtAddress));
 }
 
-otError otLinkFilterRemoveAddress(otInstance *aInstance, const otExtAddress *aExtAddress)
+void otLinkFilterRemoveAddress(otInstance *aInstance, const otExtAddress *aExtAddress)
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    OT_ASSERT(aExtAddress != NULL);
+    OT_ASSERT(aExtAddress != nullptr);
 
-    return instance.Get<Mac::Filter>().RemoveAddress(*static_cast<const Mac::ExtAddress *>(aExtAddress));
+    instance.Get<Mac::Filter>().RemoveAddress(*static_cast<const Mac::ExtAddress *>(aExtAddress));
 }
 
 void otLinkFilterClearAddresses(otInstance *aInstance)
@@ -261,7 +261,7 @@ otError otLinkFilterGetNextAddress(otInstance *aInstance, otMacFilterIterator *a
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    OT_ASSERT(aIterator != NULL && aEntry != NULL);
+    OT_ASSERT(aIterator != nullptr && aEntry != nullptr);
 
     return instance.Get<Mac::Filter>().GetNextAddress(*aIterator, *aEntry);
 }
@@ -270,28 +270,46 @@ otError otLinkFilterAddRssIn(otInstance *aInstance, const otExtAddress *aExtAddr
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    return instance.Get<Mac::Filter>().AddRssIn(static_cast<const Mac::ExtAddress *>(aExtAddress), aRss);
+    OT_ASSERT(aExtAddress != nullptr);
+
+    return instance.Get<Mac::Filter>().AddRssIn(*static_cast<const Mac::ExtAddress *>(aExtAddress), aRss);
 }
 
-otError otLinkFilterRemoveRssIn(otInstance *aInstance, const otExtAddress *aExtAddress)
+void otLinkFilterRemoveRssIn(otInstance *aInstance, const otExtAddress *aExtAddress)
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    return instance.Get<Mac::Filter>().RemoveRssIn(static_cast<const Mac::ExtAddress *>(aExtAddress));
+    OT_ASSERT(aExtAddress != nullptr);
+
+    instance.Get<Mac::Filter>().RemoveRssIn(*static_cast<const Mac::ExtAddress *>(aExtAddress));
 }
 
-void otLinkFilterClearRssIn(otInstance *aInstance)
+void otLinkFilterSetDefaultRssIn(otInstance *aInstance, int8_t aRss)
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    instance.Get<Mac::Filter>().ClearRssIn();
+    instance.Get<Mac::Filter>().SetDefaultRssIn(aRss);
+}
+
+void otLinkFilterClearDefaultRssIn(otInstance *aInstance)
+{
+    Instance &instance = *static_cast<Instance *>(aInstance);
+
+    instance.Get<Mac::Filter>().ClearDefaultRssIn();
+}
+
+void otLinkFilterClearAllRssIn(otInstance *aInstance)
+{
+    Instance &instance = *static_cast<Instance *>(aInstance);
+
+    instance.Get<Mac::Filter>().ClearAllRssIn();
 }
 
 otError otLinkFilterGetNextRssIn(otInstance *aInstance, otMacFilterIterator *aIterator, otMacFilterEntry *aEntry)
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    OT_ASSERT(aIterator != NULL && aEntry != NULL);
+    OT_ASSERT(aIterator != nullptr && aEntry != nullptr);
 
     return instance.Get<Mac::Filter>().GetNextRssIn(*aIterator, *aEntry);
 }
@@ -322,7 +340,7 @@ const uint32_t *otLinkGetTxDirectRetrySuccessHistogram(otInstance *aInstance, ui
 
 const uint32_t *otLinkGetTxIndirectRetrySuccessHistogram(otInstance *aInstance, uint8_t *aNumberOfEntries)
 {
-    const uint32_t *histogram = NULL;
+    const uint32_t *histogram = nullptr;
 
 #if OPENTHREAD_FTD
     Instance &instance = *static_cast<Instance *>(aInstance);

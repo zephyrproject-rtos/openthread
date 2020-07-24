@@ -79,10 +79,10 @@
 #endif
 
 #if (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
-#include "backbone_router/leader.hpp"
+#include "backbone_router/bbr_leader.hpp"
 
 #if OPENTHREAD_FTD && OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE
-#include "backbone_router/local.hpp"
+#include "backbone_router/bbr_local.hpp"
 #endif
 
 #endif // (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
@@ -237,14 +237,14 @@ public:
 #if OPENTHREAD_CONFIG_HEAP_EXTERNAL_ENABLE
     void HeapFree(void *aPointer)
     {
-        OT_ASSERT(mFree != NULL);
+        OT_ASSERT(mFree != nullptr);
 
         mFree(aPointer);
     }
 
     void *HeapCAlloc(size_t aCount, size_t aSize)
     {
-        OT_ASSERT(mCAlloc != NULL);
+        OT_ASSERT(mCAlloc != nullptr);
 
         return mCAlloc(aCount, aSize);
     }
@@ -436,6 +436,11 @@ template <> inline Mle::Mle &Instance::Get(void)
 template <> inline Mle::MleRouter &Instance::Get(void)
 {
     return mThreadNetif.mMleRouter;
+}
+
+template <> inline Mle::DiscoverScanner &Instance::Get(void)
+{
+    return mThreadNetif.mDiscoverScanner;
 }
 
 #if OPENTHREAD_FTD
@@ -731,12 +736,24 @@ template <> inline BackboneRouter::Local &Instance::Get(void)
 {
     return mThreadNetif.mBackboneRouterLocal;
 }
+template <> inline BackboneRouter::Manager &Instance::Get(void)
+{
+    return mThreadNetif.mBackboneRouterManager;
+}
+
 #endif
 
 #if OPENTHREAD_CONFIG_DUA_ENABLE
 template <> inline DuaManager &Instance::Get(void)
 {
     return mThreadNetif.mDuaManager;
+}
+#endif
+
+#if OPENTHREAD_CONFIG_MLR_ENABLE
+template <> inline MlrManager &Instance::Get(void)
+{
+    return mThreadNetif.mMlrManager;
 }
 #endif
 

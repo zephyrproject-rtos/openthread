@@ -51,7 +51,8 @@ const struct CoapSecure::Command CoapSecure::sCommands[] = {
     {"delete", &CoapSecure::ProcessRequest}, {"disconnect", &CoapSecure::ProcessDisconnect},
     {"get", &CoapSecure::ProcessRequest},    {"post", &CoapSecure::ProcessRequest},
     {"put", &CoapSecure::ProcessRequest},    {"resource", &CoapSecure::ProcessResource},
-    {"start", &CoapSecure::ProcessStart},    {"stop", &CoapSecure::ProcessStop},
+    {"set", &CoapSecure::ProcessSet},        {"start", &CoapSecure::ProcessStart},
+    {"stop", &CoapSecure::ProcessStop},
 #ifdef MBEDTLS_KEY_EXCHANGE_PSK_ENABLED
     {"psk", &CoapSecure::ProcessPsk},
 #endif
@@ -70,6 +71,8 @@ CoapSecure::CoapSecure(Interpreter &aInterpreter)
     memset(&mResource, 0, sizeof(mResource));
     memset(&mPsk, 0, sizeof(mPsk));
     memset(&mPskId, 0, sizeof(mPskId));
+    strncpy(mResourceContent, "0", sizeof(mResourceContent));
+    mResourceContent[sizeof(mResourceContent) - 1] = '\0';
 }
 
 void CoapSecure::PrintPayload(otMessage *aMessage) const
@@ -103,9 +106,9 @@ otError CoapSecure::ProcessHelp(uint8_t aArgsLength, char *aArgs[])
     OT_UNUSED_VARIABLE(aArgsLength);
     OT_UNUSED_VARIABLE(aArgs);
 
-    for (size_t i = 0; i < OT_ARRAY_LENGTH(sCommands); i++)
+    for (const Command &command : sCommands)
     {
-        mInterpreter.mServer->OutputFormat("%s\r\n", sCommands[i].mName);
+        mInterpreter.mServer->OutputFormat("%s\r\n", command.mName);
     }
 
     return OT_ERROR_NONE;
@@ -129,6 +132,25 @@ otError CoapSecure::ProcessResource(uint8_t aArgsLength, char *aArgs[])
     else
     {
         mInterpreter.mServer->OutputFormat("%s\r\n", mResource.mUriPath);
+    }
+
+exit:
+    return error;
+}
+
+otError CoapSecure::ProcessSet(uint8_t aArgsLength, char *aArgs[])
+{
+    otError error = OT_ERROR_NONE;
+
+    if (aArgsLength > 1)
+    {
+        VerifyOrExit(strlen(aArgs[1]) < sizeof(mResourceContent), error = OT_ERROR_INVALID_ARGS);
+        strncpy(mResourceContent, aArgs[1], sizeof(mResourceContent));
+        mResourceContent[sizeof(mResourceContent) - 1] = '\0';
+    }
+    else
+    {
+        mInterpreter.mServer->OutputFormat("%s\r\n", mResourceContent);
     }
 
 exit:
@@ -188,7 +210,7 @@ otError CoapSecure::ProcessStop(uint8_t aArgsLength, char *aArgs[])
 otError CoapSecure::ProcessRequest(uint8_t aArgsLength, char *aArgs[])
 {
     otError       error   = OT_ERROR_NONE;
-    otMessage *   message = NULL;
+    otMessage *   message = nullptr;
     otMessageInfo messageInfo;
     uint16_t      payloadLength = 0;
     uint8_t       indexShifter  = 0;
@@ -259,8 +281,8 @@ otError CoapSecure::ProcessRequest(uint8_t aArgsLength, char *aArgs[])
         }
     }
 
-    message = otCoapNewMessage(mInterpreter.mInstance, NULL);
-    VerifyOrExit(message != NULL, error = OT_ERROR_NO_BUFS);
+    message = otCoapNewMessage(mInterpreter.mInstance, nullptr);
+    VerifyOrExit(message != nullptr, error = OT_ERROR_NO_BUFS);
 
     otCoapMessageInit(message, coapType, coapCode);
     otCoapMessageGenerateToken(message, ot::Coap::Message::kDefaultTokenLength);
@@ -292,12 +314,12 @@ otError CoapSecure::ProcessRequest(uint8_t aArgsLength, char *aArgs[])
     }
     else
     {
-        error = otCoapSecureSendRequest(mInterpreter.mInstance, message, NULL, NULL);
+        error = otCoapSecureSendRequest(mInterpreter.mInstance, message, nullptr, nullptr);
     }
 
 exit:
 
-    if ((error != OT_ERROR_NONE) && (message != NULL))
+    if ((error != OT_ERROR_NONE) && (message != nullptr))
     {
         otMessageFree(message);
     }
@@ -393,16 +415,16 @@ otError CoapSecure::Process(uint8_t aArgsLength, char *aArgs[])
 
     if (aArgsLength < 1)
     {
-        IgnoreError(ProcessHelp(0, NULL));
+        IgnoreError(ProcessHelp(0, nullptr));
         error = OT_ERROR_INVALID_ARGS;
     }
     else
     {
-        for (size_t i = 0; i < OT_ARRAY_LENGTH(sCommands); i++)
+        for (const Command &command : sCommands)
         {
-            if (strcmp(aArgs[0], sCommands[i].mName) == 0)
+            if (strcmp(aArgs[0], command.mName) == 0)
             {
-                error = (this->*sCommands[i].mCommand)(aArgsLength, aArgs);
+                error = (this->*command.mCommand)(aArgsLength, aArgs);
                 break;
             }
         }
@@ -447,10 +469,9 @@ void CoapSecure::HandleRequest(void *aContext, otMessage *aMessage, const otMess
 
 void CoapSecure::HandleRequest(otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
-    otError    error             = OT_ERROR_NONE;
-    otMessage *responseMessage   = NULL;
-    otCoapCode responseCode      = OT_COAP_CODE_EMPTY;
-    char       responseContent[] = "helloWorld";
+    otError    error           = OT_ERROR_NONE;
+    otMessage *responseMessage = nullptr;
+    otCoapCode responseCode    = OT_COAP_CODE_EMPTY;
 
     mInterpreter.mServer->OutputFormat("coaps request from ");
     mInterpreter.OutputIp6Address(aMessageInfo->mPeerAddr);
@@ -493,8 +514,8 @@ void CoapSecure::HandleRequest(otMessage *aMessage, const otMessageInfo *aMessag
             responseCode = OT_COAP_CODE_VALID;
         }
 
-        responseMessage = otCoapNewMessage(mInterpreter.mInstance, NULL);
-        VerifyOrExit(responseMessage != NULL, error = OT_ERROR_NO_BUFS);
+        responseMessage = otCoapNewMessage(mInterpreter.mInstance, nullptr);
+        VerifyOrExit(responseMessage != nullptr, error = OT_ERROR_NO_BUFS);
 
         SuccessOrExit(
             error = otCoapMessageInitResponse(responseMessage, aMessage, OT_COAP_TYPE_ACKNOWLEDGMENT, responseCode));
@@ -506,7 +527,8 @@ void CoapSecure::HandleRequest(otMessage *aMessage, const otMessageInfo *aMessag
 
         if (otCoapMessageGetCode(aMessage) == OT_COAP_CODE_GET)
         {
-            SuccessOrExit(error = otMessageAppend(responseMessage, &responseContent, sizeof(responseContent)));
+            SuccessOrExit(error = otMessageAppend(responseMessage, &mResourceContent,
+                                                  static_cast<uint16_t>(strlen(mResourceContent))));
         }
 
         SuccessOrExit(error = otCoapSecureSendResponse(mInterpreter.mInstance, responseMessage, aMessageInfo));
@@ -516,7 +538,7 @@ exit:
 
     if (error != OT_ERROR_NONE)
     {
-        if (responseMessage != NULL)
+        if (responseMessage != nullptr)
         {
             mInterpreter.mServer->OutputFormat("coaps send response error %d: %s\r\n", error,
                                                otThreadErrorToString(error));
@@ -561,13 +583,13 @@ void CoapSecure::DefaultHandler(void *aContext, otMessage *aMessage, const otMes
 void CoapSecure::DefaultHandler(otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
     otError    error           = OT_ERROR_NONE;
-    otMessage *responseMessage = NULL;
+    otMessage *responseMessage = nullptr;
 
     if ((otCoapMessageGetType(aMessage) == OT_COAP_TYPE_CONFIRMABLE) ||
         (otCoapMessageGetCode(aMessage) == OT_COAP_CODE_GET))
     {
-        responseMessage = otCoapNewMessage(mInterpreter.mInstance, NULL);
-        VerifyOrExit(responseMessage != NULL, error = OT_ERROR_NO_BUFS);
+        responseMessage = otCoapNewMessage(mInterpreter.mInstance, nullptr);
+        VerifyOrExit(responseMessage != nullptr, error = OT_ERROR_NO_BUFS);
 
         SuccessOrExit(error = otCoapMessageInitResponse(responseMessage, aMessage, OT_COAP_TYPE_NON_CONFIRMABLE,
                                                         OT_COAP_CODE_NOT_FOUND));
@@ -576,7 +598,7 @@ void CoapSecure::DefaultHandler(otMessage *aMessage, const otMessageInfo *aMessa
     }
 
 exit:
-    if (error != OT_ERROR_NONE && responseMessage != NULL)
+    if (error != OT_ERROR_NONE && responseMessage != nullptr)
     {
         otMessageFree(responseMessage);
     }

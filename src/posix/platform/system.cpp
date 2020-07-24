@@ -49,20 +49,20 @@ uint64_t gNodeId = 0;
 
 otInstance *otSysInit(otPlatformConfig *aPlatformConfig)
 {
-    otInstance *         instance = NULL;
-    ot::Posix::Arguments args(aPlatformConfig->mRadioUrl);
+    otInstance *        instance = nullptr;
+    ot::Posix::RadioUrl radioUrl(aPlatformConfig->mRadioUrl);
 
 #if OPENTHREAD_POSIX_VIRTUAL_TIME
-    virtualTimeInit(static_cast<uint16_t>(atoi(args.GetValue("forkpty-arg"))));
+    virtualTimeInit(static_cast<uint16_t>(atoi(radioUrl.GetValue("forkpty-arg"))));
 #endif
 
-    VerifyOrDie(args.GetPath() != NULL, OT_EXIT_INVALID_ARGUMENTS);
-    platformAlarmInit(aPlatformConfig->mSpeedUpFactor);
-    platformRadioInit(&args);
+    VerifyOrDie(radioUrl.GetPath() != nullptr, OT_EXIT_INVALID_ARGUMENTS);
+    platformAlarmInit(aPlatformConfig->mSpeedUpFactor, aPlatformConfig->mRealTimeSignal);
+    platformRadioInit(&radioUrl);
     platformRandomInit();
 
     instance = otInstanceInitSingle();
-    assert(instance != NULL);
+    assert(instance != nullptr);
 
 #if OPENTHREAD_CONFIG_PLATFORM_NETIF_ENABLE
     platformNetifInit(instance, aPlatformConfig->mInterfaceName);
@@ -174,7 +174,7 @@ int otSysMainloopPoll(otSysMainloopContext *aMainloop)
             }
 
             rval = select(aMainloop->mMaxFd + 1, &aMainloop->mReadFdSet, &aMainloop->mWriteFdSet,
-                          &aMainloop->mErrorFdSet, NULL);
+                          &aMainloop->mErrorFdSet, nullptr);
         }
     }
     else

@@ -144,8 +144,9 @@ SOURCES_COMMON                             = \
     api/thread_api.cpp                       \
     api/thread_ftd_api.cpp                   \
     api/udp_api.cpp                          \
-    backbone_router/leader.cpp               \
-    backbone_router/local.cpp                \
+    backbone_router/bbr_leader.cpp           \
+    backbone_router/bbr_local.cpp            \
+    backbone_router/bbr_manager.cpp          \
     coap/coap.cpp                            \
     coap/coap_message.cpp                    \
     coap/coap_secure.cpp                     \
@@ -214,6 +215,7 @@ SOURCES_COMMON                             = \
     thread/announce_begin_server.cpp         \
     thread/announce_sender.cpp               \
     thread/child_table.cpp                   \
+    thread/discover_scanner.cpp              \
     thread/dua_manager.cpp                   \
     thread/energy_scan_server.cpp            \
     thread/indirect_sender.cpp               \
@@ -226,6 +228,7 @@ SOURCES_COMMON                             = \
     thread/mle.cpp                           \
     thread/mle_router.cpp                    \
     thread/mle_types.cpp                     \
+    thread/mlr_manager.cpp                   \
     thread/network_data.cpp                  \
     thread/network_data_leader.cpp           \
     thread/network_data_leader_ftd.cpp       \
@@ -314,11 +317,13 @@ endif # OPENTHREAD_ENABLE_VENDOR_EXTENSION
 
 HEADERS_COMMON                             = \
     openthread-core-config.h                 \
-    backbone_router/leader.hpp               \
-    backbone_router/local.hpp                \
+    backbone_router/bbr_leader.hpp           \
+    backbone_router/bbr_local.hpp            \
+    backbone_router/bbr_manager.hpp          \
     coap/coap.hpp                            \
     coap/coap_message.hpp                    \
     coap/coap_secure.hpp                     \
+    common/bit_vector.hpp                    \
     common/clearable.hpp                     \
     common/code_utils.hpp                    \
     common/crc16.hpp                         \
@@ -335,6 +340,7 @@ HEADERS_COMMON                             = \
     common/new.hpp                           \
     common/non_copyable.hpp                  \
     common/notifier.hpp                      \
+    common/pool.hpp                          \
     common/random.hpp                        \
     common/random_manager.hpp                \
     common/settings.hpp                      \
@@ -422,7 +428,9 @@ HEADERS_COMMON                             = \
     thread/address_resolver.hpp              \
     thread/announce_begin_server.hpp         \
     thread/announce_sender.hpp               \
+    thread/child_mask.hpp                    \
     thread/child_table.hpp                   \
+    thread/discover_scanner.hpp              \
     thread/dua_manager.hpp                   \
     thread/energy_scan_server.hpp            \
     thread/indirect_sender.hpp               \
@@ -435,6 +443,8 @@ HEADERS_COMMON                             = \
     thread/mle_router.hpp                    \
     thread/mle_tlvs.hpp                      \
     thread/mle_types.hpp                     \
+    thread/mlr_manager.hpp                   \
+    thread/mlr_types.hpp                     \
     thread/network_data.hpp                  \
     thread/network_data_leader.hpp           \
     thread/network_data_leader_ftd.hpp       \
@@ -460,7 +470,6 @@ HEADERS_COMMON                             = \
     utils/otns.hpp                           \
     utils/parse_cmdline.hpp                  \
     utils/slaac_address.hpp                  \
-    utils/static_assert.hpp                  \
     $(NULL)
 
 noinst_HEADERS                             = \

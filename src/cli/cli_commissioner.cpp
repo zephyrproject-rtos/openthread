@@ -55,9 +55,9 @@ otError Commissioner::ProcessHelp(uint8_t aArgsLength, char *aArgs[])
     OT_UNUSED_VARIABLE(aArgsLength);
     OT_UNUSED_VARIABLE(aArgs);
 
-    for (size_t i = 0; i < OT_ARRAY_LENGTH(sCommands); i++)
+    for (const Command &command : sCommands)
     {
-        mInterpreter.mServer->OutputFormat("%s\r\n", sCommands[i].mName);
+        mInterpreter.mServer->OutputFormat("%s\r\n", command.mName);
     }
 
     return OT_ERROR_NONE;
@@ -122,7 +122,7 @@ otError Commissioner::ProcessJoiner(uint8_t aArgsLength, char *aArgs[])
 
     if (strcmp(aArgs[2], "*") == 0)
     {
-        addrPtr = NULL;
+        addrPtr = nullptr;
     }
     else
     {
@@ -300,7 +300,7 @@ exit:
 
 otError Commissioner::ProcessProvisioningUrl(uint8_t aArgsLength, char *aArgs[])
 {
-    return otCommissionerSetProvisioningUrl(mInterpreter.mInstance, (aArgsLength > 1) ? aArgs[1] : NULL);
+    return otCommissionerSetProvisioningUrl(mInterpreter.mInstance, (aArgsLength > 1) ? aArgs[1] : nullptr);
 }
 
 otError Commissioner::ProcessSessionId(uint8_t aArgsLength, char *aArgs[])
@@ -345,13 +345,20 @@ void Commissioner::HandleStateChanged(otCommissionerState aState)
     }
 }
 
-void Commissioner::HandleJoinerEvent(otCommissionerJoinerEvent aEvent, const otExtAddress *aJoinerId, void *aContext)
+void Commissioner::HandleJoinerEvent(otCommissionerJoinerEvent aEvent,
+                                     const otJoinerInfo *      aJoinerInfo,
+                                     const otExtAddress *      aJoinerId,
+                                     void *                    aContext)
 {
-    static_cast<Commissioner *>(aContext)->HandleJoinerEvent(aEvent, aJoinerId);
+    static_cast<Commissioner *>(aContext)->HandleJoinerEvent(aEvent, aJoinerInfo, aJoinerId);
 }
 
-void Commissioner::HandleJoinerEvent(otCommissionerJoinerEvent aEvent, const otExtAddress *aJoinerId)
+void Commissioner::HandleJoinerEvent(otCommissionerJoinerEvent aEvent,
+                                     const otJoinerInfo *      aJoinerInfo,
+                                     const otExtAddress *      aJoinerId)
 {
+    OT_UNUSED_VARIABLE(aJoinerInfo);
+
     mInterpreter.mServer->OutputFormat("Commissioner: Joiner ");
 
     switch (aEvent)
@@ -373,7 +380,10 @@ void Commissioner::HandleJoinerEvent(otCommissionerJoinerEvent aEvent, const otE
         break;
     }
 
-    mInterpreter.OutputBytes(aJoinerId->m8, sizeof(*aJoinerId));
+    if (aJoinerId != nullptr)
+    {
+        mInterpreter.OutputBytes(aJoinerId->m8, sizeof(*aJoinerId));
+    }
 
     mInterpreter.mServer->OutputFormat("\r\n");
 }
@@ -392,15 +402,15 @@ otError Commissioner::Process(uint8_t aArgsLength, char *aArgs[])
 
     if (aArgsLength < 1)
     {
-        IgnoreError(ProcessHelp(0, NULL));
+        IgnoreError(ProcessHelp(0, nullptr));
     }
     else
     {
-        for (size_t i = 0; i < OT_ARRAY_LENGTH(sCommands); i++)
+        for (const Command &command : sCommands)
         {
-            if (strcmp(aArgs[0], sCommands[i].mName) == 0)
+            if (strcmp(aArgs[0], command.mName) == 0)
             {
-                error = (this->*sCommands[i].mCommand)(aArgsLength, aArgs);
+                error = (this->*command.mCommand)(aArgsLength, aArgs);
                 break;
             }
         }

@@ -110,6 +110,9 @@ WPAN_THREAD_PENDING_DATASET = "Thread:PendingDataset"
 WPAN_THREAD_PENDING_DATASET_ASVALMAP = "Thread:PendingDataset:AsValMap"
 WPAN_THREAD_ADDRESS_CACHE_TABLE = "Thread:AddressCacheTable"
 WPAN_THREAD_ADDRESS_CACHE_TABLE_ASVALMAP = "Thread:AddressCacheTable:AsValMap"
+WPAN_THREAD_JOINER_DISCERNER_VALUE = "Joiner:Discerner:Value"
+WPAN_THREAD_JOINER_DISCERNER_BIT_LENGTH = "Joiner:Discerner:BitLength"
+WPAN_THREAD_COMMISSIONER_JOINERS = "Commissioner:Joiners"
 
 WPAN_OT_LOG_LEVEL = "OpenThread:LogLevel"
 WPAN_OT_SLAAC_ENABLED = "OpenThread:SLAAC:Enabled"
@@ -503,7 +506,7 @@ class Node(object):
             'scan -d' +
             (' -c {}'.format(channel) if channel is not None else '') +
             (' -j' if joiner_only else '') +
-            (' -e' if enable_filtering else '') +
+            (' -f' if enable_filtering else '') +
             (' -p {}'.format(panid_filter) if panid_filter is not None else ''))
 
     def permit_join(self, duration_sec=None, port=None, udp=True, tcp=True):
@@ -580,6 +583,15 @@ class Node(object):
     def commissioner_add_joiner(self, eui64, pskd, timeout='100'):
         return self.wpanctl('commissioner joiner-add {} {} {}'.format(
             eui64, timeout, pskd))
+
+    def commissioner_add_joiner_with_discerner(self,
+                                               discerner_value,
+                                               discerner_bit_len,
+                                               pskd,
+                                               timeout='100'):
+        return self.wpanctl(
+            'commissioner joiner-add-discerner {} {} {} {}'.format(
+                discerner_value, discerner_bit_len, timeout, pskd))
 
     def joiner_join(self, pskd):
         return self.wpanctl('joiner --join {}'.format(pskd))

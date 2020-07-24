@@ -257,7 +257,7 @@ otError otThreadGetChildInfoById(otInstance *aInstance, uint16_t aChildId, otChi
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    OT_ASSERT(aChildInfo != NULL);
+    OT_ASSERT(aChildInfo != nullptr);
 
     return instance.Get<Mle::MleRouter>().GetChildInfoById(aChildId, *aChildInfo);
 }
@@ -266,29 +266,35 @@ otError otThreadGetChildInfoByIndex(otInstance *aInstance, uint16_t aChildIndex,
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    OT_ASSERT(aChildInfo != NULL);
+    OT_ASSERT(aChildInfo != nullptr);
 
     return instance.Get<Mle::MleRouter>().GetChildInfoByIndex(aChildIndex, *aChildInfo);
 }
 
 otError otThreadGetChildNextIp6Address(otInstance *               aInstance,
                                        uint16_t                   aChildIndex,
-                                       otChildIp6AddressIterator *aIterator,
+                                       otChildIp6AddressIterator *aIterIndex,
                                        otIp6Address *             aAddress)
 {
-    otError                   error    = OT_ERROR_NONE;
-    Instance &                instance = *static_cast<Instance *>(aInstance);
-    Child::Ip6AddressIterator iterator;
-    Ip6::Address *            address;
+    otError      error    = OT_ERROR_NONE;
+    Instance &   instance = *static_cast<Instance *>(aInstance);
+    const Child *child;
 
-    OT_ASSERT(aIterator != NULL && aAddress != NULL);
+    OT_ASSERT(aIterIndex != nullptr && aAddress != nullptr);
 
-    address = static_cast<Ip6::Address *>(aAddress);
-    iterator.Set(*aIterator);
+    child = instance.Get<ChildTable>().GetChildAtIndex(aChildIndex);
+    VerifyOrExit(child != nullptr, error = OT_ERROR_INVALID_ARGS);
+    VerifyOrExit(child->IsStateValidOrRestoring(), error = OT_ERROR_INVALID_ARGS);
 
-    SuccessOrExit(error = instance.Get<Mle::MleRouter>().GetChildNextIp6Address(aChildIndex, iterator, *address));
+    {
+        Child::AddressIterator iter(*child, *aIterIndex);
 
-    *aIterator = iterator.Get();
+        VerifyOrExit(!iter.IsDone(), error = OT_ERROR_NOT_FOUND);
+        *aAddress = *iter.GetAddress();
+
+        iter++;
+        *aIterIndex = iter.GetAsIndex();
+    }
 
 exit:
     return error;
@@ -311,7 +317,7 @@ otError otThreadGetRouterInfo(otInstance *aInstance, uint16_t aRouterId, otRoute
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    OT_ASSERT(aRouterInfo != NULL);
+    OT_ASSERT(aRouterInfo != nullptr);
 
     return instance.Get<RouterTable>().GetRouterInfo(aRouterId, *aRouterInfo);
 }
@@ -320,7 +326,7 @@ otError otThreadGetNextCacheEntry(otInstance *aInstance, otCacheEntryInfo *aEntr
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    OT_ASSERT((aIterator != NULL) && (aEntryInfo != NULL));
+    OT_ASSERT((aIterator != nullptr) && (aEntryInfo != nullptr));
 
     return instance.Get<AddressResolver>().GetNextCacheEntry(*aEntryInfo, *aIterator);
 }

@@ -41,6 +41,7 @@ namespace ot {
 
 void TestFlash(void)
 {
+#if OPENTHREAD_CONFIG_PLATFORM_FLASH_API_ENABLE
     uint8_t readBuffer[256];
     uint8_t writeBuffer[256];
 
@@ -57,7 +58,7 @@ void TestFlash(void)
     // No records in settings
 
     VerifyOrQuit(flash.Delete(0, 0) == OT_ERROR_NOT_FOUND, "Delete() failed");
-    VerifyOrQuit(flash.Get(0, 0, NULL, NULL) == OT_ERROR_NOT_FOUND, "Get() failed");
+    VerifyOrQuit(flash.Get(0, 0, nullptr, nullptr) == OT_ERROR_NOT_FOUND, "Get() failed");
 
     // Multiple records with different keys
 
@@ -85,7 +86,7 @@ void TestFlash(void)
     for (uint16_t key = 0; key < 16; key++)
     {
         VerifyOrQuit(flash.Delete(key, 0) == OT_ERROR_NOT_FOUND, "Delete() failed");
-        VerifyOrQuit(flash.Get(key, 0, NULL, NULL) == OT_ERROR_NOT_FOUND, "Get() failed");
+        VerifyOrQuit(flash.Get(key, 0, nullptr, nullptr) == OT_ERROR_NOT_FOUND, "Get() failed");
     }
 
     // Multiple records with the same key
@@ -112,7 +113,7 @@ void TestFlash(void)
     }
 
     VerifyOrQuit(flash.Delete(0, 0) == OT_ERROR_NOT_FOUND, "Delete() failed");
-    VerifyOrQuit(flash.Get(0, 0, NULL, NULL) == OT_ERROR_NOT_FOUND, "Get() failed");
+    VerifyOrQuit(flash.Get(0, 0, nullptr, nullptr) == OT_ERROR_NOT_FOUND, "Get() failed");
 
     // Multiple records with the same key
 
@@ -145,7 +146,7 @@ void TestFlash(void)
     }
 
     VerifyOrQuit(flash.Delete(0, 0) == OT_ERROR_NOT_FOUND, "Delete() failed");
-    VerifyOrQuit(flash.Get(0, 0, NULL, NULL) == OT_ERROR_NOT_FOUND, "Get() failed");
+    VerifyOrQuit(flash.Get(0, 0, nullptr, nullptr) == OT_ERROR_NOT_FOUND, "Get() failed");
 
     // Wipe()
 
@@ -161,7 +162,7 @@ void TestFlash(void)
     for (uint16_t key = 0; key < 16; key++)
     {
         VerifyOrQuit(flash.Delete(key, 0) == OT_ERROR_NOT_FOUND, "Delete() failed");
-        VerifyOrQuit(flash.Get(key, 0, NULL, NULL) == OT_ERROR_NOT_FOUND, "Get() failed");
+        VerifyOrQuit(flash.Get(key, 0, nullptr, nullptr) == OT_ERROR_NOT_FOUND, "Get() failed");
     }
 
     // Test swap
@@ -182,6 +183,7 @@ void TestFlash(void)
         VerifyOrQuit(length == key, "Get() did not return expected length");
         VerifyOrQuit(memcmp(readBuffer, writeBuffer, length) == 0, "Get() did not return expected value");
     }
+#endif // OPENTHREAD_CONFIG_PLATFORM_FLASH_API_ENABLE
 }
 
 } // namespace ot

@@ -51,7 +51,7 @@ Slaac::Slaac(Instance &aInstance)
     : InstanceLocator(aInstance)
     , Notifier::Receiver(aInstance, Slaac::HandleNotifierEvents)
     , mEnabled(true)
-    , mFilter(NULL)
+    , mFilter(nullptr)
 {
     memset(mAddresses, 0, sizeof(mAddresses));
 }
@@ -85,7 +85,7 @@ void Slaac::SetFilter(otIp6SlaacPrefixFilter aFilter)
     VerifyOrExit(aFilter != mFilter, OT_NOOP);
 
     mFilter = aFilter;
-    otLogInfoUtil("SLAAC: Filter %s", (mFilter != NULL) ? "updated" : "disabled");
+    otLogInfoUtil("SLAAC: Filter %s", (mFilter != nullptr) ? "updated" : "disabled");
 
     VerifyOrExit(mEnabled, OT_NOOP);
     Update(kModeAdd | kModeRemove);
@@ -96,7 +96,7 @@ exit:
 
 bool Slaac::ShouldFilter(const otIp6Prefix &aPrefix) const
 {
-    return (mFilter != NULL) && mFilter(&GetInstance(), &aPrefix);
+    return (mFilter != nullptr) && mFilter(&GetInstance(), &aPrefix);
 }
 
 void Slaac::HandleNotifierEvents(Notifier::Receiver &aReceiver, Events aEvents)
@@ -138,6 +138,14 @@ exit:
     return;
 }
 
+bool Slaac::DoesConfigMatchNetifAddr(const NetworkData::OnMeshPrefixConfig &aConfig,
+                                     const Ip6::NetifUnicastAddress &       aAddr)
+{
+    return (((aConfig.mOnMesh && (aAddr.mPrefixLength == aConfig.mPrefix.mLength)) ||
+             (!aConfig.mOnMesh && (aAddr.mPrefixLength == 128))) &&
+            (aAddr.GetAddress().PrefixMatch(aConfig.mPrefix.mPrefix) >= aConfig.mPrefix.mLength));
+}
+
 void Slaac::Update(UpdateMode aMode)
 {
     NetworkData::Iterator           iterator;
@@ -165,16 +173,13 @@ void Slaac::Update(UpdateMode aMode)
 
                 while (Get<NetworkData::Leader>().GetNextOnMeshPrefix(iterator, config) == OT_ERROR_NONE)
                 {
-                    otIp6Prefix &prefix = config.mPrefix;
-
                     if (config.mDp)
                     {
                         // Skip domain prefix which is processed in MLE.
                         continue;
                     }
 
-                    if (config.mSlaac && !ShouldFilter(prefix) && (prefix.mLength == slaacAddr->mPrefixLength) &&
-                        (slaacAddr->GetAddress().PrefixMatch(prefix.mPrefix) >= prefix.mLength))
+                    if (config.mSlaac && !ShouldFilter(config.mPrefix) && DoesConfigMatchNetifAddr(config, *slaacAddr))
                     {
                         found = true;
                         break;
@@ -210,10 +215,9 @@ void Slaac::Update(UpdateMode aMode)
             found = false;
 
             for (const Ip6::NetifUnicastAddress *netifAddr = Get<ThreadNetif>().GetUnicastAddresses();
-                 netifAddr != NULL; netifAddr              = netifAddr->GetNext())
+                 netifAddr != nullptr; netifAddr           = netifAddr->GetNext())
             {
-                if ((netifAddr->mPrefixLength == prefix.mLength) &&
-                    (netifAddr->GetAddress().PrefixMatch(prefix.mPrefix) >= prefix.mLength))
+                if (DoesConfigMatchNetifAddr(config, *netifAddr))
                 {
                     found = true;
                     break;
@@ -234,7 +238,7 @@ void Slaac::Update(UpdateMode aMode)
                     slaacAddr->Clear();
                     memcpy(&slaacAddr->mAddress, &prefix.mPrefix, BitVectorBytes(prefix.mLength));
 
-                    slaacAddr->mPrefixLength  = prefix.mLength;
+                    slaacAddr->mPrefixLength  = config.mOnMesh ? prefix.mLength : 128;
                     slaacAddr->mAddressOrigin = OT_ADDRESS_ORIGIN_SLAAC;
                     slaacAddr->mPreferred     = config.mPreferred;
                     slaacAddr->mValid         = true;
@@ -272,7 +276,7 @@ otError Slaac::GenerateIid(Ip6::NetifUnicastAddress &aAddress,
      *  - RID is random (but stable) Identifier.
      *  - For pseudo-random function `F()` SHA-256 is used in this method.
      *  - `Net_Iface` is set to constant string "wpan".
-     *  - `Network_ID` is not used if `aNetworkId` is NULL (optional per RF-7217).
+     *  - `Network_ID` is not used if `aNetworkId` is nullptr (optional per RF-7217).
      *  - The `secret_key` is randomly generated on first use (using true
      *    random number generator) and saved in non-volatile settings for
      *    future use.
@@ -286,8 +290,8 @@ otError Slaac::GenerateIid(Ip6::NetifUnicastAddress &aAddress,
     Crypto::Sha256 sha256;
     uint8_t        hash[Crypto::Sha256::kHashSize];
 
-    OT_STATIC_ASSERT(sizeof(hash) >= Ip6::Address::kInterfaceIdentifierSize,
-                     "SHA-256 hash size is too small to use as IPv6 address IID");
+    static_assert(sizeof(hash) >= Ip6::InterfaceIdentifier::kSize,
+                  "SHA-256 hash size is too small to use as IPv6 address IID");
 
     GetIidSecretKey(secretKey);
 
@@ -306,10 +310,10 @@ otError Slaac::GenerateIid(Ip6::NetifUnicastAddress &aAddress,
         sha256.Update(secretKey.m8, sizeof(IidSecretKey));
         sha256.Finish(hash);
 
-        aAddress.GetAddress().SetIid(&hash[0]);
+        aAddress.GetAddress().GetIid().SetBytes(&hash[0]);
 
         // If the IID is reserved, try again with a new dadCounter
-        if (aAddress.GetAddress().IsIidReserved())
+        if (aAddress.GetAddress().GetIid().IsReserved())
         {
             continue;
         }

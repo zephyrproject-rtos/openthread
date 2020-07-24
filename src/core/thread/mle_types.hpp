@@ -47,6 +47,7 @@
 #include "common/equatable.hpp"
 #include "common/string.hpp"
 #include "mac/mac_types.hpp"
+#include "net/ip6_address.hpp"
 
 namespace ot {
 namespace Mle {
@@ -248,20 +249,24 @@ enum
     kServiceMaxId = 0x0f, ///< Maximal Service ID.
 };
 
-#if OPENTHREAD_FTD && OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE
+#if OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE || OPENTHREAD_CONFIG_MLR_ENABLE
 
 /**
- * Backbone Router constants
+ * Backbone Router / MLR constants
  *
  */
 enum
 {
     kRegistrationDelayDefault         = 1200, //< In seconds.
     kMlrTimeoutDefault                = 3600, //< In seconds.
+    kMlrTimeoutMin                    = 300,  //< In seconds.
     kBackboneRouterRegistrationJitter = 5,    //< In seconds.
 };
 
-#endif
+static_assert(kMlrTimeoutDefault >= kMlrTimeoutMin,
+              "kMlrTimeoutDefault must be larger than or equal to kMlrTimeoutMin");
+
+#endif // OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE || OPENTHREAD_CONFIG_MLR_ENABLE
 
 /**
  * This type represents a MLE device mode.
@@ -426,15 +431,9 @@ private:
  *
  */
 OT_TOOL_PACKED_BEGIN
-class MeshLocalPrefix : public otMeshLocalPrefix, public Equatable<MeshLocalPrefix>
+class MeshLocalPrefix : public Ip6::NetworkPrefix
 {
 public:
-    enum
-    {
-        kSize   = OT_MESH_LOCAL_PREFIX_SIZE,            ///< Size in bytes.
-        kLength = OT_MESH_LOCAL_PREFIX_SIZE * CHAR_BIT, ///< Length of Mesh Local Prefix in bits.
-    };
-
     /**
      * This method derives and sets the Mesh Local Prefix from an Extended PAN ID.
      *

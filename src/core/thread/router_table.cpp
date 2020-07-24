@@ -44,14 +44,8 @@ namespace ot {
 
 RouterTable::Iterator::Iterator(Instance &aInstance)
     : InstanceLocator(aInstance)
-    , mRouter(NULL)
+    , mRouter(Get<RouterTable>().GetFirstEntry())
 {
-    Reset();
-}
-
-void RouterTable::Iterator::Reset(void)
-{
-    mRouter = Get<RouterTable>().GetFirstEntry();
 }
 
 void RouterTable::Iterator::Advance(void)
@@ -76,7 +70,7 @@ RouterTable::RouterTable(Instance &aInstance)
 const Router *RouterTable::GetFirstEntry(void) const
 {
     const Router *router = &mRouters[0];
-    VerifyOrExit(router->GetRloc16() != 0xffff, router = NULL);
+    VerifyOrExit(router->GetRloc16() != 0xffff, router = nullptr);
 
 exit:
     return router;
@@ -84,10 +78,10 @@ exit:
 
 const Router *RouterTable::GetNextEntry(const Router *aRouter) const
 {
-    VerifyOrExit(aRouter != NULL, OT_NOOP);
+    VerifyOrExit(aRouter != nullptr, OT_NOOP);
     aRouter++;
-    VerifyOrExit(aRouter < &mRouters[Mle::kMaxRouters], aRouter = NULL);
-    VerifyOrExit(aRouter->GetRloc16() != 0xffff, aRouter = NULL);
+    VerifyOrExit(aRouter < &mRouters[Mle::kMaxRouters], aRouter = nullptr);
+    VerifyOrExit(aRouter->GetRloc16() != 0xffff, aRouter = nullptr);
 
 exit:
     return aRouter;
@@ -206,7 +200,7 @@ void RouterTable::UpdateAllocation(void)
 
 Router *RouterTable::Allocate(void)
 {
-    Router *rval         = NULL;
+    Router *rval         = nullptr;
     uint8_t numAvailable = 0;
     uint8_t freeBit;
 
@@ -235,7 +229,7 @@ Router *RouterTable::Allocate(void)
         if (freeBit == 0)
         {
             rval = Allocate(routerId);
-            OT_ASSERT(rval != NULL);
+            OT_ASSERT(rval != nullptr);
             ExitNow();
         }
 
@@ -248,7 +242,7 @@ exit:
 
 Router *RouterTable::Allocate(uint8_t aRouterId)
 {
-    Router *rval = NULL;
+    Router *rval = nullptr;
 
     VerifyOrExit(aRouterId <= Mle::kMaxRouterId && mActiveRouterCount < Mle::kMaxRouters && !IsAllocated(aRouterId) &&
                      mRouterIdReuseDelay[aRouterId] == 0,
@@ -285,7 +279,7 @@ otError RouterTable::Release(uint8_t aRouterId)
 
     mRouterIdReuseDelay[aRouterId] = Mle::kRouterIdReuseDelay;
 
-    for (Router *router = GetFirstEntry(); router != NULL; router = GetNextEntry(router))
+    for (Router *router = GetFirstEntry(); router != nullptr; router = GetNextEntry(router))
     {
         if (router->GetNextHop() == rloc16)
         {
@@ -312,7 +306,7 @@ void RouterTable::RemoveRouterLink(Router &aRouter)
     aRouter.SetLinkQualityOut(0);
     aRouter.SetLastHeard(TimerMilli::GetNow());
 
-    for (Router *cur = GetFirstEntry(); cur != NULL; cur = GetNextEntry(cur))
+    for (Router *cur = GetFirstEntry(); cur != nullptr; cur = GetNextEntry(cur))
     {
         if (cur->GetNextHop() == aRouter.GetRouterId())
         {
@@ -339,7 +333,7 @@ uint8_t RouterTable::GetActiveLinkCount(void) const
 {
     uint8_t activeLinks = 0;
 
-    for (const Router *router = GetFirstEntry(); router != NULL; router = GetNextEntry(router))
+    for (const Router *router = GetFirstEntry(); router != nullptr; router = GetNextEntry(router))
     {
         if (router->IsStateValid())
         {
@@ -352,11 +346,11 @@ uint8_t RouterTable::GetActiveLinkCount(void) const
 
 Router *RouterTable::GetNeighbor(uint16_t aRloc16)
 {
-    Router *router = NULL;
+    Router *router = nullptr;
 
     VerifyOrExit(aRloc16 != Get<Mle::MleRouter>().GetRloc16(), OT_NOOP);
 
-    for (router = GetFirstEntry(); router != NULL; router = GetNextEntry(router))
+    for (router = GetFirstEntry(); router != nullptr; router = GetNextEntry(router))
     {
         if (router->IsStateValid() && router->GetRloc16() == aRloc16)
         {
@@ -370,11 +364,11 @@ exit:
 
 Router *RouterTable::GetNeighbor(const Mac::ExtAddress &aExtAddress)
 {
-    Router *router = NULL;
+    Router *router = nullptr;
 
     VerifyOrExit(aExtAddress != Get<Mac::Mac>().GetExtAddress(), OT_NOOP);
 
-    for (router = GetFirstEntry(); router != NULL; router = GetNextEntry(router))
+    for (router = GetFirstEntry(); router != nullptr; router = GetNextEntry(router))
     {
         if (router->IsStateValid() && router->GetExtAddress() == aExtAddress)
         {
@@ -388,7 +382,7 @@ exit:
 
 const Router *RouterTable::GetRouter(uint8_t aRouterId) const
 {
-    const Router *router = NULL;
+    const Router *router = nullptr;
     uint16_t      rloc16;
 
     // Skip if invalid router id is passed.
@@ -396,7 +390,7 @@ const Router *RouterTable::GetRouter(uint8_t aRouterId) const
 
     rloc16 = Mle::Mle::Rloc16FromRouterId(aRouterId);
 
-    for (router = GetFirstEntry(); router != NULL; router = GetNextEntry(router))
+    for (router = GetFirstEntry(); router != nullptr; router = GetNextEntry(router))
     {
         if (router->GetRloc16() == rloc16)
         {
@@ -410,9 +404,9 @@ exit:
 
 Router *RouterTable::GetRouter(const Mac::ExtAddress &aExtAddress)
 {
-    Router *router = NULL;
+    Router *router = nullptr;
 
-    for (router = GetFirstEntry(); router != NULL; router = GetNextEntry(router))
+    for (router = GetFirstEntry(); router != nullptr; router = GetNextEntry(router))
     {
         if (router->GetExtAddress() == aExtAddress)
         {
@@ -441,7 +435,7 @@ otError RouterTable::GetRouterInfo(uint16_t aRouterId, otRouterInfo &aRouterInfo
     }
 
     router = GetRouter(routerId);
-    VerifyOrExit(router != NULL, error = OT_ERROR_NOT_FOUND);
+    VerifyOrExit(router != nullptr, error = OT_ERROR_NOT_FOUND);
 
     memset(&aRouterInfo, 0, sizeof(aRouterInfo));
     aRouterInfo.mRouterId        = routerId;
@@ -473,7 +467,7 @@ uint8_t RouterTable::GetNeighborCount(void) const
 {
     uint8_t count = 0;
 
-    for (const Router *router = GetFirstEntry(); router != NULL; router = GetNextEntry(router))
+    for (const Router *router = GetFirstEntry(); router != nullptr; router = GetNextEntry(router))
     {
         if (router->IsStateValid())
         {
@@ -517,7 +511,7 @@ void RouterTable::UpdateRouterIdSet(uint8_t aRouterIdSequence, const Mle::Router
         {
             Router *router = GetRouter(routerId);
 
-            OT_ASSERT(router != NULL);
+            OT_ASSERT(router != nullptr);
             router->SetNextHop(Mle::kInvalidRouterId);
             RemoveRouterLink(*router);
 

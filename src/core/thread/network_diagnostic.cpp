@@ -60,8 +60,8 @@ NetworkDiagnostic::NetworkDiagnostic(Instance &aInstance)
     , mDiagnosticGetQuery(OT_URI_PATH_DIAGNOSTIC_GET_QUERY, &NetworkDiagnostic::HandleDiagnosticGetQuery, this)
     , mDiagnosticGetAnswer(OT_URI_PATH_DIAGNOSTIC_GET_ANSWER, &NetworkDiagnostic::HandleDiagnosticGetAnswer, this)
     , mDiagnosticReset(OT_URI_PATH_DIAGNOSTIC_RESET, &NetworkDiagnostic::HandleDiagnosticReset, this)
-    , mReceiveDiagnosticGetCallback(NULL)
-    , mReceiveDiagnosticGetCallbackContext(NULL)
+    , mReceiveDiagnosticGetCallback(nullptr)
+    , mReceiveDiagnosticGetCallbackContext(nullptr)
 {
     Get<Coap::Coap>().AddResource(mDiagnosticGetRequest);
     Get<Coap::Coap>().AddResource(mDiagnosticGetQuery);
@@ -81,11 +81,11 @@ otError NetworkDiagnostic::SendDiagnosticGet(const Ip6::Address &aDestination,
                                              uint8_t             aCount)
 {
     otError               error;
-    Coap::Message *       message = NULL;
+    Coap::Message *       message = nullptr;
     Ip6::MessageInfo      messageInfo;
-    otCoapResponseHandler handler = NULL;
+    otCoapResponseHandler handler = nullptr;
 
-    VerifyOrExit((message = Get<Coap::Coap>().NewMessage()) != NULL, error = OT_ERROR_NO_BUFS);
+    VerifyOrExit((message = Get<Coap::Coap>().NewMessage()) != nullptr, error = OT_ERROR_NO_BUFS);
 
     if (aDestination.IsMulticast())
     {
@@ -127,7 +127,7 @@ otError NetworkDiagnostic::SendDiagnosticGet(const Ip6::Address &aDestination,
 
 exit:
 
-    if (error != OT_ERROR_NONE && message != NULL)
+    if (error != OT_ERROR_NONE && message != nullptr)
     {
         message->Free();
     }
@@ -241,11 +241,9 @@ otError NetworkDiagnostic::AppendChildTable(Message &aMessage)
 
     SuccessOrExit(error = aMessage.Append(&tlv, sizeof(ChildTableTlv)));
 
-    for (ChildTable::Iterator iter(GetInstance(), Child::kInStateValid); !iter.IsDone(); iter++)
+    for (Child &child : Get<ChildTable>().Iterate(Child::kInStateValid))
     {
         VerifyOrExit(count--, OT_NOOP);
-
-        Child &child = *iter.GetChild();
 
         timeout = 0;
 
@@ -472,7 +470,7 @@ void NetworkDiagnostic::HandleDiagnosticGetQuery(void *aContext, otMessage *aMes
 void NetworkDiagnostic::HandleDiagnosticGetQuery(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
     otError              error   = OT_ERROR_NONE;
-    Coap::Message *      message = NULL;
+    Coap::Message *      message = nullptr;
     NetworkDiagnosticTlv networkDiagnosticTlv;
     Ip6::MessageInfo     messageInfo;
 
@@ -495,7 +493,7 @@ void NetworkDiagnostic::HandleDiagnosticGetQuery(Coap::Message &aMessage, const 
         }
     }
 
-    VerifyOrExit((message = Get<Coap::Coap>().NewMessage()) != NULL, error = OT_ERROR_NO_BUFS);
+    VerifyOrExit((message = Get<Coap::Coap>().NewMessage()) != nullptr, error = OT_ERROR_NO_BUFS);
 
     SuccessOrExit(error =
                       message->Init(OT_COAP_TYPE_CONFIRMABLE, OT_COAP_CODE_POST, OT_URI_PATH_DIAGNOSTIC_GET_ANSWER));
@@ -525,13 +523,13 @@ void NetworkDiagnostic::HandleDiagnosticGetQuery(Coap::Message &aMessage, const 
         IgnoreError(message->SetLength(message->GetLength() - 1));
     }
 
-    SuccessOrExit(error = Get<Coap::Coap>().SendMessage(*message, messageInfo, NULL, this));
+    SuccessOrExit(error = Get<Coap::Coap>().SendMessage(*message, messageInfo, nullptr, this));
 
     otLogInfoNetDiag("Sent diagnostic get answer");
 
 exit:
 
-    if (error != OT_ERROR_NONE && message != NULL)
+    if (error != OT_ERROR_NONE && message != nullptr)
     {
         message->Free();
     }
@@ -548,7 +546,7 @@ void NetworkDiagnostic::HandleDiagnosticGetRequest(void *               aContext
 void NetworkDiagnostic::HandleDiagnosticGetRequest(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
     otError              error   = OT_ERROR_NONE;
-    Coap::Message *      message = NULL;
+    Coap::Message *      message = nullptr;
     NetworkDiagnosticTlv networkDiagnosticTlv;
     Ip6::MessageInfo     messageInfo(aMessageInfo);
 
@@ -562,7 +560,7 @@ void NetworkDiagnostic::HandleDiagnosticGetRequest(Coap::Message &aMessage, cons
 
     VerifyOrExit(networkDiagnosticTlv.GetType() == NetworkDiagnosticTlv::kTypeList, error = OT_ERROR_PARSE);
 
-    VerifyOrExit((message = Get<Coap::Coap>().NewMessage()) != NULL, error = OT_ERROR_NO_BUFS);
+    VerifyOrExit((message = Get<Coap::Coap>().NewMessage()) != nullptr, error = OT_ERROR_NO_BUFS);
 
     SuccessOrExit(error = message->SetDefaultResponseHeader(aMessage));
     SuccessOrExit(error = message->SetPayloadMarker());
@@ -581,7 +579,7 @@ void NetworkDiagnostic::HandleDiagnosticGetRequest(Coap::Message &aMessage, cons
 
 exit:
 
-    if (error != OT_ERROR_NONE && message != NULL)
+    if (error != OT_ERROR_NONE && message != nullptr)
     {
         message->Free();
     }
@@ -592,10 +590,10 @@ otError NetworkDiagnostic::SendDiagnosticReset(const Ip6::Address &aDestination,
                                                uint8_t             aCount)
 {
     otError          error;
-    Coap::Message *  message = NULL;
+    Coap::Message *  message = nullptr;
     Ip6::MessageInfo messageInfo;
 
-    VerifyOrExit((message = Get<Coap::Coap>().NewMessage()) != NULL, error = OT_ERROR_NO_BUFS);
+    VerifyOrExit((message = Get<Coap::Coap>().NewMessage()) != nullptr, error = OT_ERROR_NO_BUFS);
 
     SuccessOrExit(error = message->Init(OT_COAP_TYPE_CONFIRMABLE, OT_COAP_CODE_POST, OT_URI_PATH_DIAGNOSTIC_RESET));
 
@@ -627,7 +625,7 @@ otError NetworkDiagnostic::SendDiagnosticReset(const Ip6::Address &aDestination,
 
 exit:
 
-    if (error != OT_ERROR_NONE && message != NULL)
+    if (error != OT_ERROR_NONE && message != nullptr)
     {
         message->Free();
     }

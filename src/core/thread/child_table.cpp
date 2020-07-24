@@ -44,29 +44,14 @@ namespace ot {
 ChildTable::Iterator::Iterator(Instance &aInstance, Child::StateFilter aFilter)
     : InstanceLocator(aInstance)
     , mFilter(aFilter)
-    , mStart(NULL)
-    , mChild(NULL)
-{
-    Reset();
-}
-
-ChildTable::Iterator::Iterator(Instance &aInstance, Child::StateFilter aFilter, Child *aStartingChild)
-    : InstanceLocator(aInstance)
-    , mFilter(aFilter)
-    , mStart(aStartingChild)
-    , mChild(NULL)
+    , mChild(nullptr)
 {
     Reset();
 }
 
 void ChildTable::Iterator::Reset(void)
 {
-    if (mStart == NULL)
-    {
-        mStart = &Get<ChildTable>().mChildren[0];
-    }
-
-    mChild = mStart;
+    mChild = &Get<ChildTable>().mChildren[0];
 
     if (!mChild->MatchesFilter(mFilter))
     {
@@ -76,22 +61,12 @@ void ChildTable::Iterator::Reset(void)
 
 void ChildTable::Iterator::Advance(void)
 {
-    ChildTable &childTable = Get<ChildTable>();
-    Child *     listStart  = &childTable.mChildren[0];
-    Child *     listEnd    = &childTable.mChildren[childTable.mMaxChildrenAllowed];
-
-    VerifyOrExit(mChild != NULL, OT_NOOP);
+    VerifyOrExit(mChild != nullptr, OT_NOOP);
 
     do
     {
         mChild++;
-
-        if (mChild >= listEnd)
-        {
-            mChild = listStart;
-        }
-
-        VerifyOrExit(mChild != mStart, mChild = NULL);
+        VerifyOrExit(mChild < &Get<ChildTable>().mChildren[Get<ChildTable>().mMaxChildrenAllowed], mChild = nullptr);
     } while (!mChild->MatchesFilter(mFilter));
 
 exit:
@@ -119,7 +94,7 @@ void ChildTable::Clear(void)
 
 Child *ChildTable::GetChildAtIndex(uint16_t aChildIndex)
 {
-    Child *child = NULL;
+    Child *child = nullptr;
 
     VerifyOrExit(aChildIndex < mMaxChildrenAllowed, OT_NOOP);
     child = &mChildren[aChildIndex];
@@ -141,7 +116,7 @@ Child *ChildTable::GetNewChild(void)
         }
     }
 
-    child = NULL;
+    child = nullptr;
 
 exit:
     return child;
@@ -159,7 +134,7 @@ Child *ChildTable::FindChild(uint16_t aRloc16, Child::StateFilter aFilter)
         }
     }
 
-    child = NULL;
+    child = nullptr;
 
 exit:
     return child;
@@ -177,7 +152,7 @@ Child *ChildTable::FindChild(const Mac::ExtAddress &aAddress, Child::StateFilter
         }
     }
 
-    child = NULL;
+    child = nullptr;
 
 exit:
     return child;
@@ -185,7 +160,7 @@ exit:
 
 Child *ChildTable::FindChild(const Mac::Address &aAddress, Child::StateFilter aFilter)
 {
-    Child *child = NULL;
+    Child *child = nullptr;
 
     switch (aAddress.GetType())
     {

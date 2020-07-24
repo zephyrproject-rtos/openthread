@@ -45,7 +45,6 @@
 #include "common/instance.hpp"
 #include "common/locator-getters.hpp"
 #include "common/logging.hpp"
-#include "common/new.hpp"
 #include "common/timer.hpp"
 #include "crypto/mbedtls.hpp"
 #include "crypto/sha256.hpp"
@@ -56,6 +55,11 @@
 namespace ot {
 namespace MeshCoP {
 
+const mbedtls_ecp_group_id Dtls::sCurves[] = {MBEDTLS_ECP_DP_SECP256R1, MBEDTLS_ECP_DP_NONE};
+#ifdef MBEDTLS_KEY_EXCHANGE__WITH_CERT__ENABLED
+const int Dtls::sHashes[] = {MBEDTLS_MD_NONE};
+#endif
+
 Dtls::Dtls(Instance &aInstance, bool aLayerTwoSecurity)
     : InstanceLocator(aInstance)
     , mState(kStateClosed)
@@ -65,37 +69,36 @@ Dtls::Dtls(Instance &aInstance, bool aLayerTwoSecurity)
     , mTimerIntermediate(0)
     , mTimerSet(false)
     , mLayerTwoSecurity(aLayerTwoSecurity)
-    , mReceiveMessage(NULL)
-    , mConnectedHandler(NULL)
-    , mReceiveHandler(NULL)
-    , mSendHandler(NULL)
-    , mContext(NULL)
-    , mSocket(Get<Ip6::Udp>())
-    , mTransportCallback(NULL)
-    , mTransportContext(NULL)
+    , mReceiveMessage(nullptr)
+    , mConnectedHandler(nullptr)
+    , mReceiveHandler(nullptr)
+    , mContext(nullptr)
+    , mSocket(aInstance)
+    , mTransportCallback(nullptr)
+    , mTransportContext(nullptr)
     , mMessageSubType(Message::kSubTypeNone)
     , mMessageDefaultSubType(Message::kSubTypeNone)
 {
 #if OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE
 #ifdef MBEDTLS_KEY_EXCHANGE_PSK_ENABLED
-    mPreSharedKey         = NULL;
-    mPreSharedKeyIdentity = NULL;
+    mPreSharedKey         = nullptr;
+    mPreSharedKeyIdentity = nullptr;
     mPreSharedKeyIdLength = 0;
     mPreSharedKeyLength   = 0;
-#endif // MBEDTLS_KEY_EXCHANGE_PSK_ENABLED
+#endif
 
 #ifdef MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED
-    mCaChainSrc       = NULL;
+    mCaChainSrc       = nullptr;
     mCaChainLength    = 0;
-    mOwnCertSrc       = NULL;
+    mOwnCertSrc       = nullptr;
     mOwnCertLength    = 0;
-    mPrivateKeySrc    = NULL;
+    mPrivateKeySrc    = nullptr;
     mPrivateKeyLength = 0;
     memset(&mCaChain, 0, sizeof(mCaChain));
     memset(&mOwnCert, 0, sizeof(mOwnCert));
     memset(&mPrivateKey, 0, sizeof(mPrivateKey));
-#endif // MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED
-#endif // OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE
+#endif
+#endif
 
     memset(mCipherSuites, 0, sizeof(mCipherSuites));
     memset(mPsk, 0, sizeof(mPsk));
@@ -117,8 +120,8 @@ void Dtls::FreeMbedtls(void)
     mbedtls_x509_crt_free(&mCaChain);
     mbedtls_x509_crt_free(&mOwnCert);
     mbedtls_pk_free(&mPrivateKey);
-#endif // MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED
-#endif // OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE
+#endif
+#endif
     mbedtls_ssl_config_free(&mConf);
     mbedtls_ssl_free(&mSsl);
 }
@@ -146,8 +149,8 @@ otError Dtls::Connect(const Ip6::SockAddr &aSockAddr)
 
     VerifyOrExit(mState == kStateOpen, error = OT_ERROR_INVALID_STATE);
 
-    memcpy(&mPeerAddress.mPeerAddr, &aSockAddr.mAddress, sizeof(mPeerAddress.mPeerAddr));
-    mPeerAddress.mPeerPort = aSockAddr.mPort;
+    mMessageInfo.SetPeerAddr(aSockAddr.GetAddress());
+    mMessageInfo.SetPeerPort(aSockAddr.mPort);
 
     error = Setup(true);
 
@@ -176,16 +179,16 @@ void Dtls::HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageI
         sockAddr.mPort    = aMessageInfo.GetPeerPort();
         IgnoreError(mSocket.Connect(sockAddr));
 
-        mPeerAddress.SetPeerAddr(aMessageInfo.GetPeerAddr());
-        mPeerAddress.SetPeerPort(aMessageInfo.GetPeerPort());
-        mPeerAddress.SetIsHostInterface(aMessageInfo.IsHostInterface());
+        mMessageInfo.SetPeerAddr(aMessageInfo.GetPeerAddr());
+        mMessageInfo.SetPeerPort(aMessageInfo.GetPeerPort());
+        mMessageInfo.SetIsHostInterface(aMessageInfo.IsHostInterface());
 
-        if (Get<ThreadNetif>().IsUnicastAddress(aMessageInfo.GetSockAddr()))
+        if (Get<ThreadNetif>().HasUnicastAddress(aMessageInfo.GetSockAddr()))
         {
-            mPeerAddress.SetSockAddr(aMessageInfo.GetSockAddr());
+            mMessageInfo.SetSockAddr(aMessageInfo.GetSockAddr());
         }
 
-        mPeerAddress.SetSockPort(aMessageInfo.GetSockPort());
+        mMessageInfo.SetSockPort(aMessageInfo.GetSockPort());
 
         SuccessOrExit(Setup(false));
         break;
@@ -193,8 +196,8 @@ void Dtls::HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageI
 
     default:
         // Once DTLS session is started, communicate only with a peer.
-        VerifyOrExit((mPeerAddress.GetPeerAddr() == aMessageInfo.GetPeerAddr()) &&
-                         (mPeerAddress.GetPeerPort() == aMessageInfo.GetPeerPort()),
+        VerifyOrExit((mMessageInfo.GetPeerAddr() == aMessageInfo.GetPeerAddr()) &&
+                         (mMessageInfo.GetPeerPort() == aMessageInfo.GetPeerPort()),
                      OT_NOOP);
         break;
     }
@@ -202,7 +205,7 @@ void Dtls::HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageI
 #ifdef MBEDTLS_SSL_SRV_C
     if (mState == MeshCoP::Dtls::kStateConnecting)
     {
-        IgnoreError(SetClientId(mPeerAddress.GetPeerAddr().mFields.m8, sizeof(mPeerAddress.GetPeerAddr().mFields)));
+        IgnoreError(SetClientId(mMessageInfo.GetPeerAddr().mFields.m8, sizeof(mMessageInfo.GetPeerAddr().mFields)));
     }
 #endif
 
@@ -218,7 +221,7 @@ otError Dtls::Bind(uint16_t aPort)
     Ip6::SockAddr sockaddr;
 
     VerifyOrExit(mState == kStateOpen, error = OT_ERROR_INVALID_STATE);
-    VerifyOrExit(mTransportCallback == NULL, error = OT_ERROR_ALREADY);
+    VerifyOrExit(mTransportCallback == nullptr, error = OT_ERROR_ALREADY);
 
     sockaddr.mPort = aPort;
     SuccessOrExit(error = mSocket.Bind(sockaddr));
@@ -233,7 +236,7 @@ otError Dtls::Bind(TransportCallback aCallback, void *aContext)
 
     VerifyOrExit(mState == kStateOpen, error = OT_ERROR_INVALID_STATE);
     VerifyOrExit(!mSocket.IsBound(), error = OT_ERROR_ALREADY);
-    VerifyOrExit(mTransportCallback == NULL, error = OT_ERROR_ALREADY);
+    VerifyOrExit(mTransportCallback == nullptr, error = OT_ERROR_ALREADY);
 
     mTransportCallback = aCallback;
     mTransportContext  = aContext;
@@ -258,8 +261,8 @@ otError Dtls::Setup(bool aClient)
     mbedtls_x509_crt_init(&mCaChain);
     mbedtls_x509_crt_init(&mOwnCert);
     mbedtls_pk_init(&mPrivateKey);
-#endif // MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED
-#endif // OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE
+#endif
+#endif
 #if defined(MBEDTLS_SSL_SRV_C) && defined(MBEDTLS_SSL_COOKIE_C)
     mbedtls_ssl_cookie_init(&mCookieCtx);
 #endif
@@ -279,7 +282,7 @@ otError Dtls::Setup(bool aClient)
     }
 #else
     OT_UNUSED_VARIABLE(mVerifyPeerCertificate);
-#endif // OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE
+#endif
 
     mbedtls_ssl_conf_rng(&mConf, mbedtls_ctr_drbg_random, Random::Crypto::MbedTlsContextGet());
     mbedtls_ssl_conf_min_version(&mConf, MBEDTLS_SSL_MAJOR_VERSION_3, MBEDTLS_SSL_MINOR_VERSION_3);
@@ -287,6 +290,13 @@ otError Dtls::Setup(bool aClient)
 
     OT_ASSERT(mCipherSuites[1] == 0);
     mbedtls_ssl_conf_ciphersuites(&mConf, mCipherSuites);
+    if (mCipherSuites[0] == MBEDTLS_TLS_ECJPAKE_WITH_AES_128_CCM_8)
+    {
+        mbedtls_ssl_conf_curves(&mConf, sCurves);
+#ifdef MBEDTLS_KEY_EXCHANGE__WITH_CERT__ENABLED
+        mbedtls_ssl_conf_sig_hashes(&mConf, sHashes);
+#endif
+    }
     mbedtls_ssl_conf_export_keys_cb(&mConf, HandleMbedtlsExportKeys, this);
     mbedtls_ssl_conf_handshake_timeout(&mConf, 8000, 60000);
     mbedtls_ssl_conf_dbg(&mConf, HandleMbedtlsDebug, this);
@@ -304,7 +314,7 @@ otError Dtls::Setup(bool aClient)
     rval = mbedtls_ssl_setup(&mSsl, &mConf);
     VerifyOrExit(rval == 0, OT_NOOP);
 
-    mbedtls_ssl_set_bio(&mSsl, this, &Dtls::HandleMbedtlsTransmit, HandleMbedtlsReceive, NULL);
+    mbedtls_ssl_set_bio(&mSsl, this, &Dtls::HandleMbedtlsTransmit, HandleMbedtlsReceive, nullptr);
     mbedtls_ssl_set_timer_cb(&mSsl, this, &Dtls::HandleMbedtlsSetTimer, HandleMbedtlsGetTimer);
 
     if (mCipherSuites[0] == MBEDTLS_TLS_ECJPAKE_WITH_AES_128_CCM_8)
@@ -316,10 +326,10 @@ otError Dtls::Setup(bool aClient)
     {
         rval = SetApplicationCoapSecureKeys();
     }
-#endif // OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE
+#endif
     VerifyOrExit(rval == 0, OT_NOOP);
 
-    mReceiveMessage = NULL;
+    mReceiveMessage = nullptr;
     mMessageSubType = Message::kSubTypeNone;
     mState          = kStateConnecting;
 
@@ -332,7 +342,7 @@ otError Dtls::Setup(bool aClient)
     {
         otLogInfoCoap("Application Coap Secure DTLS started");
     }
-#endif // OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE
+#endif
 
     mState = kStateConnecting;
 
@@ -357,26 +367,26 @@ int Dtls::SetApplicationCoapSecureKeys(void)
     {
     case MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8:
 #ifdef MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED
-        if (mCaChainSrc != NULL)
+        if (mCaChainSrc != nullptr)
         {
             rval = mbedtls_x509_crt_parse(&mCaChain, static_cast<const unsigned char *>(mCaChainSrc),
                                           static_cast<size_t>(mCaChainLength));
             VerifyOrExit(rval == 0, OT_NOOP);
-            mbedtls_ssl_conf_ca_chain(&mConf, &mCaChain, NULL);
+            mbedtls_ssl_conf_ca_chain(&mConf, &mCaChain, nullptr);
         }
 
-        if (mOwnCertSrc != NULL && mPrivateKeySrc != NULL)
+        if (mOwnCertSrc != nullptr && mPrivateKeySrc != nullptr)
         {
             rval = mbedtls_x509_crt_parse(&mOwnCert, static_cast<const unsigned char *>(mOwnCertSrc),
                                           static_cast<size_t>(mOwnCertLength));
             VerifyOrExit(rval == 0, OT_NOOP);
             rval = mbedtls_pk_parse_key(&mPrivateKey, static_cast<const unsigned char *>(mPrivateKeySrc),
-                                        static_cast<size_t>(mPrivateKeyLength), NULL, 0);
+                                        static_cast<size_t>(mPrivateKeyLength), nullptr, 0);
             VerifyOrExit(rval == 0, OT_NOOP);
             rval = mbedtls_ssl_conf_own_cert(&mConf, &mOwnCert, &mPrivateKey);
             VerifyOrExit(rval == 0, OT_NOOP);
         }
-#endif // MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED
+#endif
         break;
 
     case MBEDTLS_TLS_PSK_WITH_AES_128_CCM_8:
@@ -384,7 +394,7 @@ int Dtls::SetApplicationCoapSecureKeys(void)
         rval = mbedtls_ssl_conf_psk(&mConf, static_cast<const unsigned char *>(mPreSharedKey), mPreSharedKeyLength,
                                     static_cast<const unsigned char *>(mPreSharedKeyIdentity), mPreSharedKeyIdLength);
         VerifyOrExit(rval == 0, OT_NOOP);
-#endif // MBEDTLS_KEY_EXCHANGE_PSK_ENABLED
+#endif
         break;
 
     default:
@@ -398,11 +408,6 @@ exit:
     return rval;
 }
 
-void Dtls::SetSslAuthMode(bool aVerifyPeerCertificate)
-{
-    mVerifyPeerCertificate = aVerifyPeerCertificate;
-}
-
 #endif // OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE
 
 void Dtls::Close(void)
@@ -410,8 +415,8 @@ void Dtls::Close(void)
     Disconnect();
 
     mState             = kStateClosed;
-    mTransportCallback = NULL;
-    mTransportContext  = NULL;
+    mTransportCallback = nullptr;
+    mTransportContext  = nullptr;
     mTimerSet          = false;
 
     IgnoreError(mSocket.Close());
@@ -426,7 +431,7 @@ void Dtls::Disconnect(void)
     mState = kStateCloseNotify;
     mTimer.Start(kGuardTimeNewConnectionMilli);
 
-    new (&mPeerAddress) Ip6::MessageInfo();
+    mMessageInfo.Clear();
     IgnoreError(mSocket.Connect(Ip6::SockAddr()));
 
     FreeMbedtls();
@@ -459,10 +464,10 @@ void Dtls::SetCertificate(const uint8_t *aX509Certificate,
                           uint32_t       aPrivateKeyLength)
 {
     OT_ASSERT(aX509CertLength > 0);
-    OT_ASSERT(aX509Certificate != NULL);
+    OT_ASSERT(aX509Certificate != nullptr);
 
     OT_ASSERT(aPrivateKeyLength > 0);
-    OT_ASSERT(aPrivateKey != NULL);
+    OT_ASSERT(aPrivateKey != nullptr);
 
     mOwnCertSrc       = aX509Certificate;
     mOwnCertLength    = aX509CertLength;
@@ -476,7 +481,7 @@ void Dtls::SetCertificate(const uint8_t *aX509Certificate,
 void Dtls::SetCaCertificateChain(const uint8_t *aX509CaCertificateChain, uint32_t aX509CaCertChainLength)
 {
     OT_ASSERT(aX509CaCertChainLength > 0);
-    OT_ASSERT(aX509CaCertificateChain != NULL);
+    OT_ASSERT(aX509CaCertificateChain != nullptr);
 
     mCaChainSrc    = aX509CaCertificateChain;
     mCaChainLength = aX509CaCertChainLength;
@@ -485,11 +490,10 @@ void Dtls::SetCaCertificateChain(const uint8_t *aX509CaCertificateChain, uint32_
 #endif // MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED
 
 #ifdef MBEDTLS_KEY_EXCHANGE_PSK_ENABLED
-
 void Dtls::SetPreSharedKey(const uint8_t *aPsk, uint16_t aPskLength, const uint8_t *aPskIdentity, uint16_t aPskIdLength)
 {
-    OT_ASSERT(aPsk != NULL);
-    OT_ASSERT(aPskIdentity != NULL);
+    OT_ASSERT(aPsk != nullptr);
+    OT_ASSERT(aPskIdentity != nullptr);
     OT_ASSERT(aPskLength > 0);
     OT_ASSERT(aPskIdLength > 0);
 
@@ -501,7 +505,7 @@ void Dtls::SetPreSharedKey(const uint8_t *aPsk, uint16_t aPskLength, const uint8
     mCipherSuites[0] = MBEDTLS_TLS_PSK_WITH_AES_128_CCM_8;
     mCipherSuites[1] = 0;
 }
-#endif // MBEDTLS_KEY_EXCHANGE_PSK_ENABLED
+#endif
 
 #ifdef MBEDTLS_BASE64_C
 
@@ -519,7 +523,7 @@ exit:
     return error;
 }
 
-#endif // MBEDTLS_BASE64_C
+#endif
 #endif // OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE
 
 #ifdef MBEDTLS_SSL_SRV_C
@@ -559,7 +563,7 @@ void Dtls::Receive(Message &aMessage)
 
     Process();
 
-    mReceiveMessage = NULL;
+    mReceiveMessage = nullptr;
 }
 
 int Dtls::HandleMbedtlsTransmit(void *aContext, const unsigned char *aBuf, size_t aLength)
@@ -581,7 +585,7 @@ int Dtls::HandleMbedtlsTransmit(const unsigned char *aBuf, size_t aLength)
     {
         otLogDebgCoap("Dtls::ApplicationCoapSecure HandleMbedtlsTransmit");
     }
-#endif // OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE
+#endif
 
     error = HandleDtlsSend(aBuf, static_cast<uint16_t>(aLength), mMessageSubType);
 
@@ -625,9 +629,9 @@ int Dtls::HandleMbedtlsReceive(unsigned char *aBuf, size_t aLength)
     {
         otLogDebgCoap("Dtls:: ApplicationCoapSecure HandleMbedtlsReceive");
     }
-#endif // OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE
+#endif
 
-    VerifyOrExit(mReceiveMessage != NULL && (rval = mReceiveMessage->GetLength() - mReceiveMessage->GetOffset()) > 0,
+    VerifyOrExit(mReceiveMessage != nullptr && (rval = mReceiveMessage->GetLength() - mReceiveMessage->GetOffset()) > 0,
                  rval = MBEDTLS_ERR_SSL_WANT_READ);
 
     if (aLength > static_cast<size_t>(rval))
@@ -660,7 +664,7 @@ int Dtls::HandleMbedtlsGetTimer(void)
     {
         otLogDebgCoap("Dtls:: ApplicationCoapSecure HandleMbedtlsGetTimer");
     }
-#endif // OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE
+#endif
 
     if (!mTimerSet)
     {
@@ -698,7 +702,7 @@ void Dtls::HandleMbedtlsSetTimer(uint32_t aIntermediate, uint32_t aFinish)
     {
         otLogDebgCoap("Dtls::ApplicationCoapSecure SetTimer");
     }
-#endif // OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE
+#endif
 
     if (aFinish == 0)
     {
@@ -750,7 +754,7 @@ int Dtls::HandleMbedtlsExportKeys(const unsigned char *aMasterSecret,
     {
         otLogDebgCoap("ApplicationCoapSecure Generated KEK");
     }
-#endif // OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE
+#endif
     return 0;
 }
 
@@ -772,7 +776,7 @@ void Dtls::HandleTimer(void)
         mState = kStateOpen;
         mTimer.Stop();
 
-        if (mConnectedHandler != NULL)
+        if (mConnectedHandler != nullptr)
         {
             mConnectedHandler(mContext, false);
         }
@@ -800,7 +804,7 @@ void Dtls::Process(void)
             {
                 mState = kStateConnected;
 
-                if (mConnectedHandler != NULL)
+                if (mConnectedHandler != nullptr)
                 {
                     mConnectedHandler(mContext, true);
                 }
@@ -813,7 +817,10 @@ void Dtls::Process(void)
 
         if (rval > 0)
         {
-            mReceiveHandler(mContext, buf, static_cast<uint16_t>(rval));
+            if (mReceiveHandler != nullptr)
+            {
+                mReceiveHandler(mContext, buf, static_cast<uint16_t>(rval));
+            }
         }
         else if (rval == 0 || rval == MBEDTLS_ERR_SSL_WANT_READ || rval == MBEDTLS_ERR_SSL_WANT_WRITE)
         {
@@ -874,30 +881,34 @@ exit:
     }
 }
 
-void Dtls::HandleMbedtlsDebug(void *ctx, int level, const char *, int, const char *str)
+void Dtls::HandleMbedtlsDebug(void *aContext, int aLevel, const char *aFile, int aLine, const char *aStr)
 {
-    OT_UNUSED_VARIABLE(str);
+    static_cast<Dtls *>(aContext)->HandleMbedtlsDebug(aLevel, aFile, aLine, aStr);
+}
 
-    Dtls *pThis = static_cast<Dtls *>(ctx);
-    OT_UNUSED_VARIABLE(pThis);
+void Dtls::HandleMbedtlsDebug(int aLevel, const char *aFile, int aLine, const char *aStr)
+{
+    OT_UNUSED_VARIABLE(aStr);
+    OT_UNUSED_VARIABLE(aFile);
+    OT_UNUSED_VARIABLE(aLine);
 
-    switch (level)
+    switch (aLevel)
     {
     case 1:
-        otLogCritMbedTls("[%hu] %s", pThis->mSocket.GetSockName().mPort, str);
+        otLogCritMbedTls("[%hu] %s", mSocket.GetSockName().mPort, aStr);
         break;
 
     case 2:
-        otLogWarnMbedTls("[%hu] %s", pThis->mSocket.GetSockName().mPort, str);
+        otLogWarnMbedTls("[%hu] %s", mSocket.GetSockName().mPort, aStr);
         break;
 
     case 3:
-        otLogInfoMbedTls("[%hu] %s", pThis->mSocket.GetSockName().mPort, str);
+        otLogInfoMbedTls("[%hu] %s", mSocket.GetSockName().mPort, aStr);
         break;
 
     case 4:
     default:
-        otLogDebgMbedTls("[%hu] %s", pThis->mSocket.GetSockName().mPort, str);
+        otLogDebgMbedTls("[%hu] %s", mSocket.GetSockName().mPort, aStr);
         break;
     }
 }
@@ -905,9 +916,9 @@ void Dtls::HandleMbedtlsDebug(void *ctx, int level, const char *, int, const cha
 otError Dtls::HandleDtlsSend(const uint8_t *aBuf, uint16_t aLength, Message::SubType aMessageSubType)
 {
     otError      error   = OT_ERROR_NONE;
-    ot::Message *message = NULL;
+    ot::Message *message = nullptr;
 
-    VerifyOrExit((message = mSocket.NewMessage(0)) != NULL, error = OT_ERROR_NO_BUFS);
+    VerifyOrExit((message = mSocket.NewMessage(0)) != nullptr, error = OT_ERROR_NO_BUFS);
     message->SetSubType(aMessageSubType);
     message->SetLinkSecurityEnabled(mLayerTwoSecurity);
 
@@ -921,16 +932,16 @@ otError Dtls::HandleDtlsSend(const uint8_t *aBuf, uint16_t aLength, Message::Sub
 
     if (mTransportCallback)
     {
-        SuccessOrExit(error = mTransportCallback(mTransportContext, *message, mPeerAddress));
+        SuccessOrExit(error = mTransportCallback(mTransportContext, *message, mMessageInfo));
     }
     else
     {
-        SuccessOrExit(error = mSocket.SendTo(*message, mPeerAddress));
+        SuccessOrExit(error = mSocket.SendTo(*message, mMessageInfo));
     }
 
 exit:
 
-    if (error != OT_ERROR_NONE && message != NULL)
+    if (error != OT_ERROR_NONE && message != nullptr)
     {
         message->Free();
     }

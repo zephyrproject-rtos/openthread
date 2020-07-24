@@ -878,7 +878,7 @@ public:
     /**
      * This method returns a pointer to the vendor specific Time IE.
      *
-     * @returns A pointer to the Time IE, NULL if not found.
+     * @returns A pointer to the Time IE, nullptr if not found.
      *
      */
     TimeIe *GetTimeIe(void) { return const_cast<TimeIe *>(const_cast<const Frame *>(this)->GetTimeIe()); }
@@ -886,7 +886,7 @@ public:
     /**
      * This method returns a pointer to the vendor specific Time IE.
      *
-     * @returns A pointer to the Time IE, NULL if not found.
+     * @returns A pointer to the Time IE, nullptr if not found.
      *
      */
     const TimeIe *GetTimeIe(void) const;
@@ -910,7 +910,7 @@ public:
      *
      * @param[in] aIeId  The Element Id of the Header IE.
      *
-     * @returns A pointer to the Header IE, NULL if not found.
+     * @returns A pointer to the Header IE, nullptr if not found.
      *
      */
     uint8_t *GetHeaderIe(uint8_t aIeId)
@@ -923,7 +923,7 @@ public:
      *
      * @param[in] aIeId  The Element Id of the Header IE.
      *
-     * @returns A pointer to the Header IE, NULL if not found.
+     * @returns A pointer to the Header IE, nullptr if not found.
      *
      */
     const uint8_t *GetHeaderIe(uint8_t aIeId) const;
@@ -965,6 +965,14 @@ public:
      */
     InfoString ToInfoString(void) const;
 
+    /**
+     * This method returns the Frame Control field of the frame.
+     *
+     * @returns The Frame Control field.
+     *
+     */
+    uint16_t GetFrameControlField(void) const;
+
 protected:
     enum
     {
@@ -974,15 +982,14 @@ protected:
         kSequenceIndex = kFcfSize,
     };
 
-    uint16_t GetFrameControlField(void) const;
-    uint8_t  FindDstPanIdIndex(void) const;
-    uint8_t  FindDstAddrIndex(void) const;
-    uint8_t  FindSrcPanIdIndex(void) const;
-    uint8_t  FindSrcAddrIndex(void) const;
-    uint8_t  SkipAddrFieldIndex(void) const;
-    uint8_t  FindSecurityHeaderIndex(void) const;
-    uint8_t  SkipSecurityHeaderIndex(void) const;
-    uint8_t  FindPayloadIndex(void) const;
+    uint8_t FindDstPanIdIndex(void) const;
+    uint8_t FindDstAddrIndex(void) const;
+    uint8_t FindSrcPanIdIndex(void) const;
+    uint8_t FindSrcAddrIndex(void) const;
+    uint8_t SkipAddrFieldIndex(void) const;
+    uint8_t FindSecurityHeaderIndex(void) const;
+    uint8_t SkipSecurityHeaderIndex(void) const;
+    uint8_t FindPayloadIndex(void) const;
 #if OPENTHREAD_CONFIG_MAC_HEADER_IE_SUPPORT
     uint8_t FindHeaderIeIndex(void) const;
 #endif

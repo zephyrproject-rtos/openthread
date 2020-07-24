@@ -122,7 +122,7 @@ public:
         bool     mFramePurgePending : 1;   // Indicates a pending purge request for the current indirect frame.
         bool     mFrameReplacePending : 1; // Indicates a pending replace request for the current indirect frame.
 
-        OT_STATIC_ASSERT(kMaxPollTriggeredTxAttempts < (1 << 5), "mIndirectTxAttempts cannot fit max!");
+        static_assert(kMaxPollTriggeredTxAttempts < (1 << 5), "mIndirectTxAttempts cannot fit max!");
     };
 
     /**
@@ -146,7 +146,7 @@ public:
         typedef IndirectSenderBase::FrameContext FrameContext;
 
         /**
-         * This constructor initializes the data poll handler object.
+         * This constructor initializes the callbacks object.
          *
          * @param[in]  aInstance   A reference to the OpenThread instance.
          *
@@ -268,7 +268,7 @@ private:
 
     // In the current implementation of `DataPollHandler`, we can have a
     // single indirect tx operation active at MAC layer at each point of
-    // time. `mIndirectTxChild` indicates the child being handled (NULL
+    // time. `mIndirectTxChild` indicates the child being handled (nullptr
     // indicates no active indirect tx). `mFrameContext` tracks the
     // context for the prepared frame for the current indirect tx.
 

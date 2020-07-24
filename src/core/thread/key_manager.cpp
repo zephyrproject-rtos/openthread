@@ -122,19 +122,19 @@ otError KeyManager::SetMasterKey(const MasterKey &aKey)
 
 #if OPENTHREAD_FTD
     // reset router frame counters
-    for (RouterTable::Iterator iter(GetInstance()); !iter.IsDone(); iter++)
+    for (Router &router : Get<RouterTable>().Iterate())
     {
-        iter.GetRouter()->SetKeySequence(0);
-        iter.GetRouter()->SetLinkFrameCounter(0);
-        iter.GetRouter()->SetMleFrameCounter(0);
+        router.SetKeySequence(0);
+        router.SetLinkFrameCounter(0);
+        router.SetMleFrameCounter(0);
     }
 
     // reset child frame counters
-    for (ChildTable::Iterator iter(GetInstance(), Child::kInStateAnyExceptInvalid); !iter.IsDone(); iter++)
+    for (Child &child : Get<ChildTable>().Iterate(Child::kInStateAnyExceptInvalid))
     {
-        iter.GetChild()->SetKeySequence(0);
-        iter.GetChild()->SetLinkFrameCounter(0);
-        iter.GetChild()->SetMleFrameCounter(0);
+        child.SetKeySequence(0);
+        child.SetLinkFrameCounter(0);
+        child.SetMleFrameCounter(0);
     }
 #endif
 

@@ -307,6 +307,8 @@ private:
  */
 class Mle : public InstanceLocator, public Notifier::Receiver
 {
+    friend class DiscoverScanner;
+
 public:
     /**
      * This constructor initializes the MLE object.
@@ -370,51 +372,6 @@ public:
      *
      */
     otError Store(void);
-
-    /**
-     * This function pointer is called on receiving an MLE Discovery Response message.
-     *
-     * @param[in]  aResult   A valid pointer to the Discovery Response information or NULL when the Discovery completes.
-     * @param[in]  aContext  A pointer to application-specific context.
-     *
-     */
-    typedef void (*DiscoverHandler)(otActiveScanResult *aResult, void *aContext);
-
-    /**
-     * This method initiates a Thread Discovery.
-     *
-     * @param[in]  aScanChannels          A bit vector indicating which channels to scan.
-     * @param[in]  aPanId                 The PAN ID filter (set to Broadcast PAN to disable filter).
-     * @param[in]  aJoiner                Value of the Joiner Flag in the Discovery Request TLV.
-     * @param[in]  aEnableFiltering       Enable filtering out MLE discovery responses that don't match our factory
-     *                                    assigned EUI64.
-     * @param[in]  aHandler               A pointer to a function that is called on receiving an MLE Discovery Response.
-     * @param[in]  aContext               A pointer to arbitrary context information.
-     *
-     * @retval OT_ERROR_NONE  Successfully started a Thread Discovery.
-     * @retval OT_ERROR_BUSY  Thread Discovery is already in progress.
-     *
-     */
-    otError Discover(const Mac::ChannelMask &aScanChannels,
-                     uint16_t                aPanId,
-                     bool                    aJoiner,
-                     bool                    aEnableFiltering,
-                     DiscoverHandler         aCallback,
-                     void *                  aContext);
-
-    /**
-     * This method indicates whether or not an MLE Thread Discovery is currently in progress.
-     *
-     * @returns true if an MLE Thread Discovery is in progress, false otherwise.
-     *
-     */
-    bool IsDiscoverInProgress(void) const { return mDiscoverInProgress; }
-
-    /**
-     * This method is called by the MeshForwarder to indicate that discovery is complete.
-     *
-     */
-    void HandleDiscoverComplete(void);
 
     /**
      * This method generates an MLE Announce message.
@@ -597,7 +554,7 @@ public:
      */
     const MeshLocalPrefix &GetMeshLocalPrefix(void) const
     {
-        return reinterpret_cast<const MeshLocalPrefix &>(mMeshLocal16.GetAddress());
+        return static_cast<const MeshLocalPrefix &>(mMeshLocal16.GetAddress().GetPrefix());
     }
 
     /**
@@ -958,6 +915,16 @@ public:
      */
     otError GetLocatorAddress(Ip6::Address &aAddress, uint16_t aLocator) const;
 
+    /**
+     * This method indicates whether or not the device has restored the network information from
+     * non-volatile settings after boot.
+     *
+     * @retval true  Sucessfully restored the network information.
+     * @retval false No valid network information was found.
+     *
+     */
+    bool HasRestored(void) const { return mHasRestored; }
+
 protected:
     /**
      * States during attach (when searching for a parent).
@@ -1059,7 +1026,7 @@ protected:
     /**
      * This method allocates a new message buffer for preparing an MLE message.
      *
-     * @returns A pointer to the message or NULL if insufficient message buffers are available.
+     * @returns A pointer to the message or nullptr if insufficient message buffers are available.
      *
      */
     Message *NewMleMessage(void);
@@ -1455,7 +1422,7 @@ protected:
     Neighbor *GetNeighbor(const Ip6::Address &aAddress)
     {
         OT_UNUSED_VARIABLE(aAddress);
-        return NULL;
+        return nullptr;
     }
 
     /**
@@ -1720,7 +1687,6 @@ private:
     void HandleDataResponse(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo, const Neighbor *aNeighbor);
     void HandleParentResponse(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo, uint32_t aKeySequence);
     void HandleAnnounce(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
-    void HandleDiscoveryResponse(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
     otError HandleLeaderData(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
     void    ProcessAnnounce(void);
     bool    HasUnregisteredAddress(void);
@@ -1778,6 +1744,7 @@ private:
 
     AddressRegistrationMode mAddressRegistrationMode;
 
+    bool       mHasRestored;
     uint8_t    mParentLinkMargin;
     bool       mParentIsSingleton;
     bool       mReceivedResponseFromParent;
@@ -1785,14 +1752,8 @@ private:
 
     Challenge mParentCandidateChallenge;
 
-    Ip6::UdpSocket mSocket;
-    uint32_t       mTimeout;
-
-    DiscoverHandler                       mDiscoverHandler;
-    void *                                mDiscoverContext;
-    MeshCoP::SteeringData::HashBitIndexes mDiscoverFilterIndexes;
-    bool                                  mDiscoverInProgress;
-    bool                                  mDiscoverEnableFiltering;
+    Ip6::Udp::Socket mSocket;
+    uint32_t         mTimeout;
 
 #if OPENTHREAD_CONFIG_MLE_INFORM_PREVIOUS_PARENT_ON_REATTACH
     uint16_t mPreviousParentRloc;

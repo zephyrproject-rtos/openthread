@@ -34,37 +34,25 @@
 
 #include <openthread/openthread-system.h>
 
-struct otPosixRadioArguments
-{
-    const char *mPath; ///< The path to the executable or device
-};
+#include "lib/url/url.hpp"
 
 namespace ot {
 namespace Posix {
 
-class Arguments : public otPosixRadioArguments
+/**
+ * This class implements the radio URL processing.
+ *
+ */
+class RadioUrl : public ot::Url::Url
 {
 public:
-    Arguments(const char *aUrl);
-
     /**
-     * This method gets the path in url
+     * This constructor initializes the object.
      *
-     * @returns The path in url.
+     * @param[in]   aUrl    The null-terminated URL string.
      *
      */
-    const char *GetPath(void) const { return mPath; }
-
-    /**
-     * This method returns the url agument value.
-     *
-     * @param[in] aName       Argument name.
-     * @param[in] aLastValue  The last iterated argument value, NULL for first value.
-     *
-     * @returns The argument value.
-     *
-     */
-    const char *GetValue(const char *aName, const char *aLastValue = NULL);
+    RadioUrl(const char *aUrl);
 
 private:
     enum
@@ -72,9 +60,6 @@ private:
         kRadioUrlMaxSize = 512,
     };
     char mUrl[kRadioUrlMaxSize];
-
-    char *mStart;
-    char *mEnd;
 };
 
 } // namespace Posix

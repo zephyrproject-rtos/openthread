@@ -48,7 +48,7 @@ namespace Dhcp6 {
 
 Dhcp6Server::Dhcp6Server(Instance &aInstance)
     : InstanceLocator(aInstance)
-    , mSocket(Get<Ip6::Udp>())
+    , mSocket(aInstance)
     , mPrefixAgentsCount(0)
     , mPrefixAgentsMask(0)
 {
@@ -64,11 +64,11 @@ otError Dhcp6Server::UpdateService(void)
     Lowpan::Context                 lowpanContext;
 
     // remove dhcp agent aloc and prefix delegation
-    for (size_t i = 0; i < OT_ARRAY_LENGTH(mPrefixAgents); i++)
+    for (PrefixAgent &prefixAgent : mPrefixAgents)
     {
         bool found = false;
 
-        if (!mPrefixAgents[i].IsValid())
+        if (!prefixAgent.IsValid())
         {
             continue;
         }
@@ -82,9 +82,9 @@ otError Dhcp6Server::UpdateService(void)
                 continue;
             }
 
-            error = Get<NetworkData::Leader>().GetContext(mPrefixAgents[i].GetPrefix(), lowpanContext);
+            error = Get<NetworkData::Leader>().GetContext(prefixAgent.GetPrefix(), lowpanContext);
 
-            if ((error == OT_ERROR_NONE) && (mPrefixAgents[i].GetContextId() == lowpanContext.mContextId))
+            if ((error == OT_ERROR_NONE) && (prefixAgent.GetContextId() == lowpanContext.mContextId))
             {
                 // still in network data
                 found = true;
@@ -94,7 +94,7 @@ otError Dhcp6Server::UpdateService(void)
 
         if (!found)
         {
-            mPrefixAgents[i].Clear();
+            prefixAgent.Clear();
             mPrefixAgentsCount--;
         }
     }
@@ -147,22 +147,22 @@ void Dhcp6Server::Stop(void)
 void Dhcp6Server::AddPrefixAgent(const otIp6Prefix &aIp6Prefix, const Lowpan::Context &aContext)
 {
     otError      error    = OT_ERROR_NONE;
-    PrefixAgent *newEntry = NULL;
+    PrefixAgent *newEntry = nullptr;
 
-    for (size_t i = 0; i < OT_ARRAY_LENGTH(mPrefixAgents); i++)
+    for (PrefixAgent &prefixAgent : mPrefixAgents)
     {
-        if (!mPrefixAgents[i].IsValid())
+        if (!prefixAgent.IsValid())
         {
-            newEntry = &mPrefixAgents[i];
+            newEntry = &prefixAgent;
         }
-        else if (mPrefixAgents[i].IsPrefixMatch(aIp6Prefix))
+        else if (prefixAgent.IsPrefixMatch(aIp6Prefix))
         {
             // already added
             ExitNow();
         }
     }
 
-    VerifyOrExit(newEntry != NULL, error = OT_ERROR_NO_BUFS);
+    VerifyOrExit(newEntry != nullptr, error = OT_ERROR_NO_BUFS);
 
     newEntry->Set(aIp6Prefix, Get<Mle::MleRouter>().GetMeshLocalPrefix(), aContext.mContextId);
     Get<ThreadNetif>().AddUnicastAddress(newEntry->GetAloc());
@@ -335,7 +335,7 @@ otError Dhcp6Server::SendReply(otIp6Address &aDst, uint8_t *aTransactionId, Clie
     Ip6::MessageInfo messageInfo;
     Message *        message;
 
-    VerifyOrExit((message = mSocket.NewMessage(0)) != NULL, error = OT_ERROR_NO_BUFS);
+    VerifyOrExit((message = mSocket.NewMessage(0)) != nullptr, error = OT_ERROR_NO_BUFS);
     SuccessOrExit(error = AppendHeader(*message, aTransactionId));
     SuccessOrExit(error = AppendServerIdentifier(*message));
     SuccessOrExit(error = AppendClientIdentifier(*message, aClientId));
@@ -350,7 +350,7 @@ otError Dhcp6Server::SendReply(otIp6Address &aDst, uint8_t *aTransactionId, Clie
 
 exit:
 
-    if (message != NULL && error != OT_ERROR_NONE)
+    if (message != nullptr && error != OT_ERROR_NONE)
     {
         message->Free();
     }
@@ -449,11 +449,11 @@ otError Dhcp6Server::AppendIaAddress(Message &aMessage, ClientIdentifier &aClien
     else
     {
         // if not specified, apply all configured prefixes
-        for (size_t i = 0; i < OT_ARRAY_LENGTH(mPrefixAgents); i++)
+        for (const PrefixAgent &prefixAgent : mPrefixAgents)
         {
-            if (mPrefixAgents[i].IsValid())
+            if (prefixAgent.IsValid())
             {
-                SuccessOrExit(error = AddIaAddress(aMessage, mPrefixAgents[i].GetPrefix(), aClientId));
+                SuccessOrExit(error = AddIaAddress(aMessage, prefixAgent.GetPrefix(), aClientId));
             }
         }
     }
@@ -469,7 +469,8 @@ otError Dhcp6Server::AddIaAddress(Message &aMessage, const Ip6::Address &aPrefix
 
     option.Init();
     option.GetAddress().SetPrefix(aPrefix.mFields.m8, OT_IP6_PREFIX_BITSIZE);
-    option.GetAddress().SetIid(*reinterpret_cast<Mac::ExtAddress *>(aClientId.GetDuidLinkLayerAddress()));
+    option.GetAddress().GetIid().SetFromExtAddress(
+        *reinterpret_cast<Mac::ExtAddress *>(aClientId.GetDuidLinkLayerAddress()));
     option.SetPreferredLifetime(OT_DHCP6_DEFAULT_PREFERRED_LIFETIME);
     option.SetValidLifetime(OT_DHCP6_DEFAULT_VALID_LIFETIME);
     SuccessOrExit(error = aMessage.Append(&option, sizeof(option)));
@@ -488,11 +489,11 @@ otError Dhcp6Server::AppendRapidCommit(Message &aMessage)
 
 void Dhcp6Server::ApplyMeshLocalPrefix(void)
 {
-    for (size_t i = 0; i < OT_ARRAY_LENGTH(mPrefixAgents); i++)
+    for (PrefixAgent &prefixAgent : mPrefixAgents)
     {
-        if (mPrefixAgents[i].IsValid())
+        if (prefixAgent.IsValid())
         {
-            PrefixAgent *entry = &mPrefixAgents[i];
+            PrefixAgent *entry = &prefixAgent;
 
             Get<ThreadNetif>().RemoveUnicastAddress(entry->GetAloc());
             entry->GetAloc().GetAddress().SetPrefix(Get<Mle::MleRouter>().GetMeshLocalPrefix());

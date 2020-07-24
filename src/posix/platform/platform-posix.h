@@ -106,8 +106,11 @@ extern uint64_t gNodeId;
 /**
  * This function initializes the alarm service used by OpenThread.
  *
+ * @param[in]  aSpeedUpFactor   The speed up factor.
+ * @param[in]  aRealTimeSignal  The real time signal for microsecond alarms.
+ *
  */
-void platformAlarmInit(uint32_t aSpeedUpFactor);
+void platformAlarmInit(uint32_t aSpeedUpFactor, int aRealTimeSignal);
 
 /**
  * This function retrieves the time remaining until the alarm fires.
@@ -163,7 +166,7 @@ void platformAlarmAdvanceNow(uint64_t aDelta);
  * @param[in]  aPlatformConfig  Platform configuration structure.
  *
  */
-void platformRadioInit(otPosixRadioArguments *aArguments);
+void platformRadioInit(otUrl *aRadioUrl);
 
 /**
  * This function shuts down the radio service used by OpenThread.

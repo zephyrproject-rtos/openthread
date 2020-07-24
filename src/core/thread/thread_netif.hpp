@@ -48,14 +48,19 @@
 #endif // OPENTHREAD_CONFIG_COMMISSIONER_ENABLE && OPENTHREAD_FTD
 
 #if (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
-#include "backbone_router/leader.hpp"
+#include "backbone_router/bbr_leader.hpp"
 #endif
 #if OPENTHREAD_FTD && OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE
-#include "backbone_router/local.hpp"
+#include "backbone_router/bbr_local.hpp"
+#include "backbone_router/bbr_manager.hpp"
 #endif
 
 #if OPENTHREAD_CONFIG_DUA_ENABLE
 #include "thread/dua_manager.hpp"
+#endif
+
+#if OPENTHREAD_CONFIG_MLR_ENABLE
+#include "thread/mlr_manager.hpp"
 #endif
 
 #include "meshcop/dataset_manager.hpp"
@@ -75,6 +80,7 @@
 #include "net/sntp_client.hpp"
 #include "thread/address_resolver.hpp"
 #include "thread/announce_begin_server.hpp"
+#include "thread/discover_scanner.hpp"
 #include "thread/energy_scan_server.hpp"
 #include "thread/key_manager.hpp"
 #include "thread/mesh_forwarder.hpp"
@@ -210,6 +216,7 @@ private:
     Mac::Mac                mMac;
     MeshForwarder           mMeshForwarder;
     Mle::MleRouter          mMleRouter;
+    Mle::DiscoverScanner    mDiscoverScanner;
 #if OPENTHREAD_CONFIG_BORDER_ROUTER_ENABLE || OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
     NetworkData::Local mNetworkDataLocal;
 #endif // OPENTHREAD_CONFIG_BORDER_ROUTER_ENABLE || OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
@@ -251,10 +258,14 @@ private:
     BackboneRouter::Leader mBackboneRouterLeader;
 #endif
 #if OPENTHREAD_FTD && OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE
-    BackboneRouter::Local mBackboneRouterLocal;
+    BackboneRouter::Local   mBackboneRouterLocal;
+    BackboneRouter::Manager mBackboneRouterManager;
 #endif
 #if OPENTHREAD_CONFIG_DUA_ENABLE
     DuaManager mDuaManager;
+#endif
+#if OPENTHREAD_CONFIG_MLR_ENABLE
+    MlrManager mMlrManager;
 #endif
     Utils::ChildSupervisor     mChildSupervisor;
     Utils::SupervisionListener mSupervisionListener;

@@ -57,8 +57,10 @@ namespace Utils {
  * This class implements the SLAAC utility for Thread protocol.
  *
  */
-class Slaac : public InstanceLocator, public Notifier::Receiver
+class Slaac : public InstanceLocator
 {
+    friend class ot::Notifier;
+
 public:
     enum
     {
@@ -159,10 +161,9 @@ private:
 
     typedef uint8_t UpdateMode;
 
-    bool        ShouldFilter(const otIp6Prefix &aPrefix) const;
+    bool        ShouldFilter(const Ip6::Prefix &aPrefix) const;
     void        Update(UpdateMode aMode);
     void        GetIidSecretKey(IidSecretKey &aKey) const;
-    static void HandleNotifierEvents(Notifier::Receiver &aReceiver, Events aEvents);
     void        HandleNotifierEvents(Events aEvents);
     static bool DoesConfigMatchNetifAddr(const NetworkData::OnMeshPrefixConfig &aConfig,
                                          const Ip6::NetifUnicastAddress &       aAddr);

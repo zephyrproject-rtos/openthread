@@ -79,16 +79,12 @@ void Otns::EmitStatus(const char *aFmt, ...)
     va_start(ap, aFmt);
 
     n = vsnprintf(statusStr, sizeof(statusStr), aFmt, ap);
+    OT_UNUSED_VARIABLE(n);
     OT_ASSERT(n >= 0);
 
     va_end(ap);
 
     otPlatOtnsStatus(statusStr);
-}
-
-void Otns::HandleNotifierEvents(Notifier::Receiver &aReceiver, Events aEvents)
-{
-    static_cast<Otns &>(aReceiver).HandleNotifierEvents(aEvents);
 }
 
 void Otns::HandleNotifierEvents(Events aEvents)
@@ -111,7 +107,7 @@ void Otns::HandleNotifierEvents(Events aEvents)
 #endif
 }
 
-void Otns::EmitNeighborChange(otNeighborTableEvent aEvent, Neighbor &aNeighbor)
+void Otns::EmitNeighborChange(NeighborTable::Event aEvent, const Neighbor &aNeighbor)
 {
     switch (aEvent)
     {

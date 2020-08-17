@@ -139,7 +139,6 @@ LOCAL_EXPORT_C_INCLUDE_DIRS     := \
 LOCAL_CPPFLAGS                                                              := \
     -std=c++11                                                                 \
     -pedantic-errors                                                           \
-    -Wno-non-virtual-dtor                                                      \
     $(NULL)
 
 LOCAL_SRC_FILES                                          := \
@@ -256,6 +255,7 @@ LOCAL_SRC_FILES                                          := \
     src/core/thread/mle_router.cpp                          \
     src/core/thread/mle_types.cpp                           \
     src/core/thread/mlr_manager.cpp                         \
+    src/core/thread/neighbor_table.cpp                      \
     src/core/thread/network_data.cpp                        \
     src/core/thread/network_data_leader.cpp                 \
     src/core/thread/network_data_leader_ftd.cpp             \
@@ -350,7 +350,6 @@ LOCAL_CFLAGS                                                                := \
 LOCAL_CPPFLAGS                                                              := \
     -std=c++11                                                                 \
     -pedantic-errors                                                           \
-    -Wno-non-virtual-dtor                                                      \
     $(NULL)
 
 LOCAL_SRC_FILES                            := \
@@ -361,7 +360,6 @@ LOCAL_SRC_FILES                            := \
     src/cli/cli_console.cpp                   \
     src/cli/cli_dataset.cpp                   \
     src/cli/cli_joiner.cpp                    \
-    src/cli/cli_server.cpp                    \
     src/cli/cli_uart.cpp                      \
     src/cli/cli_udp.cpp                       \
     $(NULL)
@@ -395,7 +393,6 @@ LOCAL_CFLAGS                                                                := \
 LOCAL_CPPFLAGS                                                              := \
     -std=c++11                                                                 \
     -pedantic-errors                                                           \
-    -Wno-non-virtual-dtor                                                      \
     $(NULL)
 
 LOCAL_LDLIBS                               := \
@@ -435,7 +432,6 @@ LOCAL_CFLAGS                                                                := \
 LOCAL_CPPFLAGS                                                              := \
     -std=c++11                                                                 \
     -pedantic-errors                                                           \
-    -Wno-non-virtual-dtor                                                      \
     $(NULL)
 
 LOCAL_SRC_FILES                            := \
@@ -477,7 +473,6 @@ LOCAL_CFLAGS                                                                := \
 LOCAL_CPPFLAGS                                                              := \
     -std=c++11                                                                 \
     -pedantic-errors                                                           \
-    -Wno-non-virtual-dtor                                                      \
     $(NULL)
 
 LOCAL_SRC_FILES                            := \
@@ -501,7 +496,6 @@ LOCAL_MODULE_TAGS := eng
 LOCAL_CPPFLAGS                                                              := \
     -std=c++11                                                                 \
     -pedantic-errors                                                           \
-    -Wno-non-virtual-dtor                                                      \
     $(NULL)
 
 LOCAL_CFLAGS                                               := \

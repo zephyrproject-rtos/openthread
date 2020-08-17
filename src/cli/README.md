@@ -61,6 +61,7 @@ Done
 - [masterkey](#masterkey)
 - [mode](#mode)
 - [neighbor](#neighbor-list)
+- [netdata](#netdata-steeringdata-check-eui64discerner)
 - [netdataregister](#netdataregister)
 - [netdatashow](#netdatashow)
 - [netstat](#netstat)
@@ -94,6 +95,7 @@ Done
 - [state](#state)
 - [thread](#thread-start)
 - [txpower](#txpower)
+- [unsecureport](#unsecureport-add-port)
 - [version](#version)
 
 ## OpenThread Command Details
@@ -115,6 +117,27 @@ Done
 ```bash
 > bbr
 BBR Primary: None
+Done
+```
+
+### bbr mgmt dua \<status\> [meshLocalIid]
+
+Configure the response status for DUA.req with meshLocalIid in payload. Without meshLocalIid, simply respond any coming DUA.req next with the specified status.
+
+Only for testing/reference device.
+
+known status value:
+
+- 0: ST_DUA_SUCCESS
+- 1: ST_DUA_REREGISTER
+- 2: ST_DUA_INVALID
+- 3: ST_DUA_DUPLICATE
+- 4: ST_DUA_NO_RESOURCES
+- 5: ST_DUA_BBR_NOT_PRIMARY
+- 6: ST_DUA_GENERAL_FAILURE
+
+```bash
+> bbr mgmt dua 1 2f7c235e5025a2fd
 Done
 ```
 
@@ -1024,6 +1047,22 @@ Print table of neighbors.
 Done
 ```
 
+### netdata steeringdata check \<eui64\>|\<discerner\>
+
+Check whether the steering data includes a joiner.
+
+- eui64: The IEEE EUI-64 of the Joiner.
+- discerner: The Joiner discerner in format `number/length`.
+
+```bash
+> netdata steeeringdata check d45e64fa83f81cf7
+Done
+> netdata steeeringdata check 0xabc/12
+Done
+> netdata steeeringdata check 0xdef/12
+Error: NotFound
+```
+
 ### netdataregister
 
 Register local network data with Thread Leader.
@@ -1677,6 +1716,43 @@ Set the transmit power.
 
 ```bash
 > txpower -10
+Done
+```
+
+### unsecureport add \<port\>
+
+Add a port to the allowed unsecured port list.
+
+```bash
+> unsecureport add 1234
+Done
+```
+
+### unsecureport remove \<port\>
+
+Remove a port from the allowed unsecured port list.
+
+```bash
+> unsecureport remove 1234
+Done
+```
+
+### unsecureport remove all
+
+Remove all ports from the allowed unsecured port list.
+
+```bash
+> unsecureport remove all
+Done
+```
+
+### unsecureport get
+
+Print all ports from the allowed unsecured port list.
+
+```bash
+> unsecureport get
+1234
 Done
 ```
 

@@ -40,6 +40,7 @@ COVERAGE            ?= 0
 CHANNEL_MANAGER     ?= 0
 CHANNEL_MONITOR     ?= 0
 CHILD_SUPERVISION   ?= 0
+CLI_TRANSPORT       ?= UART
 DEBUG               ?= 0
 DHCP6_CLIENT        ?= 0
 DHCP6_SERVER        ?= 0
@@ -123,6 +124,10 @@ endif
 
 ifeq ($(CHILD_SUPERVISION),1)
 COMMONCFLAGS                   += -DOPENTHREAD_CONFIG_CHILD_SUPERVISION_ENABLE=1
+endif
+
+ifneq ($(CLI_TRANSPORT),)
+COMMONCFLAGS                   += -DOPENTHREAD_CONFIG_CLI_TRANSPORT=OT_CLI_TRANSPORT_$(CLI_TRANSPORT)
 endif
 
 ifeq ($(CSL_RECEIVER),1)
@@ -281,6 +286,10 @@ endif
 
 ifeq ($(OTNS),1)
 COMMONCFLAGS += -DOPENTHREAD_CONFIG_OTNS_ENABLE=1
+endif
+
+ifneq ($(SPINEL_ENCRYPTER_LIBS),)
+configure_OPTIONS              += --with-ncp-spinel-encrypter-libs=$(SPINEL_ENCRYPTER_LIBS)
 endif
 
 ifeq ($(FULL_LOGS),1)

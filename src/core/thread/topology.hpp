@@ -38,6 +38,7 @@
 
 #include <openthread/thread_ftd.h>
 
+#include "common/clearable.hpp"
 #include "common/locator.hpp"
 #include "common/message.hpp"
 #include "common/random.hpp"
@@ -82,12 +83,112 @@ public:
      */
     enum StateFilter
     {
-        kInStateValid,                     ///< Accept child only in `kStateValid`.
-        kInStateValidOrRestoring,          ///< Accept child with `IsStateValidOrRestoring()` being `true`.
-        kInStateChildIdRequest,            ///< Accept child only in `Child:kStateChildIdRequest`.
-        kInStateValidOrAttaching,          ///< Accept child with `IsStateValidOrAttaching()` being `true`.
-        kInStateAnyExceptInvalid,          ///< Accept child in any state except `kStateInvalid`.
-        kInStateAnyExceptValidOrRestoring, ///< Accept child in any state except `IsStateValidOrRestoring()`.
+        kInStateValid,                     ///< Accept neighbor only in `kStateValid`.
+        kInStateValidOrRestoring,          ///< Accept neighbor with `IsStateValidOrRestoring()` being `true`.
+        kInStateChildIdRequest,            ///< Accept neighbor only in `Child:kStateChildIdRequest`.
+        kInStateValidOrAttaching,          ///< Accept neighbor with `IsStateValidOrAttaching()` being `true`.
+        kInStateInvalid,                   ///< Accept neighbor only in `kStateInvalid`.
+        kInStateAnyExceptInvalid,          ///< Accept neighbor in any state except `kStateInvalid`.
+        kInStateAnyExceptValidOrRestoring, ///< Accept neighbor in any state except `IsStateValidOrRestoring()`.
+        kInStateAny,                       ///< Accept neighbor in any state.
+    };
+
+    /**
+     * This class represents an Address Matcher used to find a neighbor (child/router) with a given MAC address also
+     * matching a given state filter.
+     *
+     */
+    class AddressMatcher
+    {
+    public:
+        /**
+         * This constructor initializes the `AddressMatcher` with a given MAC short address (RCOC16) and state filter.
+         *
+         * @param[in]  aShortAddress   A MAC short address (RLOC16).
+         * @param[in]  aStateFilter    A state filter.
+         *
+         */
+        AddressMatcher(Mac::ShortAddress aShortAddress, StateFilter aStateFilter)
+            : AddressMatcher(aStateFilter, aShortAddress, nullptr)
+        {
+        }
+
+        /**
+         * This constructor initializes the `AddressMatcher` with a given MAC extended address and state filter.
+         *
+         * @param[in]  aExtAddress     A MAC extended address.
+         * @param[in]  aStateFilter    A state filter.
+         *
+         */
+        AddressMatcher(const Mac::ExtAddress &aExtAddress, StateFilter aStateFilter)
+            : AddressMatcher(aStateFilter, Mac::kShortAddrInvalid, &aExtAddress)
+        {
+        }
+
+        /**
+         * This constructor initializes the `AddressMatcher` with a given MAC address and state filter.
+         *
+         * @param[in]  aMacAddress     A MAC address.
+         * @param[in]  aStateFilter    A state filter.
+         *
+         */
+        AddressMatcher(const Mac::Address &aMacAddress, StateFilter aStateFilter)
+            : AddressMatcher(aStateFilter,
+                             aMacAddress.IsShort() ? aMacAddress.GetShort()
+                                                   : static_cast<Mac::ShortAddress>(Mac::kShortAddrInvalid),
+                             aMacAddress.IsExtended() ? &aMacAddress.GetExtended() : nullptr)
+        {
+        }
+
+        /**
+         * This constructor initializes the `AddressMatcher` with a given state filter (it accepts any address).
+         *
+         * @param[in]  aStateFilter    A state filter.
+         *
+         */
+        explicit AddressMatcher(StateFilter aStateFilter)
+            : AddressMatcher(aStateFilter, Mac::kShortAddrInvalid, nullptr)
+        {
+        }
+
+        /**
+         * This method indicates if a given neighbor matches the address and state filter of `AddressMatcher`.
+         *
+         * @param[in] aNeighbor   A neighbor.
+         *
+         * @retval TRUE   Neighbor @p aNeighbor matches the address and state filter.
+         * @retval FALSE  Neighbor @p aNeighbor does not match the address or state filter.
+         *
+         */
+        bool Matches(const Neighbor &aNeighbor) const;
+
+    private:
+        AddressMatcher(StateFilter aStateFilter, Mac::ShortAddress aShortAddress, const Mac::ExtAddress *aExtAddress)
+            : mStateFilter(aStateFilter)
+            , mShortAddress(aShortAddress)
+            , mExtAddress(aExtAddress)
+        {
+        }
+
+        StateFilter            mStateFilter;
+        Mac::ShortAddress      mShortAddress;
+        const Mac::ExtAddress *mExtAddress;
+    };
+
+    /**
+     * This type represents diagnostic information for a neighboring node.
+     *
+     */
+    class Info : public otNeighborInfo, public Clearable<Info>
+    {
+    public:
+        /**
+         * This method sets the `Info` instance from a given `Neighbor`.
+         *
+         * @param[in] aNeighbor   A neighbor.
+         *
+         */
+        void SetFrom(const Neighbor &aNeighbor);
     };
 
     /**
@@ -192,6 +293,16 @@ public:
      *
      */
     bool MatchesFilter(StateFilter aFilter) const;
+
+    /**
+     * This method indicates whether neighbor matches a given `AddressMatcher`.
+     *
+     * @param[in]  aMatcher   An `AddressMatcher` to match against.
+     *
+     * @returns TRUE if the neighbor matches the address and state filter of @p aMatcher, FALSE otherwise.
+     *
+     */
+    bool Matches(const AddressMatcher &aMatcher) const { return aMatcher.Matches(*this); }
 
     /**
      * This method gets the device mode flags.
@@ -413,6 +524,14 @@ public:
     LinkQualityInfo &GetLinkInfo(void) { return mLinkInfo; }
 
     /**
+     * This method returns the LinkQualityInfo object.
+     *
+     * @returns The LinkQualityInfo object.
+     *
+     */
+    const LinkQualityInfo &GetLinkInfo(void) const { return mLinkInfo; }
+
+    /**
      * This method generates a new challenge value for MLE Link Request/Response exchanges.
      *
      */
@@ -503,6 +622,22 @@ public:
     enum
     {
         kMaxRequestTlvs = 5,
+    };
+
+    /**
+     * This class represents diagnostic information for a Thread Child.
+     *
+     */
+    class Info : public otChildInfo, public Clearable<Info>
+    {
+    public:
+        /**
+         * This method sets the `Info` instance from a given `Child`.
+         *
+         * @param[in] aChild   A neighbor.
+         *
+         */
+        void SetFrom(const Child &aChild);
     };
 
     /**
@@ -759,6 +894,16 @@ public:
      */
     bool HasIp6Address(const Ip6::Address &aAddress) const;
 
+#if OPENTHREAD_CONFIG_TMF_PROXY_DUA_ENABLE
+    /**
+     * This method retrieves the Domain Unicast Address registered by the child.
+     *
+     * @returns A pointer to Domain Unicast Address registered by the child if there is.
+     *
+     */
+    const Ip6::Address *GetDomainUnicastAddress(void) const;
+#endif
+
     /**
      * This method gets the child timeout.
      *
@@ -862,6 +1007,60 @@ public:
 
 #endif // #if OPENTHREAD_CONFIG_CHILD_SUPERVISION_ENABLE
 
+#if OPENTHREAD_CONFIG_TMF_PROXY_MLR_ENABLE
+    /**
+     * This method returns MLR state of an Ip6 multicast address.
+     *
+     * @note The @p aAdddress reference MUST be from `IterateIp6Addresses()` or `AddressIterator`.
+     *
+     * @param[in] aAddress  The Ip6 multicast address.
+     *
+     * @returns MLR state of the Ip6 multicast address.
+     *
+     */
+    MlrState GetAddressMlrState(const Ip6::Address &aAddress) const;
+
+    /**
+     * This method sets MLR state of an Ip6 multicast address.
+     *
+     * @note The @p aAdddress reference MUST be from `IterateIp6Addresses()` or `AddressIterator`.
+     *
+     * @param[in] aAddress  The Ip6 multicast address.
+     * @param[in] aState    The target MLR state.
+     *
+     */
+    void SetAddressMlrState(const Ip6::Address &aAddress, MlrState aState);
+
+    /**
+     * This method returns if the Child has Ip6 address @p aAddress of MLR state `kMlrStateRegistered`.
+     *
+     * @param[in] aAddress  The Ip6 address.
+     *
+     * @retval true   If the Child has Ip6 address @p aAddress of MLR state `kMlrStateRegistered`.
+     * @retval false  If the Child does not have Ip6 address @p aAddress of MLR state `kMlrStateRegistered`.
+     *
+     */
+    bool HasMlrRegisteredAddress(const Ip6::Address &aAddress) const;
+
+    /**
+     * This method returns if the Child has any Ip6 address of MLR state `kMlrStateRegistered`.
+     *
+     * @retval true   If the Child has any Ip6 address of MLR state `kMlrStateRegistered`.
+     * @retval false  If the Child does not have any Ip6 address of MLR state `kMlrStateRegistered`.
+     *
+     */
+    bool HasAnyMlrRegisteredAddress(void) const { return mMlrRegisteredMask.HasAny(); }
+
+    /**
+     * This method returns if the Child has any Ip6 address of MLR state `kMlrStateToRegister`.
+     *
+     * @retval true   If the Child has any Ip6 address of MLR state `kMlrStateToRegister`.
+     * @retval false  If the Child does not have any Ip6 address of MLR state `kMlrStateToRegister`.
+     *
+     */
+    bool HasAnyMlrToRegisterAddress(void) const { return mMlrToRegisterMask.HasAny(); }
+#endif // OPENTHREAD_CONFIG_TMF_PROXY_MLR_ENABLE
+
 private:
 #if OPENTHREAD_CONFIG_MLE_IP_ADDRS_PER_CHILD < 2
 #error OPENTHREAD_CONFIG_MLE_IP_ADDRS_PER_CHILD should be at least set to 2.
@@ -871,6 +1070,8 @@ private:
     {
         kNumIp6Addresses = OPENTHREAD_CONFIG_MLE_IP_ADDRS_PER_CHILD - 1,
     };
+
+    typedef BitVector<kNumIp6Addresses> ChildIp6AddressMask;
 
     class AddressIteratorBuilder
     {
@@ -889,11 +1090,16 @@ private:
         Ip6::Address::TypeFilter mFilter;
     };
 
-    uint8_t                  mNetworkDataVersion;           ///< Current Network Data version
     Ip6::InterfaceIdentifier mMeshLocalIid;                 ///< IPv6 address IID for mesh-local address
     Ip6::Address             mIp6Address[kNumIp6Addresses]; ///< Registered IPv6 addresses
+    uint32_t                 mTimeout;                      ///< Child timeout
 
-    uint32_t mTimeout; ///< Child timeout
+#if OPENTHREAD_CONFIG_TMF_PROXY_MLR_ENABLE
+    ChildIp6AddressMask mMlrToRegisterMask;
+    ChildIp6AddressMask mMlrRegisteredMask;
+#endif
+
+    uint8_t mNetworkDataVersion; ///< Current Network Data version
 
     union
     {
@@ -915,6 +1121,22 @@ private:
 class Router : public Neighbor
 {
 public:
+    /**
+     * This class represents diagnostic information for a Thread Router.
+     *
+     */
+    class Info : public otRouterInfo, public Clearable<Info>
+    {
+    public:
+        /**
+         * This method sets the `Info` instance from a given `Router`.
+         *
+         * @param[in] aRouter   A router.
+         *
+         */
+        void SetFrom(const Router &aRouter);
+    };
+
     /**
      * This method initializes the `Router` object.
      *

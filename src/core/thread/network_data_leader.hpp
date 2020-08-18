@@ -137,10 +137,10 @@ public:
     /**
      * This method performs a route lookup using the Network Data.
      *
-     * @param[in]   aSource       A reference to the IPv6 source address.
-     * @param[in]   aDestination  A reference to the IPv6 destination address.
-     * @param[out]  aPrefixMatch  A pointer to the longest prefix match length in bits.
-     * @param[out]  aRloc16       A pointer to the RLOC16 for the selected route.
+     * @param[in]   aSource             A reference to the IPv6 source address.
+     * @param[in]   aDestination        A reference to the IPv6 destination address.
+     * @param[out]  aPrefixMatchLength  A pointer to output the longest prefix match length in bits.
+     * @param[out]  aRloc16             A pointer to the RLOC16 for the selected route.
      *
      * @retval OT_ERROR_NONE      Successfully found a route.
      * @retval OT_ERROR_NO_ROUTE  No valid route was found.
@@ -148,7 +148,7 @@ public:
      */
     otError RouteLookup(const Ip6::Address &aSource,
                         const Ip6::Address &aDestination,
-                        uint8_t *           aPrefixMatch,
+                        uint8_t *           aPrefixMatchLength,
                         uint16_t *          aRloc16) const;
 
     /**
@@ -246,6 +246,30 @@ public:
     otError SetCommissioningData(const uint8_t *aValue, uint8_t aValueLength);
 
     /**
+     * This method checks if the steering data includes a Joiner.
+     *
+     * @param[in]  aEui64             A reference to the Joiner's IEEE EUI-64.
+     *
+     * @retval OT_ERROR_NONE          @p aEui64 is in the bloom filter.
+     * @retval OT_ERROR_INVALID_STATE No steering data present.
+     * @retval OT_ERROR_NOT_FOUND     @p aEui64 is not in the bloom filter.
+     *
+     */
+    otError SteeringDataCheckJoiner(const Mac::ExtAddress &aEui64) const;
+
+    /**
+     * This method checks if the steering data includes a Joiner with a given discerner value.
+     *
+     * @param[in]  aDiscerner         A reference to the Joiner Discerner.
+     *
+     * @retval OT_ERROR_NONE          @p aDiscerner is in the bloom filter.
+     * @retval OT_ERROR_INVALID_STATE No steering data present.
+     * @retval OT_ERROR_NOT_FOUND     @p aDiscerner is not in the bloom filter.
+     *
+     */
+    otError SteeringDataCheckJoiner(const MeshCoP::JoinerDiscerner &aDiscerner) const;
+
+    /**
      * This method gets the Rloc of Dhcp Agent of specified contextId.
      *
      * @param[in]  aContextId      A pointer to the Commissioning Data value.
@@ -294,15 +318,18 @@ protected:
     uint8_t mVersion;
 
 private:
+    using FilterIndexes = MeshCoP::SteeringData::HashBitIndexes;
+
     const PrefixTlv *FindNextMatchingPrefix(const Ip6::Address &aAddress, const PrefixTlv *aPrevTlv) const;
 
     void RemoveCommissioningData(void);
 
     otError ExternalRouteLookup(uint8_t             aDomainId,
                                 const Ip6::Address &aDestination,
-                                uint8_t *           aPrefixMatch,
+                                uint8_t *           aPrefixMatchLength,
                                 uint16_t *          aRloc16) const;
     otError DefaultRouteLookup(const PrefixTlv &aPrefix, uint16_t *aRloc16) const;
+    otError SteeringDataCheck(const FilterIndexes &aFilterIndexes) const;
 };
 
 /**

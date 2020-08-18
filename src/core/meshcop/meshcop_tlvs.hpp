@@ -57,6 +57,8 @@ namespace MeshCoP {
 
 using ot::Encoding::BigEndian::HostSwap16;
 using ot::Encoding::BigEndian::HostSwap32;
+using ot::Encoding::BigEndian::ReadUint24;
+using ot::Encoding::BigEndian::WriteUint24;
 
 /**
  * This class implements MeshCoP TLV generation and parsing.
@@ -111,6 +113,7 @@ public:
         kEnergyList              = OT_MESHCOP_TLV_ENERGY_LIST,              ///< Energy List TLV
         kDiscoveryRequest        = OT_MESHCOP_TLV_DISCOVERYREQUEST,         ///< Discovery Request TLV
         kDiscoveryResponse       = OT_MESHCOP_TLV_DISCOVERYRESPONSE,        ///< Discovery Response TLV
+        kJoinerAdvertisement     = OT_MESHCOP_TLV_JOINERADVERTISEMENT,      ///< Joiner Advertisement TLV
     };
 
     /**
@@ -781,7 +784,7 @@ public:
      * @param[out]  aSteeringData   A reference to a `SteeringData` to copy into.
      *
      */
-    void CopyTo(SteeringData &aSteeringData);
+    void CopyTo(SteeringData &aSteeringData) const;
 
 private:
     uint8_t mSteeringData[OT_STEERING_DATA_MAX_LENGTH];
@@ -1614,6 +1617,18 @@ public:
     }
 
     /**
+     * This method indicates whether or not the TLV appears to be well-formed.
+     *
+     * @retval TRUE   If the TLV appears to be well-formed.
+     * @retval FALSE  If the TLV does not appear to be well-formed.
+     *
+     */
+    bool IsValid(void) const
+    {
+        return GetType() == kProvisioningUrl && mProvisioningUrl[GetProvisioningUrlLength()] == '\0';
+    }
+
+    /**
      * This method returns the Provisioning URL value.
      *
      * @returns The Provisioning URL value.
@@ -1967,11 +1982,7 @@ public:
      * @returns The Vendor Stack Vendor OUI value.
      *
      */
-    uint32_t GetOui(void) const
-    {
-        return (static_cast<uint32_t>(mOui[0]) << 16) | (static_cast<uint32_t>(mOui[1]) << 8) |
-               static_cast<uint32_t>(mOui[2]);
-    }
+    uint32_t GetOui(void) const { return ReadUint24(mOui); }
 
     /**
      * This method returns the Stack Vendor OUI value.
@@ -1979,12 +1990,7 @@ public:
      * @param[in]  aOui  The Vendor Stack Vendor OUI value.
      *
      */
-    void SetOui(uint32_t aOui)
-    {
-        mOui[0] = (aOui >> 16) & 0xff;
-        mOui[1] = (aOui >> 8) & 0xff;
-        mOui[2] = aOui & 0xff;
-    }
+    void SetOui(uint32_t aOui) { WriteUint24(aOui, mOui); }
 
     /**
      * This method returns the Build value.
@@ -2352,6 +2358,91 @@ private:
     };
     uint8_t mFlags;
     uint8_t mReserved;
+} OT_TOOL_PACKED_END;
+
+/**
+ * This class implements Joiner Advertisement TLV generation and parsing.
+ *
+ */
+OT_TOOL_PACKED_BEGIN
+class JoinerAdvertisementTlv : public Tlv
+{
+public:
+    enum
+    {
+        kType             = kJoinerAdvertisement,         ///< The TLV Type.
+        kAdvDataMaxLength = OT_JOINER_ADVDATA_MAX_LENGTH, ///< The Max Length of AdvData
+    };
+
+    /**
+     * This method initializes the TLV.
+     *
+     */
+    void Init(void)
+    {
+        SetType(kJoinerAdvertisement);
+        SetLength(sizeof(*this) - sizeof(Tlv));
+    }
+
+    /**
+     * This method indicates whether or not the TLV appears to be well-formed.
+     *
+     * @retval TRUE   If the TLV appears to be well-formed.
+     * @retval FALSE  If the TLV does not appear to be well-formed.
+     *
+     */
+    bool IsValid(void) const { return GetLength() >= sizeof(mOui) && GetLength() <= sizeof(mOui) + sizeof(mAdvData); }
+
+    /**
+     * This method returns the Vendor OUI value.
+     *
+     * @returns The Vendor OUI value.
+     *
+     */
+    uint32_t GetOui(void) const { return ReadUint24(mOui); }
+
+    /**
+     * This method sets the Vendor OUI value.
+     *
+     * @param[in]  aOui The Vendor OUI value.
+     *
+     */
+    void SetOui(uint32_t aOui) { return WriteUint24(aOui, mOui); }
+
+    /**
+     * This method returns the Adv Data length.
+     *
+     * @returns The AdvData length.
+     *
+     */
+    uint8_t GetAdvDataLength(void) const { return GetLength() - sizeof(mOui); }
+
+    /**
+     * This method returns the Adv Data value.
+     *
+     * @returns A pointer to the Adv Data value.
+     *
+     */
+    const uint8_t *GetAdvData(void) const { return mAdvData; }
+
+    /**
+     * This method sets the Adv Data value.
+     *
+     * @param[in]  aAdvData        A pointer to the AdvData value.
+     * @param[in]  aAdvDataLength  The length of AdvData in bytes.
+     *
+     */
+    void SetAdvData(const uint8_t *aAdvData, uint8_t aAdvDataLength)
+    {
+        OT_ASSERT((aAdvData != nullptr) && (aAdvDataLength > 0) && (aAdvDataLength <= kAdvDataMaxLength));
+
+        SetLength(aAdvDataLength + sizeof(mOui));
+        memcpy(mAdvData, aAdvData, aAdvDataLength);
+    }
+
+private:
+    uint8_t mOui[3];
+    uint8_t mAdvData[kAdvDataMaxLength];
 } OT_TOOL_PACKED_END;
 
 } // namespace MeshCoP

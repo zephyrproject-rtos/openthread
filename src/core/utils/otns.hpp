@@ -47,6 +47,7 @@
 #include "common/notifier.hpp"
 #include "mac/mac_types.hpp"
 #include "net/ip6_address.hpp"
+#include "thread/neighbor_table.hpp"
 #include "thread/topology.hpp"
 
 namespace ot {
@@ -56,8 +57,10 @@ namespace Utils {
  * This class implements the OTNS Stub that interacts with OTNS.
  *
  */
-class Otns : public InstanceLocator, public Notifier::Receiver, private NonCopyable
+class Otns : public InstanceLocator, private NonCopyable
 {
+    friend class ot::Notifier;
+
 public:
     /**
      * This constructor initializes the object.
@@ -67,7 +70,6 @@ public:
      */
     explicit Otns(Instance &aInstance)
         : InstanceLocator(aInstance)
-        , Notifier::Receiver(aInstance, Otns::HandleNotifierEvents)
     {
     }
 
@@ -122,7 +124,7 @@ public:
      * @param[in]  aNeighbor  The neighbor that is added or removed.
      *
      */
-    static void EmitNeighborChange(otNeighborTableEvent aEvent, Neighbor &aNeighbor);
+    static void EmitNeighborChange(NeighborTable::Event aEvent, const Neighbor &aNeighbor);
 
     /**
      * This function emits a transmit event to OTNS.
@@ -142,8 +144,6 @@ public:
 
 private:
     static void EmitStatus(const char *aFmt, ...);
-
-    static void HandleNotifierEvents(Notifier::Receiver &aReceiver, Events aEvents);
     void        HandleNotifierEvents(Events aEvents);
 };
 

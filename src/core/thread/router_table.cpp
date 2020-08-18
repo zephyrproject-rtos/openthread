@@ -59,9 +59,9 @@ RouterTable::RouterTable(Instance &aInstance)
     , mRouterIdSequence(Random::NonCrypto::GetUint8())
     , mActiveRouterCount(0)
 {
-    for (uint8_t index = 0; index < Mle::kMaxRouters; index++)
+    for (Router &router : mRouters)
     {
-        mRouters[index].Init(aInstance);
+        router.Init(aInstance);
     }
 
     Clear();
@@ -96,13 +96,11 @@ void RouterTable::Clear(void)
 
 void RouterTable::ClearNeighbors(void)
 {
-    for (uint8_t index = 0; index < Mle::kMaxRouters; index++)
+    for (Router &router : mRouters)
     {
-        Router &router = mRouters[index];
-
         if (router.IsStateValid())
         {
-            Get<Mle::MleRouter>().Signal(OT_NEIGHBOR_TABLE_EVENT_ROUTER_REMOVED, router);
+            Get<NeighborTable>().Signal(OT_NEIGHBOR_TABLE_EVENT_ROUTER_REMOVED, router);
         }
 
         router.SetState(Neighbor::kStateInvalid);
@@ -344,19 +342,27 @@ uint8_t RouterTable::GetActiveLinkCount(void) const
     return activeLinks;
 }
 
+const Router *RouterTable::FindRouter(const Router::AddressMatcher &aMatcher) const
+{
+    const Router *router;
+
+    for (router = GetFirstEntry(); router != nullptr; router = GetNextEntry(router))
+    {
+        if (router->Matches(aMatcher))
+        {
+            break;
+        }
+    }
+
+    return router;
+}
+
 Router *RouterTable::GetNeighbor(uint16_t aRloc16)
 {
     Router *router = nullptr;
 
     VerifyOrExit(aRloc16 != Get<Mle::MleRouter>().GetRloc16(), OT_NOOP);
-
-    for (router = GetFirstEntry(); router != nullptr; router = GetNextEntry(router))
-    {
-        if (router->IsStateValid() && router->GetRloc16() == aRloc16)
-        {
-            ExitNow();
-        }
-    }
+    router = FindRouter(Router::AddressMatcher(aRloc16, Router::kInStateValid));
 
 exit:
     return router;
@@ -364,20 +370,12 @@ exit:
 
 Router *RouterTable::GetNeighbor(const Mac::ExtAddress &aExtAddress)
 {
-    Router *router = nullptr;
+    return FindRouter(Router::AddressMatcher(aExtAddress, Router::kInStateValid));
+}
 
-    VerifyOrExit(aExtAddress != Get<Mac::Mac>().GetExtAddress(), OT_NOOP);
-
-    for (router = GetFirstEntry(); router != nullptr; router = GetNextEntry(router))
-    {
-        if (router->IsStateValid() && router->GetExtAddress() == aExtAddress)
-        {
-            ExitNow();
-        }
-    }
-
-exit:
-    return router;
+Router *RouterTable::GetNeighbor(const Mac::Address &aMacAddress)
+{
+    return FindRouter(Router::AddressMatcher(aMacAddress, Router::kInStateValid));
 }
 
 const Router *RouterTable::GetRouter(uint8_t aRouterId) const
@@ -389,14 +387,7 @@ const Router *RouterTable::GetRouter(uint8_t aRouterId) const
     VerifyOrExit(aRouterId < Mle::kInvalidRouterId, OT_NOOP);
 
     rloc16 = Mle::Mle::Rloc16FromRouterId(aRouterId);
-
-    for (router = GetFirstEntry(); router != nullptr; router = GetNextEntry(router))
-    {
-        if (router->GetRloc16() == rloc16)
-        {
-            break;
-        }
-    }
+    router = FindRouter(Router::AddressMatcher(rloc16, Router::kInStateAny));
 
 exit:
     return router;
@@ -404,20 +395,10 @@ exit:
 
 Router *RouterTable::GetRouter(const Mac::ExtAddress &aExtAddress)
 {
-    Router *router = nullptr;
-
-    for (router = GetFirstEntry(); router != nullptr; router = GetNextEntry(router))
-    {
-        if (router->GetExtAddress() == aExtAddress)
-        {
-            break;
-        }
-    }
-
-    return router;
+    return FindRouter(Router::AddressMatcher(aExtAddress, Router::kInStateAny));
 }
 
-otError RouterTable::GetRouterInfo(uint16_t aRouterId, otRouterInfo &aRouterInfo)
+otError RouterTable::GetRouterInfo(uint16_t aRouterId, Router::Info &aRouterInfo)
 {
     otError error = OT_ERROR_NONE;
     Router *router;
@@ -437,17 +418,7 @@ otError RouterTable::GetRouterInfo(uint16_t aRouterId, otRouterInfo &aRouterInfo
     router = GetRouter(routerId);
     VerifyOrExit(router != nullptr, error = OT_ERROR_NOT_FOUND);
 
-    memset(&aRouterInfo, 0, sizeof(aRouterInfo));
-    aRouterInfo.mRouterId        = routerId;
-    aRouterInfo.mRloc16          = Mle::Mle::Rloc16FromRouterId(routerId);
-    aRouterInfo.mExtAddress      = router->GetExtAddress();
-    aRouterInfo.mAllocated       = true;
-    aRouterInfo.mNextHop         = router->GetNextHop();
-    aRouterInfo.mLinkEstablished = router->IsStateValid();
-    aRouterInfo.mPathCost        = router->GetCost();
-    aRouterInfo.mLinkQualityIn   = router->GetLinkInfo().GetLinkQuality();
-    aRouterInfo.mLinkQualityOut  = router->GetLinkQualityOut();
-    aRouterInfo.mAge             = static_cast<uint8_t>(Time::MsecToSec(TimerMilli::GetNow() - router->GetLastHeard()));
+    aRouterInfo.SetFrom(*router);
 
 exit:
     return error;

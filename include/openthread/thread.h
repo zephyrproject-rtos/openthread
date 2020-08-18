@@ -265,6 +265,30 @@ otError otThreadDiscover(otInstance *             aInstance,
 bool otThreadIsDiscoverInProgress(otInstance *aInstance);
 
 /**
+ * This method sets the Thread Joiner Advertisement when discovering Thread network.
+ *
+ * Thread Joiner Advertisement is used to allow a Joiner to advertise its own application-specific information
+ * (such as Vendor ID, Product ID, Discriminator, etc.) via a newly-proposed Joiner Advertisement TLV,
+ * and to make this information available to Commissioners or Commissioner Candidates without human interaction.
+ *
+ * @param[in]  aInstance        A pointer to an OpenThread instance.
+ * @param[in]  aOui             The Vendor IEEE OUI value that will be included in the Joiner Advertisement. Only the
+ *                              least significant 3 bytes will be used, and the most significant byte will be ignored.
+ * @param[in]  aAdvData         A pointer to the AdvData that will be included in the Joiner Advertisement.
+ * @param[in]  aAdvDataLength   The length of AdvData in bytes.
+ *
+ * @retval OT_ERROR_NONE         Successfully set Joiner Advertisement.
+ * @retval OT_ERROR_INVALID_ARGS Invalid AdvData.
+ *
+ */
+otError otThreadSetJoinerAdvertisement(otInstance *   aInstance,
+                                       uint32_t       aOui,
+                                       const uint8_t *aAdvData,
+                                       uint8_t        aAdvDataLength);
+
+#define OT_JOINER_ADVDATA_MAX_LENGTH 64 ///< Maximum AdvData Length of Joiner Advertisement
+
+/**
  * Get the Thread Child Timeout used when operating in the Child role.
  *
  * @param[in]  aInstance A pointer to an OpenThread instance.
@@ -781,6 +805,37 @@ void otThreadRegisterParentResponseCallback(otInstance *                   aInst
                                             otThreadParentResponseCallback aCallback,
                                             void *                         aContext);
 
+/**
+ * This structure represents the Thread Discovery Request data.
+ *
+ */
+typedef struct otThreadDiscoveryRequestInfo
+{
+    otExtAddress mExtAddress;   ///< IEEE 802.15.4 Extended Address of the requester
+    uint8_t      mVersion : 4;  ///< Thread version.
+    bool         mIsJoiner : 1; ///< Whether is from joiner.
+} otThreadDiscoveryRequestInfo;
+
+/**
+ * This function pointer is called every time an MLE Discovery Request message is received.
+ *
+ * @param[in]  aInfo     A pointer to the Discovery Request info data.
+ * @param[in]  aContext  A pointer to callback application-specific context.
+ *
+ */
+typedef void (*otThreadDiscoveryRequestCallback)(const otThreadDiscoveryRequestInfo *aInfo, void *aContext);
+
+/**
+ * This function sets a callback to receive MLE Discovery Request data.
+ *
+ * @param[in]  aInstance  A pointer to an OpenThread instance.
+ * @param[in]  aCallback  A pointer to a function that is called upon receiving an MLE Discovery Request message.
+ * @param[in]  aContext   A pointer to callback application-specific context.
+ *
+ */
+void otThreadSetDiscoveryRequestCallback(otInstance *                     aInstnace,
+                                         otThreadDiscoveryRequestCallback aCallback,
+                                         void *                           aContext);
 /**
  * @}
  *

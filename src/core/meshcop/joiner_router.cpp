@@ -55,7 +55,6 @@ namespace MeshCoP {
 
 JoinerRouter::JoinerRouter(Instance &aInstance)
     : InstanceLocator(aInstance)
-    , Notifier::Receiver(aInstance, JoinerRouter::HandleNotifierEvents)
     , mSocket(aInstance)
     , mRelayTransmit(OT_URI_PATH_RELAY_TX, &JoinerRouter::HandleRelayTransmit, this)
     , mTimer(aInstance, JoinerRouter::HandleTimer, this)
@@ -63,11 +62,6 @@ JoinerRouter::JoinerRouter(Instance &aInstance)
     , mIsJoinerPortConfigured(false)
 {
     Get<Coap::Coap>().AddResource(mRelayTransmit);
-}
-
-void JoinerRouter::HandleNotifierEvents(Notifier::Receiver &aReceiver, Events aEvents)
-{
-    static_cast<JoinerRouter &>(aReceiver).HandleNotifierEvents(aEvents);
 }
 
 void JoinerRouter::HandleNotifierEvents(Events aEvents)
@@ -84,15 +78,13 @@ void JoinerRouter::Start(void)
 
     if (Get<NetworkData::Leader>().IsJoiningEnabled())
     {
-        Ip6::SockAddr sockaddr;
+        uint16_t port = GetJoinerUdpPort();
 
         VerifyOrExit(!mSocket.IsBound(), OT_NOOP);
 
-        sockaddr.mPort = GetJoinerUdpPort();
-
         IgnoreError(mSocket.Open(&JoinerRouter::HandleUdpReceive, this));
-        IgnoreError(mSocket.Bind(sockaddr));
-        IgnoreError(Get<Ip6::Filter>().AddUnsecurePort(sockaddr.mPort));
+        IgnoreError(mSocket.Bind(port));
+        IgnoreError(Get<Ip6::Filter>().AddUnsecurePort(port));
         otLogInfoMeshCoP("Joiner Router: start");
     }
     else

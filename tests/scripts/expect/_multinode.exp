@@ -38,7 +38,6 @@ proc setup_nodes {} {
     global spawn_id
     global env
 
-    set spawn_1 [spawn_node 1]
     set spawn_2 [spawn_node 2]
     set psk "J01NME"
 
@@ -48,22 +47,15 @@ proc setup_nodes {} {
     set eui64 $expect_out(1,string)
     expect "Done"
 
+    setup_leader
+
     set spawn_id $spawn_1
-    send "dataset init new\n"
-    expect "Done"
-    send "dataset commit active\n"
-    expect "Done"
-    send "ifconfig up\n"
-    expect "Done"
-    send "thread start\n"
-    expect "Done"
-    wait_for "state" "leader"
-    expect "Done"
     send "commissioner start\n"
     expect "Done"
     expect "Commissioner: active"
     send "commissioner joiner add $eui64 $psk\n"
     expect "Done"
+    wait_for "netdata steeringdata check $eui64" "Done"
     send "channel\n"
     expect -re {(\d+)}
     set channel $expect_out(1,string)
@@ -84,12 +76,10 @@ proc setup_nodes {} {
 }
 
 proc dispose_nodes {} {
-    global spawn_1
     global spawn_2
     global spawn_id
 
-    set spawn_id $spawn_1
-    dispose
+    dispose_leader
     set spawn_id $spawn_2
     dispose
 }

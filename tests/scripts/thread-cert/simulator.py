@@ -52,8 +52,7 @@ class BaseSimulator(object):
     def __init__(self):
         self._nodes = {}
         self.commissioning_messages = {}
-        self._payload_parse_factory = mesh_cop.MeshCopCommandFactory(
-            mesh_cop.create_default_mesh_cop_tlv_factories())
+        self._payload_parse_factory = mesh_cop.MeshCopCommandFactory(mesh_cop.create_default_mesh_cop_tlv_factories())
         self._mesh_cop_msg_set = mesh_cop.create_mesh_cop_message_type_set()
 
     def __del__(self):
@@ -86,8 +85,7 @@ class BaseSimulator(object):
                     payload,
             ) in node.read_cert_messages_in_commissioning_log():
                 if direction == b'send':
-                    msg = self._payload_parse_factory.parse(
-                        type.decode("utf-8"), io.BytesIO(payload))
+                    msg = self._payload_parse_factory.parse(type.decode("utf-8"), io.BytesIO(payload))
                     self.commissioning_messages[nodeid].append(msg)
 
 
@@ -114,7 +112,13 @@ class RealTime(BaseSimulator):
         time.sleep(duration)
 
     def stop(self):
-        pass
+        if self.is_running:
+            # self._sniffer.stop()  # FIXME: seems it blocks forever
+            self._sniffer = None
+
+    @property
+    def is_running(self):
+        return self._sniffer is not None
 
 
 class VirtualTime(BaseSimulator):
@@ -172,8 +176,13 @@ class VirtualTime(BaseSimulator):
             self.stop()
 
     def stop(self):
-        self.sock.close()
-        self.sock = None
+        if self.sock:
+            self.sock.close()
+            self.sock = None
+
+    @property
+    def is_running(self):
+        return self.sock is not None
 
     def _add_message(self, nodeid, message_obj):
         addr = ('127.0.0.1', self.port + nodeid)
@@ -184,9 +193,7 @@ class VirtualTime(BaseSimulator):
             self.devices[addr]['msgs'] += messages
 
         except message.DropPacketException:
-            print(
-                'Drop current packet because it cannot be handled in test scripts'
-            )
+            print('Drop current packet because it cannot be handled in test scripts')
         except Exception as e:
             # Just print the exception to the console
             print("EXCEPTION: %s" % e)
@@ -243,8 +250,7 @@ class VirtualTime(BaseSimulator):
         """ Receive events until all devices are asleep. """
         while True:
             if (self.current_event or len(self.awake_devices) or
-                (self._next_event_time() > self._pause_time and
-                 self.current_nodeid)):
+                (self._next_event_time() > self._pause_time and self.current_nodeid)):
                 self.sock.settimeout(self.BLOCK_TIMEOUT)
                 try:
                     msg, addr = self.sock.recvfrom(self.MAX_MESSAGE)
@@ -309,8 +315,7 @@ class VirtualTime(BaseSimulator):
 
                 self.awake_devices.discard(addr)
 
-                if (self.current_event and
-                        self.current_event[self.EVENT_ADDR] == addr):
+                if (self.current_event and self.current_event[self.EVENT_ADDR] == addr):
                     # print "Done\t", self.current_event
                     self.current_event = None
 
@@ -331,8 +336,7 @@ class VirtualTime(BaseSimulator):
                         # print "-- Enqueue\t", event
                         bisect.insort(self.event_queue, event)
 
-                self._pcap.append(data,
-                                  (event_time // 1000000, event_time % 1000000))
+                self._pcap.append(data, (event_time // 1000000, event_time % 1000000))
                 self._add_message(addr[1] - self.port, data)
 
                 # add radio transmit done events to event queue
@@ -456,8 +460,7 @@ class VirtualTime(BaseSimulator):
                 continue
             dbg_print('syncing', addr, elapsed)
             self.devices[addr]['time'] = self.current_time
-            message = struct.pack('=QBH', elapsed,
-                                  self.OT_SIM_EVENT_ALARM_FIRED, 0)
+            message = struct.pack('=QBH', elapsed, self.OT_SIM_EVENT_ALARM_FIRED, 0)
             self._send_message(message, addr)
             self.awake_devices.add(addr)
             self.receive_events()

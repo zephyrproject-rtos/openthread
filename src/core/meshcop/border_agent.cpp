@@ -333,7 +333,6 @@ void BorderAgent::HandleRequest<&BorderAgent::mProxyTransmit>(void *            
 
 BorderAgent::BorderAgent(Instance &aInstance)
     : InstanceLocator(aInstance)
-    , Notifier::Receiver(aInstance, BorderAgent::HandleNotifierEvents)
     , mCommissionerPetition(OT_URI_PATH_COMMISSIONER_PETITION,
                             BorderAgent::HandleRequest<&BorderAgent::mCommissionerPetition>,
                             this)
@@ -353,18 +352,7 @@ BorderAgent::BorderAgent(Instance &aInstance)
     , mTimer(aInstance, HandleTimeout, this)
     , mState(OT_BORDER_AGENT_STATE_STOPPED)
 {
-    mCommissionerAloc.Clear();
-    mCommissionerAloc.mPrefixLength       = 64;
-    mCommissionerAloc.mAddressOrigin      = OT_ADDRESS_ORIGIN_THREAD;
-    mCommissionerAloc.mPreferred          = true;
-    mCommissionerAloc.mValid              = true;
-    mCommissionerAloc.mScopeOverride      = Ip6::Address::kRealmLocalScope;
-    mCommissionerAloc.mScopeOverrideValid = true;
-}
-
-void BorderAgent::HandleNotifierEvents(Notifier::Receiver &aReceiver, Events aEvents)
-{
-    static_cast<BorderAgent &>(aReceiver).HandleNotifierEvents(aEvents);
+    mCommissionerAloc.InitAsThreadOriginRealmLocalScope();
 }
 
 void BorderAgent::HandleNotifierEvents(Events aEvents)

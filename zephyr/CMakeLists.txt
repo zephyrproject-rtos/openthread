@@ -15,40 +15,8 @@ set(
     "Specify external mbedtls library"
 )
 
-if(CONFIG_OPENTHREAD_COMMISSIONER)
-  set(OT_COMMISSIONER ON CACHE BOOL "Enable Commissioner")
-endif()
-
-if(CONFIG_OPENTHREAD_JAM_DETECTION)
-  set(OT_JAM_DETECTION ON CACHE BOOL "Enable Jam Detection")
-endif()
-
-if(CONFIG_OPENTHREAD_JOINER)
-  set(OT_JOINER ON CACHE BOOL "Enable Joiner")
-endif()
-
-if(CONFIG_OPENTHREAD_SLAAC)
-  set(OT_SLAAC ON CACHE BOOL "Enable SLAAC")
-endif()
-
-if(CONFIG_OPENTHREAD_DHCP6_CLIENT)
-  set(OT_DHCP6_CLIENT ON CACHE BOOL "Enable DHCPv6 Client")
-endif()
-
-if(CONFIG_OPENTHREAD_DHCP6_SERVER)
-  set(OT_DHCP6_SERVER ON CACHE BOOL "Enable DHCPv6 Server")
-endif()
-
-if(CONFIG_OPENTHREAD_DIAG)
-  set(OT_DIAGNOSTIC ON CACHE BOOL "Enable Diagnostics")
-endif()
-
-if(CONFIG_OPENTHREAD_RAW)
-  set(OT_LINK_RAW ON CACHE BOOL "Enable Link Raw")
-endif()
-
-if(CONFIG_OPENTHREAD_ENABLE_SERVICE)
-  set(OT_SERVICE ON CACHE BOOL "Enable Service entries in Thread Network Data")
+if(CONFIG_OPENTHREAD_BACKBONE_ROUTER)
+  set(OT_BACKBONE_ROUTER ON CACHE BOOL "Enable backbone router functionality")
 endif()
 
 if(CONFIG_OPENTHREAD_BORDER_AGENT)
@@ -59,32 +27,20 @@ if(CONFIG_OPENTHREAD_BORDER_ROUTER)
   set(OT_BORDER_ROUTER ON CACHE BOOL "Enable Border Router")
 endif()
 
-if(CONFIG_OPENTHREAD_NCP)
-  set(OT_NCP ON CACHE BOOL "Enable Network Co-Processor NCP")
-endif()
-
-if(CONFIG_OPENTHREAD_NCP_VENDOR_HOOK_SOURCE)
-  set(OT_NCP_VENDOR_HOOK_SOURCE ${CONFIG_OPENTHREAD_NCP_VENDOR_HOOK_SOURCE} CACHE STRING "NCP vendor hook source file name")
-endif()
-
-if(CONFIG_OPENTHREAD_RCP)
-  set(OT_RCP ON CACHE BOOL "Enable Network Co-Processor RCP")
-endif()
-
-if(CONFIG_OPENTHREAD_UDP_FORWARD)
-  set(OT_UDP_FORWARD ON CACHE BOOL "Enable UDP Forward")
-endif()
-
 if(CONFIG_OPENTHREAD_COAP)
-  set(OT_COAP ON CACHE BOOL "Enable CoAP api")
+  set(OT_COAP ON CACHE BOOL "Enable CoAP API")
 endif()
 
-if(CONFIG_OPENTHREAD_REFERENCE_DEVICE)
-  set(OT_REFERENCE_DEVICE ON CACHE BOOL "Enable Thread Certification Reference Device")
+if(CONFIG_OPENTHREAD_COAPS)
+  set(OT_COAPS ON CACHE BOOL "Enable secure CoAP API support")
 endif()
 
-if(CONFIG_OPENTHREAD_BACKBONE_ROUTER)
-  set(OT_BACKBONE_ROUTER ON CACHE BOOL "Enable backbone router functionality")
+if(CONFIG_OPENTHREAD_COAP_OBSERVE)
+  set(OT_COAP_OBSERVE ON CACHE BOOL "Enable CoAP Observe option support")
+endif()
+
+if(CONFIG_OPENTHREAD_COMMISSIONER)
+  set(OT_COMMISSIONER ON CACHE BOOL "Enable Commissioner")
 endif()
 
 if(CONFIG_OPENTHREAD_CHANNEL_MANAGER)
@@ -99,20 +55,36 @@ if(CONFIG_OPENTHREAD_CHILD_SUPERVISION)
   set(OT_CHILD_SUPERVISION ON CACHE BOOL "Enable child supervision support")
 endif()
 
-if(CONFIG_OPENTHREAD_COAPS)
-  set(OT_COAPS ON CACHE BOOL "Enable secure coap api support")
+if(CONFIG_OPENTHREAD_CSL_RECEIVER)
+  set(OT_CSL_RECEIVER ON CACHE BOOL "Enable CSL receiver feature for Thread 1.2")
+endif()
+
+if(CONFIG_OPENTHREAD_DHCP6_CLIENT)
+  set(OT_DHCP6_CLIENT ON CACHE BOOL "Enable DHCPv6 Client")
+endif()
+
+if(CONFIG_OPENTHREAD_DHCP6_SERVER)
+  set(OT_DHCP6_SERVER ON CACHE BOOL "Enable DHCPv6 Server")
+endif()
+
+if(CONFIG_OPENTHREAD_DIAG)
+  set(OT_DIAGNOSTIC ON CACHE BOOL "Enable Diagnostics support")
 endif()
 
 if(CONFIG_OPENTHREAD_DNS_CLIENT)
   set(OT_DNS_CLIENT ON CACHE BOOL "Enable DNS client support")
 endif()
 
+if(CONFIG_OPENTHREAD_DUA)
+  set(OT_DUA ON CACHE BOOL "Enable Domain Unicast Address feature for Thread 1.2")
+endif()
+
 if(CONFIG_OPENTHREAD_ECDSA)
   set(OT_ECDSA ON CACHE BOOL "Enable ECDSA support")
 endif()
 
-if(CONFIG_OPENTHREAD_DUA)
-  set(OT_DUA ON CACHE BOOL "Enable Domain Unicast Address feature for Thread 1.2")
+if(CONFIG_OPENTHREAD_ENABLE_SERVICE)
+  set(OT_SERVICE ON CACHE BOOL "Enable Service entries in Thread Network Data")
 endif()
 
 if(CONFIG_OPENTHREAD_EXTERNAL_HEAP)
@@ -120,7 +92,15 @@ if(CONFIG_OPENTHREAD_EXTERNAL_HEAP)
 endif()
 
 if(CONFIG_OPENTHREAD_IP6_FRAGM)
-  set(OT_IP6_FRAGM ON CACHE BOOL "Enable ipv6 fragmentation support")
+  set(OT_IP6_FRAGM ON CACHE BOOL "Enable IPv6 fragmentation support")
+endif()
+
+if(CONFIG_OPENTHREAD_JAM_DETECTION)
+  set(OT_JAM_DETECTION ON CACHE BOOL "Enable Jam Detection")
+endif()
+
+if(CONFIG_OPENTHREAD_JOINER)
+  set(OT_JOINER ON CACHE BOOL "Enable Joiner")
 endif()
 
 if(CONFIG_OPENTHREAD_LEGACY)
@@ -132,7 +112,15 @@ if(CONFIG_OPENTHREAD_LOG_LEVEL_DYNAMIC)
 endif()
 
 if(CONFIG_OPENTHREAD_MAC_FILTER)
-  set(OT_MAC_FILTER ON CACHE BOOL "Enable mac filter support")
+  set(OT_MAC_FILTER ON CACHE BOOL "Enable MAC filter support")
+endif()
+
+if(CONFIG_OPENTHREAD_MLE_LONG_ROUTES)
+  set(OT_MLE_LONG_ROUTES ON CACHE BOOL "Enable MLE long routes support (Experimental)")
+endif()
+
+if(CONFIG_OPENTHREAD_MLR)
+  set(OT_MLR ON CACHE BOOL "Enable Multicast Listener Registration feature for Thread 1.2")
 endif()
 
 if(CONFIG_OPENTHREAD_MTD_NETDIAG)
@@ -151,12 +139,20 @@ if(CONFIG_OPENTHREAD_PLATFORM_UDP)
   set(OT_PLATFORM_UDP ON CACHE BOOL "Enable platform UDP support")
 endif()
 
-if(CONFIG_OPENTHREAD_OTNS)
-  set(OT_OTNS ON CACHE BOOL "Enable OTNS support")
+if(CONFIG_OPENTHREAD_RAW)
+  set(OT_LINK_RAW ON CACHE BOOL "Enable Link Raw")
+endif()
+
+if(CONFIG_OPENTHREAD_REFERENCE_DEVICE)
+  set(OT_REFERENCE_DEVICE ON CACHE BOOL "Enable Thread Certification Reference Device")
 endif()
 
 if(CONFIG_OPENTHREAD_SETTINGS_RAM)
   set(OT_SETTINGS_RAM ON CACHE BOOL "Enable volatile-only storage of settings")
+endif()
+
+if(CONFIG_OPENTHREAD_SLAAC)
+  set(OT_SLAAC ON CACHE BOOL "Enable SLAAC")
 endif()
 
 if(CONFIG_OPENTHREAD_SNTP_CLIENT)
@@ -167,8 +163,20 @@ if(CONFIG_OPENTHREAD_TIME_SYNC)
   set(OT_TIME_SYNC ON CACHE BOOL "Enable the time synchronization service feature")
 endif()
 
+if(CONFIG_OPENTHREAD_UDP_FORWARD)
+  set(OT_UDP_FORWARD ON CACHE BOOL "Enable UDP forward feature")
+endif()
+
+if(CONFIG_OPENTHREAD_OTNS)
+  set(OT_OTNS ON CACHE BOOL "Enable OTNS support")
+endif()
+
 if(CONFIG_OPENTHREAD_FULL_LOGS)
   set(OT_FULL_LOGS ON CACHE BOOL "Enable full logs")
+endif()
+
+if(CONFIG_OPENTHREAD_NCP_VENDOR_HOOK_SOURCE)
+  set(OT_NCP_VENDOR_HOOK_SOURCE ${CONFIG_OPENTHREAD_NCP_VENDOR_HOOK_SOURCE} CACHE STRING "NCP vendor hook source file name")
 endif()
 
 string(REPLACE " " ";" OT_PARAM_LIST " ${CONFIG_OPENTHREAD_CUSTOM_PARAMETERS}")

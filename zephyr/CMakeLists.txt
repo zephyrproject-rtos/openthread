@@ -7,9 +7,11 @@ set(OT_BUILD_EXECUTABLES OFF CACHE BOOL "Disable OpenThread samples")
 set(OT_BUILTIN_MBEDTLS_MANAGEMENT OFF CACHE BOOL "Use Zephyr's mbedTLS heap")
 set(OT_PLATFORM "zephyr" CACHE STRING "Zephyr as a target platform")
 
+string(REPLACE " " ";" OT_MBEDTLS_LIB_LIST " ${CONFIG_OPENTHREAD_MBEDTLS_LIB_NAME}")
+
 set(
     OT_EXTERNAL_MBEDTLS
-    ${CONFIG_OPENTHREAD_MBEDTLS_TARGET}
+    ${OT_MBEDTLS_LIB_LIST}
     CACHE STRING
     "Specify external mbedtls library"
 )

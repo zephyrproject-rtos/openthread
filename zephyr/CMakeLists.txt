@@ -8,9 +8,11 @@ set(OT_BUILTIN_MBEDTLS_MANAGEMENT OFF CACHE BOOL "Use Zephyr's mbedTLS heap")
 set(OT_PLATFORM "zephyr" CACHE STRING "Zephyr as a target platform")
 set(OT_THREAD_VERSION ${CONFIG_OPENTHREAD_THREAD_VERSION} CACHE STRING "User selected Thread stack version")
 
+string(REPLACE " " ";" OT_MBEDTLS_LIB_LIST " ${CONFIG_OPENTHREAD_MBEDTLS_LIB_NAME}")
+
 set(
     OT_EXTERNAL_MBEDTLS
-    ${CONFIG_OPENTHREAD_MBEDTLS_TARGET}
+    ${OT_MBEDTLS_LIB_LIST}
     CACHE STRING
     "Specify external mbedtls library"
 )

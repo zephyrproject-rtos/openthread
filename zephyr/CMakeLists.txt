@@ -198,7 +198,7 @@ add_definitions(
     -DOPENTHREAD_PROJECT_CORE_CONFIG_FILE="openthread-core-zephyr-config.h"
 )
 
-list(APPEND OT_PRIVATE_INCLUDES $ENV{ZEPHYR_BASE}/subsys/net/lib/openthread/platform)
+list(APPEND OT_PRIVATE_INCLUDES ${ZEPHYR_BASE}/subsys/net/lib/openthread/platform)
 
 # Need to specify build directory as well
 add_subdirectory(.. build)

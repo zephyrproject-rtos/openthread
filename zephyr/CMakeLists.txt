@@ -192,20 +192,6 @@ if(CONFIG_LOG_BACKEND_SPINEL)
   )
 endif()
 
-# Zephyr compiler options
-zephyr_get_compile_options_for_lang_as_string(C   c_options)
-zephyr_get_compile_options_for_lang_as_string(CXX cxx_options)
-
-set(c_options   "${c_options} -fno-builtin")
-set(cxx_options "${cxx_options} -fno-builtin")
-
-zephyr_get_include_directories_for_lang_as_string(       C includes)
-zephyr_get_system_include_directories_for_lang_as_string(C system_includes)
-
-set(CMAKE_C_FLAGS   "${c_options} ${includes} ${system_includes}")
-set(CMAKE_CXX_FLAGS "${cxx_options} ${includes} ${system_includes}")
-set(CMAKE_ASM_FLAGS "${c_options} ${includes} ${system_includes}")
-
 # Other options
 add_definitions(
     -DOPENTHREAD_CONFIG_LOG_LEVEL=${CONFIG_OPENTHREAD_LOG_LEVEL}
@@ -216,6 +202,29 @@ list(APPEND OT_PRIVATE_INCLUDES $ENV{ZEPHYR_BASE}/subsys/net/lib/openthread/plat
 
 # Need to specify build directory as well
 add_subdirectory(.. build)
+
+# Zephyr compiler options
+target_include_directories(ot-config INTERFACE
+    $<TARGET_PROPERTY:zephyr_interface,INTERFACE_INCLUDE_DIRECTORIES>
+)
+
+target_include_directories(ot-config SYSTEM INTERFACE
+    $<TARGET_PROPERTY:zephyr_interface,INTERFACE_SYSTEM_INCLUDE_DIRECTORIES>
+)
+
+target_compile_definitions(ot-config INTERFACE
+    $<TARGET_PROPERTY:zephyr_interface,INTERFACE_COMPILE_DEFINITIONS>
+)
+
+target_compile_options(ot-config INTERFACE
+    $<TARGET_PROPERTY:zephyr_interface,INTERFACE_COMPILE_OPTIONS> -fno-builtin
+)
+
+target_compile_options(openthread-platform-utils PRIVATE
+    $<TARGET_PROPERTY:zephyr_interface,INTERFACE_COMPILE_OPTIONS> -fno-builtin
+)
+
+add_dependencies(openthread-platform-utils syscall_list_h_target)
 
 # Include OpenThread headers
 zephyr_system_include_directories(../include)

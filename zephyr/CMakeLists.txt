@@ -203,6 +203,14 @@ list(APPEND OT_PRIVATE_INCLUDES $ENV{ZEPHYR_BASE}/subsys/net/lib/openthread/plat
 # Need to specify build directory as well
 add_subdirectory(.. build)
 
+zephyr_get_targets(${CMAKE_CURRENT_LIST_DIR}/../ "STATIC_LIBRARY;OBJECT_LIBRARY" ALL_TARGETS)
+foreach(target ${ALL_TARGETS})
+  # We don't want to build all openthread libraries per default.
+  # Setting EXCLUDE_FROM_ALL ensures that only libraries that are linked
+  # into Zephyr will be built due to dependencies.
+  set_property(TARGET ${target} PROPERTY EXCLUDE_FROM_ALL TRUE)
+endforeach()
+
 # Zephyr compiler options
 target_include_directories(ot-config INTERFACE
     $<TARGET_PROPERTY:zephyr_interface,INTERFACE_INCLUDE_DIRECTORIES>
@@ -219,12 +227,6 @@ target_compile_definitions(ot-config INTERFACE
 target_compile_options(ot-config INTERFACE
     $<TARGET_PROPERTY:zephyr_interface,INTERFACE_COMPILE_OPTIONS> -fno-builtin
 )
-
-target_compile_options(openthread-platform-utils PRIVATE
-    $<TARGET_PROPERTY:zephyr_interface,INTERFACE_COMPILE_OPTIONS> -fno-builtin
-)
-
-add_dependencies(openthread-platform-utils syscall_list_h_target)
 
 # Include OpenThread headers
 zephyr_system_include_directories(../include)

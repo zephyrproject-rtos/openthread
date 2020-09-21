@@ -228,6 +228,10 @@ target_compile_options(ot-config INTERFACE
     $<TARGET_PROPERTY:zephyr_interface,INTERFACE_COMPILE_OPTIONS> -fno-builtin
 )
 
+# Openthread depends on errno.h, which includes errno_private.h in minimal libc.
+# errno_private.h is generated as part of ${SYSCALL_LIST_H_TARGET} target.
+add_dependencies(ot-config ${SYSCALL_LIST_H_TARGET})
+
 # Include OpenThread headers
 zephyr_system_include_directories(../include)
 zephyr_system_include_directories(../examples/platforms)

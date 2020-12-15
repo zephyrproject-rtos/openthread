@@ -73,16 +73,16 @@ class TestBackboneRouterService(thread_cert.TestCase):
     TOPOLOGY = {
         LEADER_1_1: {
             'version': '1.1',
-            'whitelist': [BBR_1, BBR_2],
+            'allowlist': [BBR_1, BBR_2],
         },
         BBR_1: {
             'version': '1.2',
-            'whitelist': [LEADER_1_1, BBR_2],
+            'allowlist': [LEADER_1_1, BBR_2],
             'is_bbr': True
         },
         BBR_2: {
             'version': '1.2',
-            'whitelist': [LEADER_1_1, BBR_1],
+            'allowlist': [LEADER_1_1, BBR_1],
             'is_bbr': True
         },
     }
@@ -107,15 +107,11 @@ class TestBackboneRouterService(thread_cert.TestCase):
         self.nodes[BBR_1].enable_backbone_router()
         WAIT_TIME = BBR_REGISTRATION_JITTER + WAIT_REDUNDANCE
         self.simulator.go(WAIT_TIME)
-        self.assertEqual(self.nodes[BBR_1].get_backbone_router_state(),
-                         'Primary')
-        assert self.nodes[BBR_1].has_ipmaddr(config.ALL_NETWORK_BBRS_ADDRESS)
-        assert not self.nodes[BBR_1].has_ipmaddr(config.ALL_DOMAIN_BBRS_ADDRESS)
+        self.assertEqual(self.nodes[BBR_1].get_backbone_router_state(), 'Primary')
 
         self.nodes[BBR_1].set_domain_prefix(config.DOMAIN_PREFIX)
         WAIT_TIME = WAIT_REDUNDANCE
         self.simulator.go(WAIT_TIME)
-        assert self.nodes[BBR_1].has_ipmaddr(config.ALL_DOMAIN_BBRS_ADDRESS)
 
         # 2) Reset BBR_1 and bring it back soon.
         # Verify that it restores Primary State with sequence number
@@ -131,8 +127,7 @@ class TestBackboneRouterService(thread_cert.TestCase):
         self.assertEqual(self.nodes[BBR_1].get_state(), 'router')
         WAIT_TIME = BBR_REGISTRATION_JITTER + WAIT_REDUNDANCE
         self.simulator.go(WAIT_TIME)
-        self.assertEqual(self.nodes[BBR_1].get_backbone_router_state(),
-                         'Primary')
+        self.assertEqual(self.nodes[BBR_1].get_backbone_router_state(), 'Primary')
         assert self.nodes[BBR_1].get_backbone_router()['seqno'] == 2
 
         # 3) Reset BBR_1 and bring it back after its original router id is released
@@ -144,10 +139,8 @@ class TestBackboneRouterService(thread_cert.TestCase):
             self.nodes[BBR_1].reset()
             WAIT_TIME = 200
             self.simulator.go(WAIT_TIME)
-            self.nodes[BBR_1].set_router_selection_jitter(
-                ROUTER_SELECTION_JITTER)
-            self.nodes[BBR_1].set_bbr_registration_jitter(
-                BBR_REGISTRATION_JITTER)
+            self.nodes[BBR_1].set_router_selection_jitter(ROUTER_SELECTION_JITTER)
+            self.nodes[BBR_1].set_bbr_registration_jitter(BBR_REGISTRATION_JITTER)
             self.nodes[BBR_1].set_domain_prefix(config.DOMAIN_PREFIX)
             self.nodes[BBR_1].enable_backbone_router()
             self.nodes[BBR_1].start()
@@ -156,8 +149,7 @@ class TestBackboneRouterService(thread_cert.TestCase):
             self.assertEqual(self.nodes[BBR_1].get_state(), 'router')
             WAIT_TIME = BBR_REGISTRATION_JITTER + WAIT_REDUNDANCE
             self.simulator.go(WAIT_TIME)
-            self.assertEqual(self.nodes[BBR_1].get_backbone_router_state(),
-                             'Primary')
+            self.assertEqual(self.nodes[BBR_1].get_backbone_router_state(), 'Primary')
             BBR_1_SEQNO = self.nodes[BBR_1].get_backbone_router()['seqno']
             if (BBR_1_SEQNO != 255):
                 break
@@ -178,12 +170,7 @@ class TestBackboneRouterService(thread_cert.TestCase):
         self.assertEqual(self.nodes[BBR_2].get_state(), 'router')
         WAIT_TIME = BBR_REGISTRATION_JITTER + WAIT_REDUNDANCE
         self.simulator.go(WAIT_TIME)
-        self.assertEqual(self.nodes[BBR_2].get_backbone_router_state(),
-                         'Disabled')
-
-        assert not self.nodes[BBR_2].has_ipmaddr(
-            config.ALL_NETWORK_BBRS_ADDRESS)
-        assert not self.nodes[BBR_2].has_ipmaddr(config.ALL_DOMAIN_BBRS_ADDRESS)
+        self.assertEqual(self.nodes[BBR_2].get_backbone_router_state(), 'Disabled')
 
         # Enable Backbone function, it will stay at Secondary state as
         # there is Primary Backbone Router already.
@@ -194,15 +181,12 @@ class TestBackboneRouterService(thread_cert.TestCase):
         self.nodes[BBR_2].set_backbone_router(seqno=255)
         WAIT_TIME = BBR_REGISTRATION_JITTER + WAIT_REDUNDANCE
         self.simulator.go(WAIT_TIME)
-        self.assertEqual(self.nodes[BBR_2].get_backbone_router_state(),
-                         'Secondary')
+        self.assertEqual(self.nodes[BBR_2].get_backbone_router_state(), 'Secondary')
 
         # Check no SRV_DATA.ntf.
         messages = self.simulator.get_messages_sent_by(BBR_2)
         msg = messages.next_coap_message('0.02', '/a/sd', False)
-        assert (
-            msg is None
-        ), "Error: %d sent unexpected SRV_DATA.ntf when there is PBbr already"
+        assert (msg is None), "Error: %d sent unexpected SRV_DATA.ntf when there is PBbr already"
 
         # Flush relative message queue.
         self.flush_nodes([BBR_1])
@@ -211,18 +195,15 @@ class TestBackboneRouterService(thread_cert.TestCase):
         self.nodes[BBR_2].register_backbone_router()
         WAIT_TIME = WAIT_REDUNDANCE
         self.simulator.go(WAIT_TIME)
-        self.assertEqual(self.nodes[BBR_2].get_backbone_router_state(),
-                         'Primary')
+        self.assertEqual(self.nodes[BBR_2].get_backbone_router_state(), 'Primary')
 
         # Verify BBR_1 becomes Secondary and sends SRV_DATA.ntf to deregister
         # its service.
         messages = self.simulator.get_messages_sent_by(BBR_1)
         messages.next_coap_message('0.02', '/a/sd', True)
-        self.assertEqual(self.nodes[BBR_1].get_backbone_router_state(),
-                         'Secondary')
+        self.assertEqual(self.nodes[BBR_1].get_backbone_router_state(), 'Secondary')
         # Verify Sequence number increases when become Secondary from Primary.
-        assert self.nodes[BBR_1].get_backbone_router()['seqno'] == (
-            BBR_1_SEQNO + 1)
+        assert self.nodes[BBR_1].get_backbone_router()['seqno'] == (BBR_1_SEQNO + 1)
 
         # 4a) Check communication via DUA.
         bbr2_dua = self.nodes[BBR_2].get_addr(config.DOMAIN_PREFIX)
@@ -231,14 +212,12 @@ class TestBackboneRouterService(thread_cert.TestCase):
         # 5) Stop BBR_2, BBR_1 becomes Primary after detecting there is no
         #    available Backbone Router Service.
         self.nodes[BBR_2].reset()
-        self.nodes[LEADER_1_1].release_router_id(
-            self.nodes[BBR_2].get_router_id())
+        self.nodes[LEADER_1_1].release_router_id(self.nodes[BBR_2].get_router_id())
         # Wait for the dissemination of Network Data without Backbone Router service
         self.simulator.go(10)
 
         # BBR_1 becomes Primary.
-        self.assertEqual(self.nodes[BBR_1].get_backbone_router_state(),
-                         'Primary')
+        self.assertEqual(self.nodes[BBR_1].get_backbone_router_state(), 'Primary')
         messages = self.simulator.get_messages_sent_by(BBR_1)
         messages.next_coap_message('0.02', '/a/sd', True)
 
@@ -255,16 +234,11 @@ class TestBackboneRouterService(thread_cert.TestCase):
         self.assertEqual(self.nodes[BBR_2].get_state(), 'router')
         WAIT_TIME = BBR_REGISTRATION_JITTER + WAIT_REDUNDANCE
         self.simulator.go(WAIT_TIME)
-        self.assertEqual(self.nodes[BBR_2].get_backbone_router_state(),
-                         'Secondary')
-
-        assert self.nodes[BBR_1].has_ipmaddr(config.ALL_NETWORK_BBRS_ADDRESS)
-        assert self.nodes[BBR_1].has_ipmaddr(config.ALL_DOMAIN_BBRS_ADDRESS)
+        self.assertEqual(self.nodes[BBR_2].get_backbone_router_state(), 'Secondary')
 
         # 6a) Check the uniqueness of DUA by comparing the one in above 4a).
         bbr2_dua2 = self.nodes[BBR_2].get_addr(config.DOMAIN_PREFIX)
-        assert bbr2_dua == bbr2_dua2, 'Error: Unexpected different DUA ({} v.s. {})'.format(
-            bbr2_dua, bbr2_dua2)
+        assert bbr2_dua == bbr2_dua2, 'Error: Unexpected different DUA ({} v.s. {})'.format(bbr2_dua, bbr2_dua2)
 
         # 6b) Check communication via DUA
         self.assertTrue(self.nodes[BBR_1].ping(bbr2_dua))

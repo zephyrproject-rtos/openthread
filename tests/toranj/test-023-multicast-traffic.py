@@ -74,15 +74,9 @@ def send_mcast(
     Verify that the message is received on all nodes in `recving_nodes` list and that it is not received on all
     nodes in `non_recving_nodes` list.
     """
-    sender = src_node.prepare_tx(src_addr,
-                                 mcast_addr,
-                                 msg_len,
-                                 mcast_hops=mcast_hops)
+    sender = src_node.prepare_tx(src_addr, mcast_addr, msg_len, mcast_hops=mcast_hops)
     recvers = [node.prepare_rx(sender) for node in recving_nodes]
-    listeners = [
-        node.prepare_listener(sender.dst_port, timeout=0.5)
-        for node in non_recving_nodes
-    ]
+    listeners = [node.prepare_listener(sender.dst_port, timeout=0.5) for node in non_recving_nodes]
 
     wpan.Node.perform_async_tx_rx()
 
@@ -92,10 +86,8 @@ def send_mcast(
     for lsnr in listeners:
         # `all_rx_msg` contains a list of (msg_content, (src_addr, src_port)).
         verify(
-            len(lsnr.all_rx_msg) == 0 or all([
-                msg[1][0] != sender.src_addr and msg[1][1] != sender.src_port
-                for msg in lsnr.all_rx_msg
-            ]))
+            len(lsnr.all_rx_msg) == 0 or
+            all([msg[1][0] != sender.src_addr and msg[1][1] != sender.src_port for msg in lsnr.all_rx_msg]))
 
 
 # -----------------------------------------------------------------------------------------------------------------------
@@ -132,24 +124,24 @@ wpan.Node.init_all_nodes()
 
 r1.form("mcast-traffic")
 
-r1.whitelist_node(r2)
-r2.whitelist_node(r1)
+r1.allowlist_node(r2)
+r2.allowlist_node(r1)
 r2.join_node(r1, wpan.JOIN_TYPE_ROUTER)
 
-r2.whitelist_node(fed)
-fed.whitelist_node(r2)
+r2.allowlist_node(fed)
+fed.allowlist_node(r2)
 fed.join_node(r2, wpan.JOIN_TYPE_END_DEVICE)
 
-r2.whitelist_node(r3)
-r3.whitelist_node(r2)
+r2.allowlist_node(r3)
+r3.allowlist_node(r2)
 r3.join_node(r2, wpan.JOIN_TYPE_ROUTER)
 
-r3.whitelist_node(r4)
-r4.whitelist_node(r3)
+r3.allowlist_node(r4)
+r4.allowlist_node(r3)
 r4.join_node(r3, wpan.JOIN_TYPE_ROUTER)
 
-r4.whitelist_node(sed)
-sed.whitelist_node(r4)
+r4.allowlist_node(sed)
+sed.allowlist_node(r4)
 sed.join_node(r4, wpan.JOIN_TYPE_SLEEPY_END_DEVICE)
 sed.set(wpan.WPAN_POLL_INTERVAL, '600')
 
@@ -248,10 +240,7 @@ send_mcast(
 )
 
 # r1 =>> mesh-local all-thread (four hops)
-send_mcast(r1,
-           ml1,
-           ml_all_thread_nodes_addr, [r1, r2, fed, r3, r4, sed],
-           mcast_hops=4)
+send_mcast(r1, ml1, ml_all_thread_nodes_addr, [r1, r2, fed, r3, r4, sed], mcast_hops=4)
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Subscribe to a specific multicast address on r2 and sed

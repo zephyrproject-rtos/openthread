@@ -39,13 +39,13 @@ ROUTER2 = 3
 
 SRV_0_ID = 0
 SRV_0_ENT_NUMBER = '123'
-SRV_0_SERVICE_DATA = 'foo'
-SRV_0_SERVER_DATA = 'bar'
+SRV_0_SERVICE_DATA = '123'
+SRV_0_SERVER_DATA = 'abc'
 
 SRV_1_ID = 1
 SRV_1_ENT_NUMBER = '234'
-SRV_1_SERVICE_DATA = 'baz'
-SRV_1_SERVER_DATA = 'qux'
+SRV_1_SERVICE_DATA = '456'
+SRV_1_SERVER_DATA = 'def'
 
 
 class Test_Service(thread_cert.TestCase):
@@ -54,37 +54,34 @@ class Test_Service(thread_cert.TestCase):
     TOPOLOGY = {
         LEADER: {
             'channel': 12,
-            'mode': 'rsdn',
+            'mode': 'rdn',
             'network_name': 'OpenThread',
             'panid': 0xface,
-            'whitelist': [ROUTER1, ROUTER2]
+            'allowlist': [ROUTER1, ROUTER2]
         },
         ROUTER1: {
             'channel': 12,
-            'mode': 'rsdn',
+            'mode': 'rdn',
             'network_name': 'OpenThread',
             'panid': 0xface,
             'router_selection_jitter': 1,
-            'whitelist': [LEADER, ROUTER2]
+            'allowlist': [LEADER, ROUTER2]
         },
         ROUTER2: {
             'channel': 12,
-            'mode': 'rsdn',
+            'mode': 'rdn',
             'network_name': 'OpenThread',
             'panid': 0xface,
             'router_selection_jitter': 1,
-            'whitelist': [LEADER, ROUTER1]
+            'allowlist': [LEADER, ROUTER1]
         },
     }
 
     def hasAloc(self, node_id, service_id):
-        for addr in self.nodes[node_id].get_ip6_address(
-                config.ADDRESS_TYPE.ALOC):
+        for addr in self.nodes[node_id].get_ip6_address(config.ADDRESS_TYPE.ALOC):
             m = re.match('.*:fc(..)$', addr, re.I)
             if m is not None:
-                if m.group(
-                        1) == str(service_id +
-                                  10):  # for service_id=3 look for '...:fc13'
+                if m.group(1) == str(service_id + 10):  # for service_id=3 look for '...:fc13'
                     return True
 
         return False
@@ -115,8 +112,7 @@ class Test_Service(thread_cert.TestCase):
         self.assertEqual(self.hasAloc(ROUTER2, SRV_0_ID), False)
         self.assertEqual(self.hasAloc(ROUTER2, SRV_1_ID), False)
 
-        self.nodes[ROUTER1].add_service(SRV_0_ENT_NUMBER, SRV_0_SERVICE_DATA,
-                                        SRV_0_SERVER_DATA)
+        self.nodes[ROUTER1].add_service(SRV_0_ENT_NUMBER, SRV_0_SERVICE_DATA, SRV_0_SERVER_DATA)
         self.nodes[ROUTER1].register_netdata()
         self.simulator.go(2)
 
@@ -130,8 +126,7 @@ class Test_Service(thread_cert.TestCase):
         aloc0 = self.nodes[ROUTER1].get_ip6_address(config.ADDRESS_TYPE.ALOC)[0]
         self.pingFromAll(aloc0)
 
-        self.nodes[LEADER].add_service(SRV_0_ENT_NUMBER, SRV_0_SERVICE_DATA,
-                                       SRV_0_SERVER_DATA)
+        self.nodes[LEADER].add_service(SRV_0_ENT_NUMBER, SRV_0_SERVICE_DATA, SRV_0_SERVER_DATA)
         self.nodes[LEADER].register_netdata()
         self.simulator.go(2)
 
@@ -144,8 +139,7 @@ class Test_Service(thread_cert.TestCase):
 
         self.pingFromAll(aloc0)
 
-        self.nodes[ROUTER2].add_service(SRV_1_ENT_NUMBER, SRV_1_SERVICE_DATA,
-                                        SRV_1_SERVER_DATA)
+        self.nodes[ROUTER2].add_service(SRV_1_ENT_NUMBER, SRV_1_SERVICE_DATA, SRV_1_SERVER_DATA)
         self.nodes[ROUTER2].register_netdata()
         self.simulator.go(2)
 

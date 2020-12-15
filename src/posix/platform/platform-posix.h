@@ -38,6 +38,7 @@
 #include "openthread-posix-config.h"
 
 #include <errno.h>
+#include <net/if.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/select.h>
@@ -96,12 +97,6 @@ struct RadioProcessContext
     const fd_set *mReadFdSet;
     const fd_set *mWriteFdSet;
 };
-
-/**
- * Unique node ID.
- *
- */
-extern uint64_t gNodeId;
 
 /**
  * This function initializes the alarm service used by OpenThread.
@@ -276,6 +271,15 @@ void platformNetifUpdateFdSet(fd_set *aReadFdSet, fd_set *aWriteFdSet, fd_set *a
 void platformNetifProcess(const fd_set *aReadFdSet, const fd_set *aWriteFdSet, const fd_set *aErrorFdSet);
 
 /**
+ * This function performs notifies state changes to platform netif.
+ *
+ * @param[in]   aInstance       A pointer to the OpenThread instance.
+ * @param[in]   aFlags          Flags that denote the state change events.
+ *
+ */
+void platformNetifStateChange(otInstance *aInstance, otChangedFlags aFlags);
+
+/**
  * This function initialize virtual time simulation.
  *
  * @params[in]  aNodeId     Node id of this simulated device.
@@ -386,6 +390,41 @@ enum SocketBlockOption
 };
 
 /**
+ * This function initializes platform TREL UDP6 driver.
+ *
+ * @param[in]   aInterfaceName   The name of network interface.
+ *
+ */
+void platformTrelInit(const char *aInterfaceName);
+
+/**
+ * This function shuts down the platform TREL UDP6 platform driver.
+ *
+ */
+void platformTrelDeinit(void);
+
+/**
+ * This function updates the file descriptor sets with file descriptors used by the TREL driver.
+ *
+ * @param[inout]  aReadFdSet   A pointer to the read file descriptors.
+ * @param[inout]  aWriteFdSet  A pointer to the write file descriptors.
+ * @param[inout]  aMaxFd       A pointer to the max file descriptor.
+ * @param[inout]  aTimeout     A pointer to the timeout.
+ *
+ */
+void platformTrelUpdateFdSet(fd_set *aReadFdSet, fd_set *aWriteFdSet, int *aMaxFd, struct timeval *aTimeout);
+
+/**
+ * This function performs TREL driver processing.
+ *
+ * @param[in]   aInstance       A pointer to the OpenThread instance.
+ * @param[in]   aReadFdSet      A pointer to the read file descriptors.
+ * @param[in]   aWriteFdSet     A pointer to the write file descriptors.
+ *
+ */
+void platformTrelProcess(otInstance *aInstance, const fd_set *aReadFdSet, const fd_set *aWriteFdSet);
+
+/**
  * This function creates a socket with SOCK_CLOEXEC flag set.
  *
  * @param[in]   aDomain       The communication domain.
@@ -399,6 +438,65 @@ enum SocketBlockOption
  *
  */
 int SocketWithCloseExec(int aDomain, int aType, int aProtocol, SocketBlockOption aBlockOption);
+
+/**
+ * The name of Thread network interface.
+ *
+ */
+extern char gNetifName[IFNAMSIZ];
+
+/**
+ * The index of Thread network interface.
+ *
+ */
+extern unsigned int gNetifIndex;
+
+/**
+ * This function initializes platform Backbone network.
+ *
+ * @param[in]   aInstance       A pointer to the OpenThread instance.
+ * @param[in]   aInterfaceName  A pointer to Thread network interface name.
+ *
+ */
+void platformBackboneInit(otInstance *aInstance, const char *aInterfaceName);
+
+/**
+ * This function updates the file descriptor sets with file descriptors used by the platform Backbone network.
+ *
+ * @param[inout]  aReadFdSet   A reference to the read file descriptors.
+ * @param[inout]  aMaxFd       A reference to the max file descriptor.
+ *
+ */
+void platformBackboneUpdateFdSet(fd_set &aReadFdSet, int &aMaxFd);
+
+/**
+ * This function performs platform Backbone network processing.
+ *
+ * @param[in]   aReadFdSet  A reference to the read file descriptors.
+ *
+ */
+void platformBackboneProcess(const fd_set &aReadSet);
+
+/**
+ * This function performs notifies state changes to platform Backbone network.
+ *
+ * @param[in]   aInstance       A pointer to the OpenThread instance.
+ * @param[in]   aFlags          Flags that denote the state change events.
+ *
+ */
+void platformBackboneStateChange(otInstance *aInstance, otChangedFlags aFlags);
+
+/**
+ * The name of Backbone network interface.
+ *
+ */
+extern char gBackboneNetifName[IFNAMSIZ];
+
+/**
+ * The index of Backbone network interface.
+ *
+ */
+extern unsigned int gBackboneNetifIndex;
 
 #ifdef __cplusplus
 }

@@ -47,7 +47,6 @@ namespace Utils {
 
 JamDetector::JamDetector(Instance &aInstance)
     : InstanceLocator(aInstance)
-    , Notifier::Receiver(aInstance, JamDetector::HandleNotifierEvents)
     , mHandler(nullptr)
     , mContext(nullptr)
     , mTimer(aInstance, JamDetector::HandleTimer, this)
@@ -101,18 +100,18 @@ exit:
 
 void JamDetector::CheckState(void)
 {
-    VerifyOrExit(mEnabled, OT_NOOP);
+    VerifyOrExit(mEnabled);
 
     switch (Get<Mle::MleRouter>().GetRole())
     {
     case Mle::kRoleDisabled:
-        VerifyOrExit(mTimer.IsRunning(), OT_NOOP);
+        VerifyOrExit(mTimer.IsRunning());
         mTimer.Stop();
         SetJamState(false);
         break;
 
     default:
-        VerifyOrExit(!mTimer.IsRunning(), OT_NOOP);
+        VerifyOrExit(!mTimer.IsRunning());
         mCurSecondStartTime   = TimerMilli::GetNow();
         mAlwaysAboveThreshold = true;
         mHistoryBitmap        = 0;
@@ -170,7 +169,7 @@ void JamDetector::HandleTimer(void)
     int8_t rssi;
     bool   didExceedThreshold = true;
 
-    VerifyOrExit(mEnabled, OT_NOOP);
+    VerifyOrExit(mEnabled);
 
     rssi = Get<Radio>().GetRssi();
 
@@ -269,11 +268,6 @@ void JamDetector::SetJamState(bool aNewState)
     {
         mHandler(mJamState, mContext);
     }
-}
-
-void JamDetector::HandleNotifierEvents(Notifier::Receiver &aReceiver, Events aEvents)
-{
-    static_cast<JamDetector &>(aReceiver).HandleNotifierEvents(aEvents);
 }
 
 void JamDetector::HandleNotifierEvents(Events aEvents)

@@ -135,11 +135,7 @@ mbedtls_platform_setup(NULL);
 When building an external application with OpenThread libraries and CryptoCell 310 hardware acceleration, use the following configuration:
 
 - Crypto libraries:
-  - `third_party/NordicSemiconductor/libraries/nrf_security/lib/libmbedcrypto_glue.a`
-  - `third_party/NordicSemiconductor/libraries/nrf_security/lib/libmbedcrypto_glue_cc310.a`
-  - `third_party/NordicSemiconductor/libraries/nrf_security/lib/libmbedcrypto_glue_vanilla.a`
   - `third_party/NordicSemiconductor/libraries/nrf_security/lib/libmbedcrypto_cc310_backend.a`
-  - `third_party/NordicSemiconductor/libraries/nrf_security/lib/libmbedcrypto_vanilla_backend.a`
   - `third_party/NordicSemiconductor/libraries/nrf_security/lib/libmbedtls_tls_vanilla.a`
   - `third_party/NordicSemiconductor/libraries/nrf_security/lib/libmbedtls_x509_vanilla.a`
   - `third_party/NordicSemiconductor/libraries/nrf_security/lib/libmbedtls_base_vanilla.a`
@@ -191,9 +187,9 @@ void nrf_cc310_platform_set_mutexes(nrf_cc310_platform_mutex_apis_t const * cons
                                     nrf_cc310_platform_mutexes_t const * const mutexes)
 ```
 
-The sample implementation of mutexes for FreeRTOS and Zephyr operating systems can be found in `nrf_cc310_platform_mutex_freertos.c` and `nrf_cc310_platform_mutex_zephyr.c`. Both files implement the function `int nrf_cc310_platform_mutex_init(void)`. This function must be called before `mbedtls_platform_setup`.
+The sample implementation of mutexes for FreeRTOS and Zephyr operating systems can be found in `nrf_cc3xx_platform_mutex_freertos.c` and `nrf_cc3xx_platform_mutex_zephyr.c`. Both files implement the function `int nrf_cc310_platform_mutex_init(void)`. This function must be called before `mbedtls_platform_setup`.
 
-The sample implementation of the abort functionality for FreeRTOS and Zephyr operating systems can be found in `nrf_cc310_platform_abort_freertos.c` and `nrf_cc310_platform_abort_zephyr.c`. Both files implement the function `void nrf_cc310_platform_abort_init(void)`. This function must be called before `mbedtls_platform_setup`.
+The sample implementation of the abort functionality for FreeRTOS and Zephyr operating systems can be found in `nrf_cc3xx_platform_abort_freertos.c` and `nrf_cc3xx_platform_abort_zephyr.c`. Both files implement the function `void nrf_cc310_platform_abort_init(void)`. This function must be called before `mbedtls_platform_setup`.
 
 The typical setup in the RTOS environment (error checking omitted) is as follows:
 
@@ -207,15 +203,13 @@ mbedtls_platform_setup(NULL);
 When building an external application that uses RTOS with OpenThread libraries and the CryptoCell 310 hardware acceleration, use the following configuration:
 
 - Crypto libraries:
-  - `third_party/NordicSemiconductor/libraries/nrf_security/lib/libmbedcrypto_glue.a`
-  - `third_party/NordicSemiconductor/libraries/nrf_security/lib/libmbedcrypto_glue_cc310.a`
-  - `third_party/NordicSemiconductor/libraries/nrf_security/lib/libmbedcrypto_glue_vanilla.a`
-  - `third_party/NordicSemiconductor/libraries/nrf_security/lib/libmbedcrypto_cc310_backend.a`
-  - `third_party/NordicSemiconductor/libraries/nrf_security/lib/libmbedcrypto_vanilla_backend.a`
-  - `third_party/NordicSemiconductor/libraries/nrf_security/lib/libmbedtls_tls_vanilla.a`
-  - `third_party/NordicSemiconductor/libraries/nrf_security/lib/libmbedtls_x509_vanilla.a`
-  - `third_party/NordicSemiconductor/libraries/nrf_security/lib/libmbedtls_base_vanilla.a`
-  - `third_party/NordicSemiconductor/libraries/nrf_security/lib/libnrf_cc310_platform_0.9.2.a`
+  - `/third_party/NordicSemiconductor/libraries/nrf_security/lib/libmbedcrypto_shared.a`
+  - `/third_party/NordicSemiconductor/libraries/nrf_security/lib/libmbedtls_tls_vanilla.a`
+  - `/third_party/NordicSemiconductor/libraries/nrf_security/lib/libmbedtls_x509_vanilla.a`
+  - `/third_party/NordicSemiconductor/libraries/nrf_security/lib/libmbedcrypto_cc3xx.a`
+  - `/third_party/NordicSemiconductor/libraries/nrf_security/lib/libnrf_cc310_platform_0.9.4.a`
+  - `/third_party/NordicSemiconductor/libraries/nrf_security/lib/libmbedcrypto_oberon.a`
+  - `/third_party/NordicSemiconductor/libraries/nrf_security/lib/libmbedtls_base_vanilla.a`
 - Include directories:
   - `third_party/NordicSemiconductor/libraries/nrf_security/mbedtls_platform_config`
   - `third_party/NordicSemiconductor/libraries/nrf_security/include`
@@ -225,8 +219,8 @@ When building an external application that uses RTOS with OpenThread libraries a
   - `MBEDTLS_CONFIG_FILE` set to `"nrf-config.h"`
   - `MBEDTLS_USER_CONFIG_FILE` set to `"nrf52840-mbedtls-config.h"`
 - Sources:
-  - `nrf_cc310_platform_mutex_freertos.c` or `nrf_cc310_platform_mutex_zephyr.c` from `third_party/NordicSemiconductor/libraries/nrf_security/nrf_cc310_platform/src`, depending on the RTOS used.
-  - `nrf_cc310_platform_abort_freertos.c` or `nrf_cc310_platform_abort_zephyr.c` from `third_party/NordicSemiconductor/libraries/nrf_security/nrf_cc310_platform/src`, depending on the RTOS used.
+  - `nrf_cc3xx_platform_mutex_freertos.c` or `nrf_cc3xx_platform_mutex_zephyr.c` from `third_party/NordicSemiconductor/libraries/nrf_security/nrf_cc310_platform/src`, depending on the RTOS used.
+  - `nrf_cc3xx_platform_abort_freertos.c` or `nrf_cc3xx_platform_abort_zephyr.c` from `third_party/NordicSemiconductor/libraries/nrf_security/nrf_cc310_platform/src`, depending on the RTOS used.
 
 See [mbedTls Thread Safety and Multi Threading][mbedtls-thread-safety-and-multi-threading] for more details.
 
@@ -328,9 +322,9 @@ To test the example:
    > dataset
    Active Timestamp: 1
    Channel: 13
-   Channel Mask: 07fff800
+   Channel Mask: 0x07fff800
    Ext PAN ID: d63e8e3e495ebbc3
-   Mesh Local Prefix: fd3d:b50b:f96d:722d/64
+   Mesh Local Prefix: fd3d:b50b:f96d:722d::/64
    Master Key: dfd34f0f05cad978ec4e32b0413038ff
    Network Name: OpenThread-8f28
    PAN ID: 0x8f28

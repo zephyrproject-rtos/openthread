@@ -76,6 +76,37 @@ class NetifUnicastAddress : public otNetifAddress,
 
 public:
     /**
+     * This method clears and initializes the unicast address as a preferred, valid, thread-origin address with 64-bit
+     * prefix length.
+     *
+     */
+    void InitAsThreadOrigin(void);
+
+    /**
+     * This method clears and initializes the unicast address as a preferred, valid, thread-origin, realm-local scope
+     * (overridden) address with 64-bit prefix length.
+     *
+     */
+    void InitAsThreadOriginRealmLocalScope(void);
+
+    /**
+     * This method clears and initializes the unicast address as a valid (but not preferred), thread-origin, global
+     * scope address.
+     *
+     */
+    void InitAsThreadOriginGlobalScope(void);
+
+    /**
+     * This method clears and initializes the unicast address as a valid, SLAAC-origin address with a given preferred
+     * flag and a given prefix length.
+     *
+     * @param[in] aPrefixLength    The prefix length (in bits).
+     * @param[in] aPreferred       The preferred flag.
+     *
+     */
+    void InitAsSlaacOrigin(uint8_t aPrefixLength, bool aPreferred);
+
+    /**
      * This method returns the unicast address.
      *
      * @returns The unicast address.
@@ -92,6 +123,28 @@ public:
     Address &GetAddress(void) { return static_cast<Address &>(mAddress); }
 
     /**
+     * This method returns the address's prefix length (in bits).
+     *
+     * @returns The prefix length (in bits).
+     *
+     */
+    uint8_t GetPrefixLength(void) const { return mPrefixLength; }
+
+    /**
+     * This method indicates whether the address has a given prefix (i.e. same prefix length and matches the prefix).
+     *
+     * @param[in] aPrefix   A prefix to check against.
+     *
+     * @retval TRUE  The address has and fully matches the @p aPrefix.
+     * @retval FALSE The address does not contain or match the @p aPrefix.
+     *
+     */
+    bool HasPrefix(const Prefix &aPrefix) const
+    {
+        return (mPrefixLength == aPrefix.GetLength()) && GetAddress().MatchesPrefix(aPrefix);
+    }
+
+    /**
      * This method returns the IPv6 scope value.
      *
      * @returns The IPv6 scope value.
@@ -100,6 +153,18 @@ public:
     uint8_t GetScope(void) const
     {
         return mScopeOverrideValid ? static_cast<uint8_t>(mScopeOverride) : GetAddress().GetScope();
+    }
+
+    /**
+     * This method sets the IPv6 scope override value.
+     *
+     * @param[in]  aScope  The IPv6 scope value.
+     *
+     */
+    void SetScopeOverride(uint8_t aScope)
+    {
+        mScopeOverride      = aScope;
+        mScopeOverrideValid = true;
     }
 
 private:
@@ -214,13 +279,15 @@ public:
     public:
         /**
          * This constructor initializes an `ExternalMulticastAddressIterator` instance to start from the first external
-         * multicast address.
+         * multicast address that matches a given Ip6 address type filter.
          *
-         * @param[in] aNetif  A reference to the Netif instance.
+         * @param[in] aNetif   A reference to the Netif instance.
+         * @param[in] aFilter  The Ip6 address type filter.
          *
          */
-        explicit ExternalMulticastAddressIterator(const Netif &aNetif)
+        explicit ExternalMulticastAddressIterator(const Netif &aNetif, Address::TypeFilter aFilter = Address::kTypeAny)
             : mNetif(aNetif)
+            , mFilter(aFilter)
         {
             AdvanceFrom(mNetif.GetMulticastAddresses());
         }
@@ -315,7 +382,8 @@ public:
 
         void AdvanceFrom(const NetifMulticastAddress *aAddr)
         {
-            while (aAddr != nullptr && !mNetif.IsMulticastAddressExternal(*aAddr))
+            while (aAddr != nullptr &&
+                   !(mNetif.IsMulticastAddressExternal(*aAddr) && aAddr->GetAddress().MatchesFilter(mFilter)))
             {
                 aAddr = aAddr->GetNext();
             }
@@ -326,6 +394,7 @@ public:
 
         const Netif &                  mNetif;
         ExternalNetifMulticastAddress *mCurrent;
+        Address::TypeFilter            mFilter;
     };
 
     /**
@@ -334,7 +403,7 @@ public:
      * @param[in]  aInstance        A reference to the OpenThread instance.
      *
      */
-    Netif(Instance &aInstance);
+    explicit Netif(Instance &aInstance);
 
     /**
      * This method registers a callback to notify internal IPv6 address changes.
@@ -563,19 +632,28 @@ public:
     void SetMulticastPromiscuous(bool aEnabled) { mMulticastPromiscuous = aEnabled; }
 
     /**
-     * This method enables range-based `for` loop iteration over all external multicast addresses on the Netif.
+     * This method enables range-based `for` loop iteration over external multicast addresses on the Netif that matches
+     * a given Ip6 address type filter.
      *
-     * This method should be used like follows:
+     * This method should be used like follows: to iterate over all external multicast addresses
      *
      *     for (Ip6::ExternalNetifMulticastAddress &addr : Get<ThreadNetif>().IterateExternalMulticastAddresses())
      *     { ... }
      *
+     * or to iterate over a subset of external multicast addresses determined by a given address type filter
+     *
+     *     for (Ip6::ExternalNetifMulticastAddress &addr :
+     * Get<ThreadNetif>().IterateExternalMulticastAddresses(Ip6::Address::kTypeMulticastLargerThanRealmLocal)) { ... }
+     *
+     * @param[in] aFilter  The Ip6 address type filter.
+     *
      * @returns An `ExternalMulticastAddressIteratorBuilder` instance.
      *
      */
-    ExternalMulticastAddressIteratorBuilder IterateExternalMulticastAddresses(void)
+    ExternalMulticastAddressIteratorBuilder IterateExternalMulticastAddresses(
+        Address::TypeFilter aFilter = Address::kTypeAny)
     {
-        return ExternalMulticastAddressIteratorBuilder(*this);
+        return ExternalMulticastAddressIteratorBuilder(*this, aFilter);
     }
 
     /**
@@ -605,27 +683,24 @@ protected:
     void UnsubscribeAllNodesMulticast(void);
 
 private:
-    enum
-    {
-        kMulticastPrefixLength = 128, ///< Multicast prefix length used to notify internal address changes.
-    };
-
     class ExternalMulticastAddressIteratorBuilder
     {
     public:
-        ExternalMulticastAddressIteratorBuilder(const Netif &aNetif)
+        ExternalMulticastAddressIteratorBuilder(const Netif &aNetif, Address::TypeFilter aFilter)
             : mNetif(aNetif)
+            , mFilter(aFilter)
         {
         }
 
-        ExternalMulticastAddressIterator begin(void) { return ExternalMulticastAddressIterator(mNetif); }
+        ExternalMulticastAddressIterator begin(void) { return ExternalMulticastAddressIterator(mNetif, mFilter); }
         ExternalMulticastAddressIterator end(void)
         {
             return ExternalMulticastAddressIterator(mNetif, ExternalMulticastAddressIterator::kEndIterator);
         }
 
     private:
-        const Netif &mNetif;
+        const Netif &       mNetif;
+        Address::TypeFilter mFilter;
     };
 
     LinkedList<NetifUnicastAddress>   mUnicastAddresses;

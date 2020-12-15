@@ -46,6 +46,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <time.h>
 #include <unistd.h>
 
 #if HAVE_LIBEDIT
@@ -58,6 +59,15 @@
 #include "common/code_utils.hpp"
 
 #include "platform-posix.h"
+
+enum
+{
+    kLineBufferSize = 256,
+};
+
+static_assert(kLineBufferSize >= sizeof("> "), "kLineBufferSize is too small");
+static_assert(kLineBufferSize >= sizeof("Done\r\n"), "kLineBufferSize is too small");
+static_assert(kLineBufferSize >= sizeof("Error "), "kLineBufferSize is too small");
 
 static int sSessionFd = -1;
 
@@ -76,97 +86,6 @@ static void InputCallback(char *aLine)
     }
 }
 #endif // OPENTHREAD_USE_READLINE
-
-static bool FindPrompt(int &aState, char aChar)
-{
-    switch (aChar)
-    {
-    case '>':
-        aState = aState == 0 ? 1 : -1;
-        break;
-    case ' ':
-        aState = aState == 1 ? 2 : -1;
-        break;
-    case '\r':
-    case '\n':
-        aState = 0;
-        break;
-    default:
-        aState = -1;
-    }
-
-    return aState == 2;
-}
-
-static bool FindDone(int &aDoneState, char aNowCharacter)
-{
-    switch (aNowCharacter)
-    {
-    case 'D':
-        aDoneState = aDoneState == 0 ? 1 : -1;
-        break;
-    case 'o':
-        aDoneState = aDoneState == 1 ? 2 : -1;
-        break;
-    case 'n':
-        aDoneState = aDoneState == 2 ? 3 : -1;
-        break;
-    case 'e':
-        aDoneState = aDoneState == 3 ? 4 : -1;
-        break;
-    case '\r':
-    case '\n':
-        if (aDoneState == 4)
-        {
-            aDoneState = 5;
-        }
-        else
-        {
-            aDoneState = 0;
-        }
-        break;
-    default:
-        aDoneState = -1;
-        break;
-    }
-
-    return aDoneState == 5;
-}
-
-static bool FindError(int &aErrorState, char aNowCharacter)
-{
-    switch (aNowCharacter)
-    {
-    case 'E':
-        aErrorState = aErrorState == 0 ? 1 : -1;
-        break;
-    case 'r':
-        if (aErrorState == 1 || aErrorState == 2 || aErrorState == 4)
-        {
-            (aErrorState)++;
-        }
-        else
-        {
-            aErrorState = -1;
-        }
-        break;
-    case 'o':
-        aErrorState = aErrorState == 3 ? 4 : -1;
-        break;
-    case ' ':
-        aErrorState = aErrorState == 5 ? 6 : -1;
-        break;
-    case '\r':
-    case '\n':
-        aErrorState = 0;
-        break;
-    default:
-        aErrorState = -1;
-        break;
-    }
-
-    return aErrorState == 6;
-}
 
 static bool DoWrite(int aFile, const void *aBuffer, size_t aSize)
 {
@@ -190,17 +109,17 @@ exit:
     return ret;
 }
 
-int main(int argc, char *argv[])
+static int ConnectSession(void)
 {
-    int  ret;
-    bool isInteractive = true;
-    bool isFinished    = false;
-    int  doneState     = 0;
-    int  errorState    = 0;
-    int  promptState   = 0;
+    int ret;
+
+    if (sSessionFd != -1)
+    {
+        close(sSessionFd);
+    }
 
     sSessionFd = socket(AF_UNIX, SOCK_STREAM, 0);
-    VerifyOrExit(sSessionFd != -1, perror("socket"); ret = OT_EXIT_FAILURE);
+    VerifyOrExit(sSessionFd != -1, ret = -1);
 
     {
         struct sockaddr_un sockname;
@@ -210,13 +129,46 @@ int main(int argc, char *argv[])
         strncpy(sockname.sun_path, OPENTHREAD_POSIX_DAEMON_SOCKET_NAME, sizeof(sockname.sun_path) - 1);
 
         ret = connect(sSessionFd, reinterpret_cast<const struct sockaddr *>(&sockname), sizeof(struct sockaddr_un));
-
-        if (ret == -1)
-        {
-            fprintf(stderr, "OpenThread daemon is not running.\n");
-            ExitNow(ret = OT_EXIT_FAILURE);
-        }
     }
+
+exit:
+    return ret;
+}
+
+static bool ReconnectSession(void)
+{
+    bool     ok    = false;
+    uint32_t delay = 0; // 100ms
+
+    for (int i = 0; i < 6; i++) // delay for 3.1s in total
+    {
+        int rval;
+
+        usleep(delay);
+        delay = delay > 0 ? delay * 2 : 100000;
+
+        rval = ConnectSession();
+
+        VerifyOrExit(rval == -1, ok = true);
+
+        // Exit immediately if the sock file is not found
+        VerifyOrExit(errno != ENOENT);
+    }
+
+exit:
+    return ok;
+}
+
+int main(int argc, char *argv[])
+{
+    int    ret;
+    bool   isInteractive = true;
+    bool   isFinished    = false;
+    char   lineBuffer[kLineBufferSize];
+    size_t lineBufferWritePos = 0;
+    bool   isBeginOfLine      = true;
+
+    VerifyOrExit(ConnectSession() != -1, perror("connect session failed"); ret = OT_EXIT_FAILURE);
 
     if (argc > 1)
     {
@@ -287,6 +239,11 @@ int main(int argc, char *argv[])
             if (rval == 0)
             {
                 // daemon closed sSessionFd
+                if (isInteractive && ReconnectSession())
+                {
+                    continue;
+                }
+
                 ExitNow(ret = isInteractive ? OT_EXIT_FAILURE : OT_EXIT_SUCCESS);
             }
 
@@ -296,43 +253,39 @@ int main(int argc, char *argv[])
             }
             else
             {
-                ssize_t lineStart = 0;
-
                 for (ssize_t i = 0; i < rval; i++)
                 {
-                    int prevPromptState = promptState;
+                    char c = buffer[i];
 
-                    if (FindPrompt(promptState, buffer[i]))
+                    lineBuffer[lineBufferWritePos++] = c;
+                    if (c == '\n' || lineBufferWritePos >= sizeof(lineBuffer) - 1)
                     {
-                        doneState  = 0;
-                        errorState = 0;
-                        lineStart  = i + 1;
-                        continue;
-                    }
-                    else if (prevPromptState == 1 && i == 0)
-                    {
-                        VerifyOrExit(DoWrite(STDOUT_FILENO, ">", 1), ret = OT_EXIT_FAILURE);
-                    }
+                        char * line = lineBuffer;
+                        size_t len  = lineBufferWritePos;
 
-                    if (buffer[i] == '\r' || buffer[i] == '\n')
-                    {
-                        VerifyOrExit(DoWrite(STDOUT_FILENO, buffer + lineStart, static_cast<size_t>(i - lineStart + 1)),
-                                     ret = OT_EXIT_FAILURE);
-                        lineStart = i + 1;
-                    }
+                        // read one line successfully or line buffer is full
+                        line[len] = '\0';
 
-                    if (FindDone(doneState, buffer[i]) || FindError(errorState, buffer[i]))
-                    {
-                        isFinished = true;
-                        ret        = OT_EXIT_SUCCESS;
-                    }
-                }
+                        if (isBeginOfLine && strncmp("> ", lineBuffer, 2) == 0)
+                        {
+                            line += 2;
+                            len -= 2;
+                        }
 
-                if (lineStart < rval && promptState != 1)
-                {
-                    assert(promptState != 0 && promptState != 2);
-                    VerifyOrExit(DoWrite(STDOUT_FILENO, buffer + lineStart, static_cast<size_t>(rval - lineStart)),
-                                 ret = OT_EXIT_FAILURE);
+                        VerifyOrExit(DoWrite(STDOUT_FILENO, line, len), ret = OT_EXIT_FAILURE);
+
+                        if (isBeginOfLine && (strncmp("Done\n", line, 5) == 0 || strncmp("Done\r\n", line, 6) == 0 ||
+                                              strncmp("Error ", line, 6) == 0))
+                        {
+                            isFinished = true;
+                            ret        = OT_EXIT_SUCCESS;
+                            break;
+                        }
+
+                        // reset for next line
+                        lineBufferWritePos = 0;
+                        isBeginOfLine      = c == '\n';
+                    }
                 }
             }
         }

@@ -30,11 +30,15 @@ LOCAL_PATH := $(call my-dir)
 
 OPENTHREAD_DEFAULT_VERSION := $(shell cat $(LOCAL_PATH)/.default-version)
 OPENTHREAD_SOURCE_VERSION := $(shell git -C $(LOCAL_PATH) describe --always --match "[0-9].*" 2> /dev/null)
-OPENTHREAD_PROJECT_CFLAGS ?= -DOPENTHREAD_PROJECT_CORE_CONFIG_FILE=\"openthread-core-posix-config.h\"
+
+OPENTHREAD_PROJECT_CFLAGS                                                 ?= \
+    -DOPENTHREAD_PROJECT_CORE_CONFIG_FILE=\"openthread-core-posix-config.h\" \
+    -DOPENTHREAD_CONFIG_FILE=\<openthread-config-android.h\>                 \
+    $(NULL)
 
 OPENTHREAD_PUBLIC_CFLAGS                                         := \
     -DOPENTHREAD_CONFIG_COMMISSIONER_ENABLE=1                       \
-    -DOPENTHREAD_CONFIG_FILE=\<openthread-config-android.h\>        \
+    -DOPENTHREAD_CONFIG_IP6_SLAAC_ENABLE=1                          \
     -DOPENTHREAD_CONFIG_LOG_LEVEL_DYNAMIC_ENABLE=1                  \
     -DOPENTHREAD_CONFIG_MAC_FILTER_ENABLE=1                         \
     -DOPENTHREAD_POSIX_CONFIG_RCP_PTY_ENABLE=1                      \
@@ -139,7 +143,6 @@ LOCAL_EXPORT_C_INCLUDE_DIRS     := \
 LOCAL_CPPFLAGS                                                              := \
     -std=c++11                                                                 \
     -pedantic-errors                                                           \
-    -Wno-non-virtual-dtor                                                      \
     $(NULL)
 
 LOCAL_SRC_FILES                                          := \
@@ -154,6 +157,7 @@ LOCAL_SRC_FILES                                          := \
     src/core/api/crypto_api.cpp                             \
     src/core/api/dataset_api.cpp                            \
     src/core/api/dataset_ftd_api.cpp                        \
+    src/core/api/dataset_updater_api.cpp                    \
     src/core/api/diags_api.cpp                              \
     src/core/api/dns_api.cpp                                \
     src/core/api/icmp6_api.cpp                              \
@@ -162,9 +166,11 @@ LOCAL_SRC_FILES                                          := \
     src/core/api/jam_detection_api.cpp                      \
     src/core/api/joiner_api.cpp                             \
     src/core/api/link_api.cpp                               \
+    src/core/api/link_metrics_api.cpp                       \
     src/core/api/link_raw_api.cpp                           \
     src/core/api/logging_api.cpp                            \
     src/core/api/message_api.cpp                            \
+    src/core/api/multi_radio_api.cpp                        \
     src/core/api/netdata_api.cpp                            \
     src/core/api/netdiag_api.cpp                            \
     src/core/api/random_crypto_api.cpp                      \
@@ -174,9 +180,12 @@ LOCAL_SRC_FILES                                          := \
     src/core/api/thread_api.cpp                             \
     src/core/api/thread_ftd_api.cpp                         \
     src/core/api/udp_api.cpp                                \
+    src/core/backbone_router/backbone_tmf.cpp               \
     src/core/backbone_router/bbr_leader.cpp                 \
     src/core/backbone_router/bbr_local.cpp                  \
     src/core/backbone_router/bbr_manager.cpp                \
+    src/core/backbone_router/multicast_listeners_table.cpp  \
+    src/core/backbone_router/ndproxy_table.cpp              \
     src/core/coap/coap.cpp                                  \
     src/core/coap/coap_message.cpp                          \
     src/core/coap/coap_secure.cpp                           \
@@ -189,11 +198,13 @@ LOCAL_SRC_FILES                                          := \
     src/core/common/settings.cpp                            \
     src/core/common/string.cpp                              \
     src/core/common/tasklet.cpp                             \
+    src/core/common/time_ticker.cpp                         \
     src/core/common/timer.cpp                               \
     src/core/common/tlvs.cpp                                \
     src/core/common/trickle_timer.cpp                       \
     src/core/crypto/aes_ccm.cpp                             \
     src/core/crypto/aes_ecb.cpp                             \
+    src/core/crypto/hkdf_sha256.cpp                         \
     src/core/crypto/hmac_sha256.cpp                         \
     src/core/crypto/mbedtls.cpp                             \
     src/core/crypto/pbkdf2_cmac.cpp                         \
@@ -205,6 +216,7 @@ LOCAL_SRC_FILES                                          := \
     src/core/mac/mac.cpp                                    \
     src/core/mac/mac_filter.cpp                             \
     src/core/mac/mac_frame.cpp                              \
+    src/core/mac/mac_links.cpp                              \
     src/core/mac/mac_types.cpp                              \
     src/core/mac/sub_mac.cpp                                \
     src/core/mac/sub_mac_callbacks.cpp                      \
@@ -224,9 +236,11 @@ LOCAL_SRC_FILES                                          := \
     src/core/meshcop/meshcop_tlvs.cpp                       \
     src/core/meshcop/panid_query_client.cpp                 \
     src/core/meshcop/timestamp.cpp                          \
+    src/core/net/checksum.cpp                               \
     src/core/net/dhcp6_client.cpp                           \
     src/core/net/dhcp6_server.cpp                           \
     src/core/net/dns_client.cpp                             \
+    src/core/net/dns_headers.cpp                            \
     src/core/net/icmp6.cpp                                  \
     src/core/net/ip6.cpp                                    \
     src/core/net/ip6_address.cpp                            \
@@ -238,15 +252,20 @@ LOCAL_SRC_FILES                                          := \
     src/core/radio/radio.cpp                                \
     src/core/radio/radio_callbacks.cpp                      \
     src/core/radio/radio_platform.cpp                       \
+    src/core/radio/trel_interface.cpp                       \
+    src/core/radio/trel_link.cpp                            \
+    src/core/radio/trel_packet.cpp                          \
     src/core/thread/address_resolver.cpp                    \
     src/core/thread/announce_begin_server.cpp               \
     src/core/thread/announce_sender.cpp                     \
     src/core/thread/child_table.cpp                         \
+    src/core/thread/csl_tx_scheduler.cpp                    \
     src/core/thread/discover_scanner.cpp                    \
     src/core/thread/dua_manager.cpp                         \
     src/core/thread/energy_scan_server.cpp                  \
     src/core/thread/indirect_sender.cpp                     \
     src/core/thread/key_manager.cpp                         \
+    src/core/thread/link_metrics.cpp                        \
     src/core/thread/link_quality.cpp                        \
     src/core/thread/lowpan.cpp                              \
     src/core/thread/mesh_forwarder.cpp                      \
@@ -256,6 +275,7 @@ LOCAL_SRC_FILES                                          := \
     src/core/thread/mle_router.cpp                          \
     src/core/thread/mle_types.cpp                           \
     src/core/thread/mlr_manager.cpp                         \
+    src/core/thread/neighbor_table.cpp                      \
     src/core/thread/network_data.cpp                        \
     src/core/thread/network_data_leader.cpp                 \
     src/core/thread/network_data_leader_ftd.cpp             \
@@ -263,15 +283,20 @@ LOCAL_SRC_FILES                                          := \
     src/core/thread/network_data_notifier.cpp               \
     src/core/thread/network_diagnostic.cpp                  \
     src/core/thread/panid_query_server.cpp                  \
+    src/core/thread/radio_selector.cpp                      \
     src/core/thread/router_table.cpp                        \
     src/core/thread/src_match_controller.cpp                \
     src/core/thread/thread_netif.cpp                        \
+    src/core/thread/tmf.cpp                                 \
     src/core/thread/topology.cpp                            \
+    src/core/thread/uri_paths.cpp                           \
     src/core/utils/channel_manager.cpp                      \
     src/core/utils/channel_monitor.cpp                      \
     src/core/utils/child_supervision.cpp                    \
+    src/core/utils/dataset_updater.cpp                      \
     src/core/utils/heap.cpp                                 \
     src/core/utils/jam_detector.cpp                         \
+    src/core/utils/lookup_table.cpp                         \
     src/core/utils/parse_cmdline.cpp                        \
     src/core/utils/slaac_address.cpp                        \
     src/lib/hdlc/hdlc.cpp                                   \
@@ -281,10 +306,12 @@ LOCAL_SRC_FILES                                          := \
     src/lib/spinel/spinel_encoder.cpp                       \
     src/lib/url/url.cpp                                     \
     src/posix/platform/alarm.cpp                            \
+    src/posix/platform/backbone.cpp                         \
     src/posix/platform/entropy.cpp                          \
     src/posix/platform/hdlc_interface.cpp                   \
     src/posix/platform/logging.cpp                          \
     src/posix/platform/misc.cpp                             \
+    src/posix/platform/multicast_routing.cpp                \
     src/posix/platform/netif.cpp                            \
     src/posix/platform/radio.cpp                            \
     src/posix/platform/radio_url.cpp                        \
@@ -350,7 +377,6 @@ LOCAL_CFLAGS                                                                := \
 LOCAL_CPPFLAGS                                                              := \
     -std=c++11                                                                 \
     -pedantic-errors                                                           \
-    -Wno-non-virtual-dtor                                                      \
     $(NULL)
 
 LOCAL_SRC_FILES                            := \
@@ -361,7 +387,7 @@ LOCAL_SRC_FILES                            := \
     src/cli/cli_console.cpp                   \
     src/cli/cli_dataset.cpp                   \
     src/cli/cli_joiner.cpp                    \
-    src/cli/cli_server.cpp                    \
+    src/cli/cli_network_data.cpp              \
     src/cli/cli_uart.cpp                      \
     src/cli/cli_udp.cpp                       \
     $(NULL)
@@ -395,7 +421,6 @@ LOCAL_CFLAGS                                                                := \
 LOCAL_CPPFLAGS                                                              := \
     -std=c++11                                                                 \
     -pedantic-errors                                                           \
-    -Wno-non-virtual-dtor                                                      \
     $(NULL)
 
 LOCAL_LDLIBS                               := \
@@ -435,7 +460,6 @@ LOCAL_CFLAGS                                                                := \
 LOCAL_CPPFLAGS                                                              := \
     -std=c++11                                                                 \
     -pedantic-errors                                                           \
-    -Wno-non-virtual-dtor                                                      \
     $(NULL)
 
 LOCAL_SRC_FILES                            := \
@@ -477,7 +501,6 @@ LOCAL_CFLAGS                                                                := \
 LOCAL_CPPFLAGS                                                              := \
     -std=c++11                                                                 \
     -pedantic-errors                                                           \
-    -Wno-non-virtual-dtor                                                      \
     $(NULL)
 
 LOCAL_SRC_FILES                            := \
@@ -501,11 +524,12 @@ LOCAL_MODULE_TAGS := eng
 LOCAL_CPPFLAGS                                                              := \
     -std=c++11                                                                 \
     -pedantic-errors                                                           \
-    -Wno-non-virtual-dtor                                                      \
     $(NULL)
 
-LOCAL_CFLAGS                                               := \
-    -DOPENTHREAD_CONFIG_FILE=\<openthread-config-android.h\>  \
+LOCAL_CFLAGS                                                                := \
+    $(OPENTHREAD_PUBLIC_CFLAGS)                                                \
+    $(OPENTHREAD_PRIVATE_CFLAGS)                                               \
+    $(OPENTHREAD_PROJECT_CFLAGS)                                               \
     $(NULL)
 
 LOCAL_C_INCLUDES                                         := \
@@ -521,3 +545,7 @@ LOCAL_SRC_FILES := src/posix/client.cpp
 
 include $(BUILD_EXECUTABLE)
 endif # ($(USE_OTBR_DAEMON), 1)
+
+ifneq ($(OPENTHREAD_PROJECT_ANDROID_MK),)
+include $(OPENTHREAD_PROJECT_ANDROID_MK)
+endif

@@ -87,14 +87,14 @@ for node in all_nodes:
 #   |       |
 #  fed1    sed2
 
-r1.whitelist_node(r2)
-r2.whitelist_node(r1)
+r1.allowlist_node(r2)
+r2.allowlist_node(r1)
 
-r1.whitelist_node(fed1)
-fed1.whitelist_node(r1)
+r1.allowlist_node(fed1)
+fed1.allowlist_node(r1)
 
-r2.whitelist_node(sed2)
-sed2.whitelist_node(r2)
+r2.allowlist_node(sed2)
+sed2.allowlist_node(r2)
 
 r1.form("off-mesh")
 r2.join_node(r1, wpan.JOIN_TYPE_ROUTER)
@@ -144,15 +144,9 @@ def check_off_mesh_routes():
     # its WPAN_THREAD_OFF_MESH_ROUTES list (one time as part of network-wide
     # network data and again as part of the local network data). Note that
     # `r1 and `r2` each add a route, while `sed2` does not.
-    verify(
-        len(wpan.parse_list(r1.get(wpan.WPAN_THREAD_OFF_MESH_ROUTES))) ==
-        NUM_ROUTES + NUM_ROUTES_LOCAL)
-    verify(
-        len(wpan.parse_list(r2.get(wpan.WPAN_THREAD_OFF_MESH_ROUTES))) ==
-        NUM_ROUTES + NUM_ROUTES_LOCAL)
-    verify(
-        len(wpan.parse_list(sed2.get(wpan.WPAN_THREAD_OFF_MESH_ROUTES))) ==
-        NUM_ROUTES)
+    verify(len(wpan.parse_list(r1.get(wpan.WPAN_THREAD_OFF_MESH_ROUTES))) == NUM_ROUTES + NUM_ROUTES_LOCAL)
+    verify(len(wpan.parse_list(r2.get(wpan.WPAN_THREAD_OFF_MESH_ROUTES))) == NUM_ROUTES + NUM_ROUTES_LOCAL)
+    verify(len(wpan.parse_list(sed2.get(wpan.WPAN_THREAD_OFF_MESH_ROUTES))) == NUM_ROUTES)
 
 
 wpan.verify_within(check_off_mesh_routes, WAIT_TIME)

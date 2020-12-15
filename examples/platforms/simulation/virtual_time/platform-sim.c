@@ -193,7 +193,7 @@ static void socket_init(void)
             exit(EXIT_FAILURE);
         }
 
-        sPortOffset *= WELLKNOWN_NODE_ID;
+        sPortOffset *= (MAX_NETWORK_SIZE + 1);
     }
 
     sockaddr.sin_port        = htons((uint16_t)(9000 + sPortOffset + gNodeId));
@@ -237,7 +237,7 @@ void otSysInit(int argc, char *argv[])
 
     gNodeId = (uint32_t)strtol(argv[1], &endptr, 0);
 
-    if (*endptr != '\0' || gNodeId < 1 || gNodeId >= WELLKNOWN_NODE_ID)
+    if (*endptr != '\0' || gNodeId < 1 || gNodeId > MAX_NETWORK_SIZE)
     {
         fprintf(stderr, "Invalid NodeId: %s\n", argv[1]);
         exit(EXIT_FAILURE);
@@ -311,5 +311,24 @@ void otSysProcessDrivers(otInstance *aInstance)
     platformUartProcess();
 #endif
 }
+
+#if OPENTHREAD_CONFIG_OTNS_ENABLE
+
+void otPlatOtnsStatus(const char *aStatus)
+{
+    struct Event event;
+    uint16_t     statusLength = (uint16_t)strlen(aStatus);
+
+    assert(statusLength < sizeof(event.mData));
+
+    memcpy(event.mData, aStatus, statusLength);
+    event.mDataLength = statusLength;
+    event.mDelay      = 0;
+    event.mEvent      = OT_SIM_EVENT_OTNS_STATUS_PUSH;
+
+    otSimSendEvent(&event);
+}
+
+#endif // OPENTHREAD_CONFIG_OTNS_ENABLE
 
 #endif // OPENTHREAD_SIMULATION_VIRTUAL_TIME

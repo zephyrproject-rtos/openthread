@@ -35,7 +35,7 @@ from wpan import verify
 #
 # This test covers the behavior of Child Supervision feature.
 #
-# This test uses MAC whitelisting to emulate the situation where a child is
+# This test uses MAC allowlisting to emulate the situation where a child is
 # removed from parent's child table while the child continues to stay attached
 # to the parent (since data polls from child are acked at radio platform layer).
 # Specifically the test verifies that once supervision check is enabled on the
@@ -94,32 +94,29 @@ verify(child.is_associated())
 verify(int(child.get(wpan.WPAN_THREAD_CHILD_TIMEOUT), 0) == CHILD_TIMEOUT)
 
 # Verify the child table on parent contains the child with correct timeout
-child_table = wpan.parse_child_table_result(
-    parent.get(wpan.WPAN_THREAD_CHILD_TABLE))
+child_table = wpan.parse_child_table_result(parent.get(wpan.WPAN_THREAD_CHILD_TABLE))
 verify(len(child_table) == 1)
 verify(int(child_table[0].timeout, 0) == CHILD_TIMEOUT)
 
-# Enabling white-listing on parent
+# Enabling allowlisting on parent
 #
-# Since child is not in parent's whitelist, the data polls from child
+# Since child is not in parent's allowlist, the data polls from child
 # should be rejected and the child should be removed from parent's
 # child table after timeout. The child however should continue to
 # stay attached (since data polls are acked by radio driver) and
 # supervision check is disabled on the child.
 
-parent.set(wpan.WPAN_MAC_WHITELIST_ENABLED, '1')
+parent.set(wpan.WPAN_MAC_ALLOWLIST_ENABLED, '1')
 
 
 def check_child_is_removed_from_parent_child_table():
-    child_table = wpan.parse_child_table_result(
-        parent.get(wpan.WPAN_THREAD_CHILD_TABLE))
+    child_table = wpan.parse_child_table_result(parent.get(wpan.WPAN_THREAD_CHILD_TABLE))
     verify(len(child_table) == 0)
 
 
 # wait till child is removed from parent's child table
 # after this child should still be associated
-wpan.verify_within(check_child_is_removed_from_parent_child_table,
-                   CHILD_TIMEOUT / speedup + 2)
+wpan.verify_within(check_child_is_removed_from_parent_child_table, CHILD_TIMEOUT / speedup + 2)
 verify(child.is_associated())
 
 # Enable supervision check on child and expect the child to
@@ -135,16 +132,14 @@ def check_child_is_detached():
     verify(not child.is_associated())
 
 
-wpan.verify_within(check_child_is_detached,
-                   CHILD_SUPERVISION_CHECK_TIMEOUT / speedup + 8)
+wpan.verify_within(check_child_is_detached, CHILD_SUPERVISION_CHECK_TIMEOUT / speedup + 8)
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-# Enable child supervision on parent and disable white-listing
+# Enable child supervision on parent and disable allowlisting
 
-parent.set(wpan.WPAN_CHILD_SUPERVISION_INTERVAL,
-           str(PARENT_SUPERVISION_INTERVAL))
-parent.set(wpan.WPAN_MAC_WHITELIST_ENABLED, '0')
+parent.set(wpan.WPAN_CHILD_SUPERVISION_INTERVAL, str(PARENT_SUPERVISION_INTERVAL))
+parent.set(wpan.WPAN_MAC_ALLOWLIST_ENABLED, '0')
 
 # Wait for the child to attach back
 
@@ -165,9 +160,7 @@ time.sleep(PARENT_SUPERVISION_INTERVAL * 1.2 / speedup)
 # messages to its child, MAC counter for number of unicast tx is
 # used. Note that supervision interval on parent is set to 1 sec.
 
-verify(
-    int(parent.get("NCP:Counter:TX_PKT_UNICAST"), 0) >=
-    parent_unicast_tx_count + 1)
+verify(int(parent.get("NCP:Counter:TX_PKT_UNICAST"), 0) >= parent_unicast_tx_count + 1)
 
 verify(child.is_associated())
 

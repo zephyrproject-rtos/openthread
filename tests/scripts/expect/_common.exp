@@ -27,7 +27,7 @@
 #  POSSIBILITY OF SUCH DAMAGE.
 #
 
-proc wait_for {command expected} {
+proc wait_for {command success {failure {[\r\n]FAILURE_NOT_EXPECTED[\r\n]}}} {
     set result 0
     set timeout 1
     for {set i 0} {$i < 20} {incr i} {
@@ -36,8 +36,11 @@ proc wait_for {command expected} {
         }
 
         expect {
-            -re $expected {
+            -re $success {
                 set result 1
+            }
+            -re $failure {
+                error "Got failure in wait_for"
             }
             timeout {
                 # Do nothing
@@ -48,25 +51,128 @@ proc wait_for {command expected} {
         }
     }
     if {$result == 0} {
-        exit 1
+        error "Timed out in wait_for"
     }
 }
 
-proc spawn_node {id} {
-    if {[info exists ::env(RCP_COMMAND)] && $::env(RCP_COMMAND) != ""} {
-        spawn $::env(OT_COMMAND) "spinel+hdlc+uart://$::env(RCP_COMMAND)?forkpty-arg=$id"
+proc spawn_node {id {type ""} {radio_url ""}} {
+    global spawn_id
+    global spawn_ids
+    global argv0
+
+    if {${type} == ""} {
+        set type $::env(OT_NODE_TYPE)
+    }
+
+    if {${radio_url} == ""} {
+        set radio_url "spinel+hdlc+uart://$::env(OT_SIMULATION_APPS)/ncp/ot-rcp?forkpty-arg=$id"
+    }
+
+    send_user "\n# ${id} ${type}\n"
+
+    if {[info exists ::env(CC)] && $::env(CC) == "clang"} {
+        set gcov_prefix ""
     } else {
-        spawn $::env(OT_COMMAND) $id
+        set gcov_prefix "ot-run/$argv0/ot-gcda.$id"
     }
+
+    switch -regexp ${type} {
+        {rcp|rcp-cli} {
+            spawn /usr/bin/env GCOV_PREFIX=$gcov_prefix $::env(OT_POSIX_APPS)/ot-cli $radio_url
+            send "factoryreset\n"
+            wait_for "state" "disabled"
+            expect "Done"
+            send "routerselectionjitter 1\n"
+            expect "Done"
+        }
+        cli {
+            spawn /usr/bin/env GCOV_PREFIX=$gcov_prefix $::env(OT_SIMULATION_APPS)/cli/ot-cli-ftd $id
+            send "factoryreset\n"
+            wait_for "state" "disabled"
+            expect "Done"
+            send "routerselectionjitter 1\n"
+            expect "Done"
+        }
+        mtd {
+            spawn /usr/bin/env GCOV_PREFIX=$gcov_prefix $::env(OT_SIMULATION_APPS)/cli/ot-cli-mtd $id
+            send "factoryreset\n"
+            wait_for "state" "disabled"
+            expect "Done"
+        }
+    }
+
     expect_after {
-        timeout { exit 1 }
+        timeout { error "Timed out" }
     }
+
+    set spawn_ids($id) $spawn_id
+
     return $spawn_id
 }
 
-proc dispose {} {
+proc switch_node {id} {
+    global spawn_ids
+    global spawn_id
+
+    send_user "\n# ${id}\n"
+    set spawn_id $spawn_ids($id)
+}
+
+proc dispose_node {id} {
+    switch_node $id
     send "\x04"
     expect eof
+}
+
+proc setup_leader {} {
+    send "dataset init new\n"
+    expect "Done"
+    send "dataset commit active\n"
+    expect "Done"
+    send "ifconfig up\n"
+    expect "Done"
+    send "thread start\n"
+    expect "Done"
+    wait_for "state" "leader"
+    expect "Done"
+}
+
+proc dispose_all {} {
+    global spawn_ids
+    set max_node [array size spawn_ids]
+    for {set i 1} {$i <= $max_node} {incr i} {
+        dispose_node $i
+    }
+    array unset spawn_ids
+}
+
+proc get_ipaddr {type} {
+    send "ipaddr $type\n"
+    expect "ipaddr $type"
+    expect -re {(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4})}
+    set rval $expect_out(1,string)
+    expect "Done"
+
+    return $rval
+}
+
+proc get_extaddr {} {
+    send "extaddr\n"
+    expect -re {([0-9a-fA-F]{16})}
+    set rval $expect_out(1,string)
+    expect "Done"
+
+    return $rval
+}
+
+proc get_rloc16 {} {
+    send "rloc16\n"
+    expect "rloc16"
+    expect -re {([0-9a-fA-F]{4})}
+    set rval $expect_out(1,string)
+    expect "Done"
+
+    return $rval
 }
 
 set timeout 10

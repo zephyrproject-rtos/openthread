@@ -39,6 +39,7 @@
 #include <openthread/link.h>
 
 #include "common/locator.hpp"
+#include "common/non_copyable.hpp"
 #include "common/timer.hpp"
 #include "mac/mac_frame.hpp"
 #include "radio/radio.hpp"
@@ -74,7 +75,7 @@ namespace Mac {
  * addresses and PAN Id.
  *
  */
-class SubMac : public InstanceLocator
+class SubMac : public InstanceLocator, private NonCopyable
 {
     friend class Radio::Callbacks;
 
@@ -297,6 +298,25 @@ public:
      */
     otError Receive(uint8_t aChannel);
 
+#if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
+    /**
+     * This method lets `SubMac` start CSL sample.
+     *
+     * `SubMac` would switch the radio state between `Receive` and `Sleep` according the CSL timer. When CslSample is
+     * started, `mState` will become `kStateCslSample`. But it could be doing `Sleep` or `Receive` at this moment
+     * (depending on `mCslState`).
+     *
+     * @param[in]  aPanChannel  The current phy channel used by the device. This param will only take effect when CSL
+     *                          channel hasn't been explicitly specified.
+     *
+     * @retval OT_ERROR_NONE          Successfully entered CSL operation (sleep or receive according to CSL timer).
+     * @retval OT_ERROR_BUSY          The radio was transmitting.
+     * @retval OT_ERROR_INVALID_STATE The radio was disabled.
+     *
+     */
+    otError CslSample(uint8_t aPanChannel);
+#endif
+
     /**
      * This method gets the radio transmit frame.
      *
@@ -319,7 +339,7 @@ public:
     otError Send(void);
 
     /**
-     * This method gets the number of transmit retries of last transmit packet.
+     * This method gets the number of transmit retries of last transmitted frame.
      *
      * @returns Number of transmit retries.
      *
@@ -354,6 +374,71 @@ public:
      *
      */
     int8_t GetNoiseFloor(void);
+
+#if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
+
+    /**
+     * This method gets the CSL channel.
+     *
+     * @returns CSL channel.
+     *
+     */
+    uint8_t GetCslChannel(void) const { return mCslChannel; }
+
+    /**
+     * This method sets the CSL channel.
+     *
+     * @param[in]  aChannel  The CSL channel. `0` to set CSL Channel unspecified.
+     *
+     */
+    void SetCslChannel(uint8_t aChannel);
+
+    /**
+     * This method indicates if CSL channel has been explicitly specified by the upper layer.
+     *
+     * @returns If CSL channel has been specified.
+     *
+     */
+    bool IsCslChannelSpecified(void) const { return mIsCslChannelSpecified; }
+
+    /**
+     * This method sets the flag representing if CSL channel has been specified.
+     *
+     */
+    void SetCslChannelSpecified(bool aIsSpecified) { mIsCslChannelSpecified = aIsSpecified; }
+
+    /**
+     * This method gets the CSL period.
+     *
+     * @returns CSL period.
+     *
+     */
+    uint16_t GetCslPeriod(void) const { return mCslPeriod; }
+
+    /**
+     * This method sets the CSL period.
+     *
+     * @param[in]  aPeriod  The CSL period in 10 symbols.
+     *
+     */
+    void SetCslPeriod(uint16_t aPeriod);
+
+    /**
+     * This method gets the CSL timeout.
+     *
+     * @returns CSL timeout
+     *
+     */
+    uint32_t GetCslTimeout(void) const { return mCslTimeout; }
+
+    /**
+     * This method sets the CSL timeout.
+     *
+     * @param[in]  aTimeout  The CSL timeout in seconds.
+     *
+     */
+    void SetCslTimeout(uint32_t aTimeout);
+#endif // OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
 
     /**
      * This method sets MAC keys and key index.
@@ -397,7 +482,7 @@ public:
      * @returns The current MAC frame counter value.
      *
      */
-    uint32_t GetFrameCounter(void) const { return mFrameCounter; };
+    uint32_t GetFrameCounter(void) const { return mFrameCounter; }
 
     /**
      * This method sets the current MAC Frame Counter value.
@@ -408,13 +493,19 @@ public:
     void SetFrameCounter(uint32_t aFrameCounter);
 
 private:
+#if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
+    static void HandleCslTimer(Timer &aTimer);
+    void        HandleCslTimer(void);
+#endif
+
     enum
     {
-        kMinBE             = 3,  ///< macMinBE (IEEE 802.15.4-2006).
-        kMaxBE             = 5,  ///< macMaxBE (IEEE 802.15.4-2006).
-        kUnitBackoffPeriod = 20, ///< Number of symbols (IEEE 802.15.4-2006).
-        kMinBackoff        = 1,  ///< Minimum backoff (milliseconds).
-        kAckTimeout        = 16, ///< Timeout for waiting on an ACK (milliseconds).
+        kMinBE             = 3,   ///< macMinBE (IEEE 802.15.4-2006).
+        kMaxBE             = 5,   ///< macMaxBE (IEEE 802.15.4-2006).
+        kUnitBackoffPeriod = 20,  ///< Number of symbols (IEEE 802.15.4-2006).
+        kMinBackoff        = 1,   ///< Minimum backoff (milliseconds).
+        kAckTimeout        = 16,  ///< Timeout for waiting on an ACK (milliseconds).
+        kCcaSampleInterval = 128, ///< CCA sample interval, 128 usec.
 
 #if OPENTHREAD_CONFIG_PLATFORM_USEC_TIMER_ENABLE
         kEnergyScanRssiSampleInterval = 128, ///< RSSI sample interval during energy scan, 128 usec
@@ -431,7 +522,34 @@ private:
         kStateCsmaBackoff, ///< CSMA backoff before transmission.
         kStateTransmit,    ///< Radio is transmitting.
         kStateEnergyScan,  ///< Energy scan.
+#if !OPENTHREAD_MTD && OPENTHREAD_CONFIG_MAC_CSL_TRANSMITTER_ENABLE
+        kStateCslTransmit, ///< CSL transmission.
+#endif
+#if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
+        kStateCslSample, ///< CSL receive.
+#endif
     };
+
+#if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
+    enum : uint32_t{
+        kCslSampleWindow = OPENTHREAD_CONFIG_CSL_SAMPLE_WINDOW *
+                           kUsPerTenSymbols, ///< The SSED sample window in units of microseconds.
+        kCslReceiveTimeAhead =
+            OPENTHREAD_CONFIG_CSL_RECEIVE_TIME_AHEAD, ///< CSL receivers would wake up `kCslReceiveTimeAhead` earlier
+                                                      ///< than expected sample window. The time is in unit of 10
+                                                      ///< symbols.
+    };
+
+    /**
+     * CSL state, always updated by `mCslTimer`.
+     *
+     */
+    enum CslState : uint8_t{
+        kCslIdle = 0, ///< CSL receiver is not started.
+        kCslSample,   ///< Sampling CSL channel.
+        kCslSleep,    ///< Radio in sleep.
+    };
+#endif
 
     bool RadioSupportsCsmaBackoff(void) const
     {
@@ -442,12 +560,14 @@ private:
     bool RadioSupportsRetries(void) const { return ((mRadioCaps & OT_RADIO_CAPS_TRANSMIT_RETRIES) != 0); }
     bool RadioSupportsAckTimeout(void) const { return ((mRadioCaps & OT_RADIO_CAPS_ACK_TIMEOUT) != 0); }
     bool RadioSupportsEnergyScan(void) const { return ((mRadioCaps & OT_RADIO_CAPS_ENERGY_SCAN) != 0); }
+    bool RadioSupportsTransmitTiming(void) const { return ((mRadioCaps & OT_RADIO_CAPS_TRANSMIT_TIMING) != 0); }
 
     bool ShouldHandleTransmitSecurity(void) const;
     bool ShouldHandleCsmaBackOff(void) const;
     bool ShouldHandleAckTimeout(void) const;
     bool ShouldHandleRetries(void) const;
     bool ShouldHandleEnergyScan(void) const;
+    bool ShouldHandleTransmitTargetTime(void) const;
 
     void ProcessTransmitSecurity(void);
     void UpdateFrameCounter(uint32_t aFrameCounter);
@@ -457,7 +577,8 @@ private:
 
     void HandleReceiveDone(RxFrame *aFrame, otError aError);
     void HandleTransmitStarted(TxFrame &aFrame);
-    void HandleTransmitDone(TxFrame &aTxFrame, RxFrame *aAckFrame, otError aError);
+    void HandleTransmitDone(TxFrame &aFrame, RxFrame *aAckFrame, otError aError);
+    void UpdateFrameCounterOnTxDone(const TxFrame &aFrame);
     void HandleEnergyScanDone(int8_t aMaxRssi);
 
     static void HandleTimer(Timer &aTimer);
@@ -465,6 +586,9 @@ private:
 
     void               SetState(State aState);
     static const char *StateToString(State aState);
+#if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
+    static const char *CslStateToString(CslState aCslState);
+#endif
 
     otRadioCaps        mRadioCaps;
     State              mState;
@@ -489,6 +613,20 @@ private:
 #else
     TimerMilli mTimer;
 #endif
+
+#if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
+    uint32_t  mCslTimeout;     ///< The CSL synchronized timeout in seconds.
+    TimeMicro mCslSampleTime;  ///< The CSL sample time of the current period.
+    uint16_t  mCslPeriod;      ///< The CSL sample period, in units of 10 symbols (160 microseconds).
+    uint8_t   mCslChannel : 7; ///< The actually CSL sample channel. If `mIsCslChannelSpecified` is 0, this should be
+                               ///< equal to the Pan channel of `Mac`.
+    uint8_t mIsCslChannelSpecified : 1; ///< Indicates whether or not the CSL channel was explicitly specified by
+                                        ///< the user.
+
+    CslState mCslState;
+
+    TimerMicro mCslTimer;
+#endif // OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
 };
 
 /**

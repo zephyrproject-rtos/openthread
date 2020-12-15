@@ -107,18 +107,26 @@ check_PROGRAMS                                                      = \
 if OPENTHREAD_ENABLE_FTD
 check_PROGRAMS                                                     += \
     test-aes                                                          \
+    test-checksum                                                     \
     test-child                                                        \
     test-child-table                                                  \
+    test-cmd-line-parser                                              \
+    test-dns                                                          \
     test-flash                                                        \
     test-heap                                                         \
+    test-hkdf-sha256                                                  \
     test-hmac-sha256                                                  \
     test-ip6-address                                                  \
     test-link-quality                                                 \
     test-linked-list                                                  \
+    test-lookup-table                                                 \
     test-lowpan                                                       \
     test-mac-frame                                                    \
+    test-macros                                                       \
     test-message                                                      \
     test-message-queue                                                \
+    test-multicast-listeners-table                                    \
+    test-ndproxy-table                                                \
     test-netif                                                        \
     test-network-data                                                 \
     test-pool                                                         \
@@ -170,11 +178,20 @@ COMMON_SOURCES               = test_platform.cpp test_util.cpp
 test_aes_LDADD               = $(COMMON_LDADD)
 test_aes_SOURCES             = $(COMMON_SOURCES) test_aes.cpp
 
+test_checksum_LDADD          = $(COMMON_LDADD)
+test_checksum_SOURCES        = $(COMMON_SOURCES) test_checksum.cpp
+
 test_child_LDADD             = $(COMMON_LDADD)
 test_child_SOURCES           = $(COMMON_SOURCES) test_child.cpp
 
 test_child_table_LDADD       = $(COMMON_LDADD)
 test_child_table_SOURCES     = $(COMMON_SOURCES) test_child_table.cpp
+
+test_cmd_line_parser_LDADD   = $(COMMON_LDADD)
+test_cmd_line_parser_SOURCES = $(COMMON_SOURCES) test_cmd_line_parser.cpp
+
+test_dns_LDADD               = $(COMMON_LDADD)
+test_dns_SOURCES             = $(COMMON_SOURCES) test_dns.cpp
 
 test_flash_LDADD             = $(COMMON_LDADD)
 test_flash_SOURCES           = $(COMMON_SOURCES) test_flash.cpp
@@ -184,6 +201,9 @@ test_hdlc_SOURCES            = $(COMMON_SOURCES) test_hdlc.cpp
 
 test_heap_LDADD              = $(COMMON_LDADD)
 test_heap_SOURCES            = $(COMMON_SOURCES) test_heap.cpp
+
+test_hkdf_sha256_LDADD       = $(COMMON_LDADD)
+test_hkdf_sha256_SOURCES     = $(COMMON_SOURCES) test_hkdf_sha256.cpp
 
 test_hmac_sha256_LDADD       = $(COMMON_LDADD)
 test_hmac_sha256_SOURCES     = $(COMMON_SOURCES) test_hmac_sha256.cpp
@@ -197,11 +217,17 @@ test_link_quality_SOURCES    = $(COMMON_SOURCES) test_link_quality.cpp
 test_linked_list_LDADD       = $(COMMON_LDADD)
 test_linked_list_SOURCES     = $(COMMON_SOURCES) test_linked_list.cpp
 
+test_lookup_table_LDADD      = $(COMMON_LDADD)
+test_lookup_table_SOURCES    = $(COMMON_SOURCES) test_lookup_table.cpp
+
 test_lowpan_LDADD            = $(COMMON_LDADD)
 test_lowpan_SOURCES          = $(COMMON_SOURCES) test_lowpan.cpp
 
 test_mac_frame_LDADD         = $(COMMON_LDADD)
 test_mac_frame_SOURCES       = $(COMMON_SOURCES) test_mac_frame.cpp
+
+test_macros_LDADD            = $(COMMON_LDADD)
+test_macros_SOURCES          = $(COMMON_SOURCES) test_macros.cpp
 
 test_message_LDADD           = $(COMMON_LDADD)
 test_message_SOURCES         = $(COMMON_SOURCES) test_message.cpp
@@ -209,8 +235,14 @@ test_message_SOURCES         = $(COMMON_SOURCES) test_message.cpp
 test_message_queue_LDADD     = $(COMMON_LDADD)
 test_message_queue_SOURCES   = $(COMMON_SOURCES) test_message_queue.cpp
 
+test_multicast_listeners_table_LDADD   = $(COMMON_LDADD)
+test_multicast_listeners_table_SOURCES = $(COMMON_SOURCES) test_multicast_listeners_table.cpp
+
 test_spinel_buffer_LDADD        = $(COMMON_LDADD)
 test_spinel_buffer_SOURCES      = $(COMMON_SOURCES) test_spinel_buffer.cpp
+
+test_ndproxy_table_LDADD     = $(COMMON_LDADD)
+test_ndproxy_table_SOURCES   = $(COMMON_SOURCES) test_ndproxy_table.cpp
 
 test_netif_LDADD             = $(COMMON_LDADD)
 test_netif_SOURCES           = $(COMMON_SOURCES) test_netif.cpp

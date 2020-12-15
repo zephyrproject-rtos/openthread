@@ -40,12 +40,29 @@
 #include <openthread-core-config.h>
 #include <openthread/tasklet.h>
 #include <openthread/platform/alarm-milli.h>
+#include <openthread/platform/otns.h>
 #include <openthread/platform/radio.h>
 #include <openthread/platform/uart.h>
 
 #include "common/code_utils.hpp"
 
-uint64_t gNodeId = 0;
+#if OPENTHREAD_CONFIG_PLATFORM_NETIF_ENABLE || OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE
+static void processStateChange(otChangedFlags aFlags, void *aContext)
+{
+    otInstance *instance = static_cast<otInstance *>(aContext);
+
+    OT_UNUSED_VARIABLE(instance);
+    OT_UNUSED_VARIABLE(aFlags);
+
+#if OPENTHREAD_CONFIG_PLATFORM_NETIF_ENABLE
+    platformNetifStateChange(instance, aFlags);
+#endif
+
+#if OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE
+    platformBackboneStateChange(instance, aFlags);
+#endif
+}
+#endif
 
 otInstance *otSysInit(otPlatformConfig *aPlatformConfig)
 {
@@ -53,21 +70,41 @@ otInstance *otSysInit(otPlatformConfig *aPlatformConfig)
     ot::Posix::RadioUrl radioUrl(aPlatformConfig->mRadioUrl);
 
 #if OPENTHREAD_POSIX_VIRTUAL_TIME
-    virtualTimeInit(static_cast<uint16_t>(atoi(radioUrl.GetValue("forkpty-arg"))));
+    // The last argument must be the node id
+    {
+        const char *nodeId = nullptr;
+
+        for (const char *arg = nullptr; (arg = radioUrl.GetValue("forkpty-arg", arg)) != nullptr; nodeId = arg)
+        {
+        }
+
+        virtualTimeInit(static_cast<uint16_t>(atoi(nodeId)));
+    }
 #endif
 
     VerifyOrDie(radioUrl.GetPath() != nullptr, OT_EXIT_INVALID_ARGUMENTS);
     platformAlarmInit(aPlatformConfig->mSpeedUpFactor, aPlatformConfig->mRealTimeSignal);
     platformRadioInit(&radioUrl);
+#if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
+    platformTrelInit(aPlatformConfig->mTrelInterface);
+#endif
     platformRandomInit();
 
     instance = otInstanceInitSingle();
     assert(instance != nullptr);
 
+#if OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE
+    platformBackboneInit(instance, aPlatformConfig->mBackboneInterfaceName);
+#endif
+
 #if OPENTHREAD_CONFIG_PLATFORM_NETIF_ENABLE
     platformNetifInit(instance, aPlatformConfig->mInterfaceName);
 #elif OPENTHREAD_CONFIG_PLATFORM_UDP_ENABLE
     platformUdpInit(aPlatformConfig->mInterfaceName);
+#endif
+
+#if OPENTHREAD_CONFIG_PLATFORM_NETIF_ENABLE || OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE
+    SuccessOrDie(otSetStateChangedCallback(instance, processStateChange, instance));
 #endif
 
     return instance;
@@ -81,6 +118,9 @@ void otSysDeinit(void)
     platformRadioDeinit();
 #if OPENTHREAD_CONFIG_PLATFORM_NETIF_ENABLE
     platformNetifDeinit();
+#endif
+#if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
+    platformTrelDeinit();
 #endif
     IgnoreError(otPlatUartDisable());
 }
@@ -130,11 +170,17 @@ void otSysMainloopUpdate(otInstance *aInstance, otSysMainloopContext *aMainloop)
     platformNetifUpdateFdSet(&aMainloop->mReadFdSet, &aMainloop->mWriteFdSet, &aMainloop->mErrorFdSet,
                              &aMainloop->mMaxFd);
 #endif
+#if OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE
+    platformBackboneUpdateFdSet(aMainloop->mReadFdSet, aMainloop->mMaxFd);
+#endif
 #if OPENTHREAD_POSIX_VIRTUAL_TIME
     virtualTimeUpdateFdSet(&aMainloop->mReadFdSet, &aMainloop->mWriteFdSet, &aMainloop->mErrorFdSet, &aMainloop->mMaxFd,
                            &aMainloop->mTimeout);
 #else
     platformRadioUpdateFdSet(&aMainloop->mReadFdSet, &aMainloop->mWriteFdSet, &aMainloop->mMaxFd, &aMainloop->mTimeout);
+#endif
+#if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
+    platformTrelUpdateFdSet(&aMainloop->mReadFdSet, &aMainloop->mWriteFdSet, &aMainloop->mMaxFd, &aMainloop->mTimeout);
 #endif
 
     if (otTaskletsArePending(aInstance))
@@ -194,6 +240,9 @@ void otSysMainloopProcess(otInstance *aInstance, const otSysMainloopContext *aMa
 #else
     platformRadioProcess(aInstance, &aMainloop->mReadFdSet, &aMainloop->mWriteFdSet);
 #endif
+#if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
+    platformTrelProcess(aInstance, &aMainloop->mReadFdSet, &aMainloop->mWriteFdSet);
+#endif
     platformUartProcess(&aMainloop->mReadFdSet, &aMainloop->mWriteFdSet, &aMainloop->mErrorFdSet);
     platformAlarmProcess(aInstance);
 #if OPENTHREAD_CONFIG_PLATFORM_NETIF_ENABLE
@@ -202,4 +251,16 @@ void otSysMainloopProcess(otInstance *aInstance, const otSysMainloopContext *aMa
 #if OPENTHREAD_CONFIG_PLATFORM_UDP_ENABLE
     platformUdpProcess(aInstance, &aMainloop->mReadFdSet);
 #endif
+#if OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE
+    platformBackboneProcess(aMainloop->mReadFdSet);
+#endif
 }
+
+#if OPENTHREAD_CONFIG_OTNS_ENABLE
+
+void otPlatOtnsStatus(const char *aStatus)
+{
+    otLogOtns("[OTNS] %s", aStatus);
+}
+
+#endif

@@ -34,6 +34,7 @@ import re
 
 import logging
 import serial
+import sys
 import time
 
 from IThci import IThci
@@ -53,23 +54,33 @@ assert LOGX.match('[57522.618196] Under-voltage detected! (0x00050005)')
 OTBR_AGENT_SYSLOG_PATTERN = re.compile(r'raspberrypi otbr-agent\[\d+\]: (.*)')
 assert OTBR_AGENT_SYSLOG_PATTERN.search(
     'Jun 23 05:21:22 raspberrypi otbr-agent[323]: =========[[THCI] direction=send | type=JOIN_FIN.req | len=039]==========]'
-).group(
-    1
-) == '=========[[THCI] direction=send | type=JOIN_FIN.req | len=039]==========]'
+).group(1) == '=========[[THCI] direction=send | type=JOIN_FIN.req | len=039]==========]'
 
 
-class OpenThread_BR(OpenThreadTHCI, IThci):
-    DEFAULT_COMMAND_TIMEOUT = 20
+class SSHHandle(object):
 
-    def _connect(self):
-        self.log("logining Raspberry Pi ...")
-        self.__cli_output_lines = []
-        self.__syslog_skip_lines = None
-        self.__syslog_last_read_ts = 0
+    def __init__(self, ip, port, username, password):
+        import paramiko
+        self.__handle = paramiko.SSHClient()
+        self.__handle.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        self.__handle.connect(ip, port=int(port), username=username, password=password)
 
-        self.__handle = serial.Serial(self.port, 115200, timeout=0)
-        self.__lines = ['']
-        assert len(self.__lines) >= 1, self.__lines
+    def close(self):
+        self.__handle.close()
+
+    def bash(self, cmd, timeout):
+        stdin, stdout, stderr = self.__handle.exec_command(cmd, timeout=timeout)
+
+        sys.stderr.write(stderr.read())
+        output = [r.encode('utf8').rstrip('\r\n') for r in stdout.readlines()]
+        return output
+
+
+def SerialHandle(object):
+
+    def __init__(self, port, baudrate):
+        self.port = port
+        self.__handle = serial.Serial(port, baudrate, timeout=0)
 
         self.log("inputing username ...")
         self.__bashWriteLine('pi')
@@ -106,12 +117,158 @@ class OpenThread_BR(OpenThreadTHCI, IThci):
             raise Exception('login fail')
 
         self.bash('stty cols 256')
+
+    def log(self, fmt, *args):
+        try:
+            msg = fmt % args
+            logging.info('%s - %s', self.port, msg)
+        except Exception:
+            pass
+
+    def close(self):
+        self.__handle.close()
+
+    def bash(self, cmd, timeout):
+        """
+        Execute the command in bash.
+        """
+        self.__bashClearLines()
+        self.__bashWriteLine(cmd)
+        self.__bashExpect(cmd, endswith=True)
+
+        response = []
+
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            line = self.__bashReadLine()
+            if line is None:
+                self.sleep(0.01)
+                continue
+
+            if line == RPI_FULL_PROMPT:
+                # return response lines without prompt
+                return response
+
+            response.append(line)
+
+        self.__bashWrite('\x03')
+        raise Exception('%s: failed to find end of response' % self.port)
+
+    def __bashExpect(self, expected, timeout=DEFAULT_COMMAND_TIMEOUT, endswith=False):
+        print('[%s] Expecting [%r]' % (self.port, expected))
+
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            line = self.__bashReadLine()
+            if line is None:
+                self.sleep(0.01)
+                continue
+
+            print('[%s] Got line [%r]' % (self.port, line))
+
+            if endswith:
+                matched = line.endswith(expected)
+            else:
+                matched = line == expected
+
+            if matched:
+                print('[%s] Expected [%r]' % (self.port, expected))
+                return
+
+        # failed to find the expected string
+        # send Ctrl+C to terminal
+        self.__bashWrite('\x03')
+        raise Exception('failed to find expected string[%s]' % expected)
+
+    def __bashRead(self, timeout=1):
+        deadline = time.time() + timeout
+        data = ''
+        while True:
+            piece = self.__handle.read()
+            data = data + piece
+            if piece:
+                continue
+
+            if data or time.time() >= deadline:
+                break
+
+        if data:
+            self.log('>>> %r', data)
+
+        return data
+
+    def __bashReadLine(self, timeout=1):
+        line = self.__bashGetNextLine()
+        if line is not None:
+            return line
+
+        assert len(self.__lines) == 1, self.__lines
+        tail = self.__lines.pop()
+
+        try:
+            tail += self.__bashRead(timeout=timeout)
+            tail = tail.replace(RPI_FULL_PROMPT, RPI_FULL_PROMPT + '\r\n')
+            tail = tail.replace(RPI_USERNAME_PROMPT, RPI_USERNAME_PROMPT + '\r\n')
+            tail = tail.replace(RPI_PASSWORD_PROMPT, RPI_PASSWORD_PROMPT + '\r\n')
+        finally:
+            self.__lines += [l.rstrip('\r') for l in LINESEPX.split(tail)]
+            assert len(self.__lines) >= 1, self.__lines
+
+        return self.__bashGetNextLine()
+
+    def __bashGetNextLine(self):
+        assert len(self.__lines) >= 1, self.__lines
+        while len(self.__lines) > 1:
+            line = self.__lines.pop(0)
+            assert len(self.__lines) >= 1, self.__lines
+            if LOGX.match(line):
+                logging.info('LOG: %s', line)
+                continue
+            else:
+                return line
+        assert len(self.__lines) >= 1, self.__lines
+        return None
+
+    def __bashWrite(self, data):
+        self.__handle.write(data)
+        self.log("<<< %r", data)
+
+    def __bashClearLines(self):
+        assert len(self.__lines) >= 1, self.__lines
+        while self.__bashReadLine(timeout=0) is not None:
+            pass
+        assert len(self.__lines) >= 1, self.__lines
+
+    def __bashWriteLine(self, line):
+        self.__bashWrite(line + '\n')
+
+
+class OpenThread_BR(OpenThreadTHCI, IThci):
+    DEFAULT_COMMAND_TIMEOUT = 20
+
+    def _connect(self):
+        self.log("logining Raspberry Pi ...")
+        self.__cli_output_lines = []
+        self.__syslog_skip_lines = None
+        self.__syslog_last_read_ts = 0
+
+        if self.connectType == 'ip':
+            self.__handle = SSHHandle(self.telnetIp, self.telnetPort, self.telnetUsername, self.telnetPassword)
+        else:
+            self.__handle = SerialHandle(self.port, 115200)
+        self.__lines = ['']
+        assert len(self.__lines) >= 1, self.__lines
+
         self.__truncateSyslog()
 
     def _disconnect(self):
         if self.__handle:
             self.__handle.close()
             self.__handle = None
+
+    @watched
+    def bash(self, cmd, timeout=DEFAULT_COMMAND_TIMEOUT):
+        return self.__handle.bash(cmd, timeout=timeout)
 
     def _cliReadLine(self):
         # read commissioning log if it's commissioning
@@ -126,8 +283,7 @@ class OpenThread_BR(OpenThreadTHCI, IThci):
     @watched
     def _onCommissionStart(self):
         assert self.__syslog_skip_lines is None
-        self.__syslog_skip_lines = int(
-            self.bash('wc -l /var/log/syslog')[0].split()[0])
+        self.__syslog_skip_lines = int(self.bash('wc -l /var/log/syslog')[0].split()[0])
         self.__syslog_last_read_ts = 0
 
     @watched
@@ -163,126 +319,6 @@ class OpenThread_BR(OpenThreadTHCI, IThci):
         self.__cli_output_lines.append(line)
         for line in output:
             self.__cli_output_lines.append(line)
-
-    @watched
-    def bash(self, cmd, timeout=DEFAULT_COMMAND_TIMEOUT):
-        """
-        Execute the command in bash.
-        """
-        self.__bashClearLines()
-        self.__bashWriteLine(cmd)
-        self.__bashExpect(cmd, endswith=True)
-
-        response = []
-
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            line = self.__bashReadLine()
-            if line is None:
-                self.sleep(0.01)
-                continue
-
-            if line == RPI_FULL_PROMPT:
-                # return response lines without prompt
-                return response
-
-            response.append(line)
-
-        self.__bashWrite('\x03')
-        raise Exception('%s: failed to find end of response' % self.port)
-
-    def __bashExpect(self,
-                     expected,
-                     timeout=DEFAULT_COMMAND_TIMEOUT,
-                     endswith=False):
-        print('[%s] Expecting [%r]' % (self.port, expected))
-
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            line = self.__bashReadLine()
-            if line is None:
-                self.sleep(0.01)
-                continue
-
-            print('[%s] Got line [%r]' % (self.port, line))
-
-            if endswith:
-                matched = line.endswith(expected)
-            else:
-                matched = line == expected
-
-            if matched:
-                print('[%s] Expected [%r]' % (self.port, expected))
-                return
-
-        # failed to find the expected string
-        # send Ctrl+C to terminal
-        self.__bashWrite('\x03')
-        raise Exception('failed to find expected string[%s]' % expected)
-
-    def __bashRead(self, timeout=1):
-        deadline = time.time() + timeout
-        data = ''
-        while True:
-            piece = self.__handle.read(self.__handle.inWaiting())
-            data = data + piece
-            if piece:
-                continue
-
-            if data or time.time() >= deadline:
-                break
-
-        if data:
-            self.log('>>> %r', data)
-
-        return data
-
-    def __bashReadLine(self, timeout=1):
-        line = self.__bashGetNextLine()
-        if line is not None:
-            return line
-
-        assert len(self.__lines) == 1, self.__lines
-        tail = self.__lines.pop()
-
-        try:
-            tail += self.__bashRead(timeout=timeout)
-            tail = tail.replace(RPI_FULL_PROMPT, RPI_FULL_PROMPT + '\r\n')
-            tail = tail.replace(RPI_USERNAME_PROMPT,
-                                RPI_USERNAME_PROMPT + '\r\n')
-            tail = tail.replace(RPI_PASSWORD_PROMPT,
-                                RPI_PASSWORD_PROMPT + '\r\n')
-        finally:
-            self.__lines += [l.rstrip('\r') for l in LINESEPX.split(tail)]
-            assert len(self.__lines) >= 1, self.__lines
-
-        return self.__bashGetNextLine()
-
-    def __bashGetNextLine(self):
-        assert len(self.__lines) >= 1, self.__lines
-        while len(self.__lines) > 1:
-            line = self.__lines.pop(0)
-            assert len(self.__lines) >= 1, self.__lines
-            if LOGX.match(line):
-                logging.info('LOG: %s', line)
-                continue
-            else:
-                return line
-        assert len(self.__lines) >= 1, self.__lines
-        return None
-
-    def __bashWrite(self, data):
-        self.__handle.write(data)
-        self.log("<<< %r", data)
-
-    def __bashClearLines(self):
-        assert len(self.__lines) >= 1, self.__lines
-        while self.__bashReadLine(timeout=0) is not None:
-            pass
-        assert len(self.__lines) >= 1, self.__lines
-
-    def __bashWriteLine(self, line):
-        self.__bashWrite(line + '\n')
 
     def __truncateSyslog(self):
         self.bash('sudo truncate -s 0 /var/log/syslog')

@@ -68,7 +68,7 @@ otJoinerState otJoinerGetState(otInstance *aInstance)
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    return instance.Get<MeshCoP::Joiner>().GetState();
+    return static_cast<otJoinerState>(instance.Get<MeshCoP::Joiner>().GetState());
 }
 
 const otExtAddress *otJoinerGetId(otInstance *aInstance)
@@ -83,7 +83,7 @@ otError otJoinerSetDiscerner(otInstance *aInstance, otJoinerDiscerner *aDiscerne
     otError          error  = OT_ERROR_NONE;
     MeshCoP::Joiner &joiner = static_cast<Instance *>(aInstance)->Get<MeshCoP::Joiner>();
 
-    if (aDiscerner != NULL)
+    if (aDiscerner != nullptr)
     {
         error = joiner.SetDiscerner(*static_cast<const MeshCoP::JoinerDiscerner *>(aDiscerner));
     }

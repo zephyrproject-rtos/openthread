@@ -27,43 +27,218 @@
 #  POSSIBILITY OF SUCH DAMAGE.
 #
 
-import config
+import binascii
 import ipaddress
+import logging
 import os
+import re
+import socket
+import subprocess
 import sys
+import time
+import traceback
+import unittest
+from typing import Union, Dict, Optional, List
+
 import pexpect
 import pexpect.popen_spawn
-import re
+
+import config
 import simulator
-import socket
-import time
-import unittest
-import binascii
+import thread_cert
+
+PORT_OFFSET = int(os.getenv('PORT_OFFSET', "0"))
 
 
-class Node:
+class OtbrDocker:
+    _socat_proc = None
+    _ot_rcp_proc = None
+    _docker_proc = None
 
-    def __init__(self,
-                 nodeid,
-                 is_mtd=False,
-                 simulator=None,
-                 version=None,
-                 is_bbr=False):
-        self.nodeid = nodeid
+    def __init__(self, nodeid: int, **kwargs):
+        try:
+            self._docker_name = config.OTBR_DOCKER_NAME_PREFIX + str(nodeid)
+            self._prepare_ot_rcp_sim(nodeid)
+            self._launch_docker()
+        except Exception:
+            traceback.print_exc()
+            self.destroy()
+            raise
+
+    def _prepare_ot_rcp_sim(self, nodeid: int):
+        self._socat_proc = subprocess.Popen(['socat', '-d', '-d', 'pty,raw,echo=0', 'pty,raw,echo=0'],
+                                            stderr=subprocess.PIPE,
+                                            stdin=subprocess.DEVNULL,
+                                            stdout=subprocess.DEVNULL)
+
+        line = self._socat_proc.stderr.readline().decode('ascii').strip()
+        self._rcp_device_pty = rcp_device_pty = line[line.index('PTY is /dev') + 7:]
+        line = self._socat_proc.stderr.readline().decode('ascii').strip()
+        self._rcp_device = rcp_device = line[line.index('PTY is /dev') + 7:]
+        logging.info(f"socat running: device PTY: {rcp_device_pty}, device: {rcp_device}")
+
+        ot_rcp_path = self._get_ot_rcp_path()
+        self._ot_rcp_proc = subprocess.Popen(f"{ot_rcp_path} {nodeid} > {rcp_device_pty} < {rcp_device_pty}",
+                                             shell=True,
+                                             stdin=subprocess.DEVNULL,
+                                             stdout=subprocess.DEVNULL,
+                                             stderr=subprocess.DEVNULL)
+
+    def _get_ot_rcp_path(self) -> str:
+        srcdir = os.environ['top_builddir']
+        path = '%s/examples/apps/ncp/ot-rcp' % srcdir
+        logging.info("ot-rcp path: %s", path)
+        return path
+
+    def _launch_docker(self):
+        subprocess.check_call(f"docker rm -f {self._docker_name} || true", shell=True)
+        CI_ENV = os.getenv('CI_ENV', '').split()
+        os.makedirs('/tmp/coverage/', exist_ok=True)
+        self._docker_proc = subprocess.Popen(['docker', 'run'] + CI_ENV + [
+            '--rm',
+            '--name',
+            self._docker_name,
+            '--network',
+            config.BACKBONE_DOCKER_NETWORK_NAME,
+            '-i',
+            '--sysctl',
+            'net.ipv6.conf.all.disable_ipv6=0 net.ipv4.conf.all.forwarding=1 net.ipv6.conf.all.forwarding=1',
+            '--privileged',
+            '--cap-add=NET_ADMIN',
+            '--volume',
+            f'{self._rcp_device}:/dev/ttyUSB0',
+            '-v',
+            '/tmp/coverage/:/tmp/coverage/',
+            config.OTBR_DOCKER_IMAGE,
+            '-B',
+            config.BACKBONE_IFNAME,
+        ],
+                                             stdin=subprocess.DEVNULL,
+                                             stdout=sys.stdout,
+                                             stderr=sys.stderr)
+
+        launch_docker_deadline = time.time() + 300
+        launch_ok = False
+
+        while time.time() < launch_docker_deadline:
+            try:
+                subprocess.check_call(f'docker exec -i {self._docker_name} ot-ctl state', shell=True)
+                launch_ok = True
+                logging.info("OTBR Docker %s Is Ready!", self._docker_name)
+                break
+            except subprocess.CalledProcessError:
+                time.sleep(5)
+                continue
+
+        assert launch_ok
+
+        cmd = f'docker exec -i {self._docker_name} ot-ctl'
+        self.pexpect = pexpect.popen_spawn.PopenSpawn(cmd, timeout=10)
+
+        # Add delay to ensure that the process is ready to receive commands.
+        timeout = 0.4
+        while timeout > 0:
+            self.pexpect.send('\r\n')
+            try:
+                self.pexpect.expect('> ', timeout=0.1)
+                break
+            except pexpect.TIMEOUT:
+                timeout -= 0.1
+
+    def __repr__(self):
+        return f'OtbrDocker<{self.nodeid}>'
+
+    def destroy(self):
+        logging.info("Destroying %s", self)
+        self._shutdown_docker()
+        self._shutdown_ot_rcp()
+        self._shutdown_socat()
+
+    def _shutdown_docker(self):
+        if self._docker_proc is not None:
+            COVERAGE = int(os.getenv('COVERAGE', '0'))
+            OTBR_COVERAGE = int(os.getenv('OTBR_COVERAGE', '0'))
+            if COVERAGE or OTBR_COVERAGE:
+                self.bash('service otbr-agent stop')
+
+                test_name = os.getenv('TEST_NAME')
+                cov_file_path = f'/tmp/coverage/coverage-{test_name}-{PORT_OFFSET}-{self.nodeid}.info'
+                # Upload OTBR code coverage if OTBR_COVERAGE=1, otherwise OpenThread code coverage.
+                if OTBR_COVERAGE:
+                    codecov_cmd = f'lcov --directory . --capture --output-file {cov_file_path}'
+                else:
+                    codecov_cmd = ('lcov --directory build/otbr/third_party/openthread/repo --capture '
+                                   f'--output-file {cov_file_path}')
+
+                self.bash(codecov_cmd)
+
+            subprocess.check_call(f"docker rm -f {self._docker_name}", shell=True)
+            self._docker_proc.wait()
+            del self._docker_proc
+
+    def _shutdown_ot_rcp(self):
+        if self._ot_rcp_proc is not None:
+            self._ot_rcp_proc.kill()
+            self._ot_rcp_proc.wait()
+            del self._ot_rcp_proc
+
+    def _shutdown_socat(self):
+        if self._socat_proc is not None:
+            self._socat_proc.stderr.close()
+            self._socat_proc.kill()
+            self._socat_proc.wait()
+            del self._socat_proc
+
+    def bash(self, cmd: str) -> List[str]:
+        logging.info("%s $ %s", self, cmd)
+        proc = subprocess.Popen(['docker', 'exec', '-i', self._docker_name, 'bash', '-c', cmd],
+                                stdin=subprocess.DEVNULL,
+                                stdout=subprocess.PIPE,
+                                stderr=sys.stderr,
+                                encoding='ascii')
+
+        with proc:
+
+            lines = []
+
+            while True:
+                line = proc.stdout.readline()
+
+                if not line:
+                    break
+
+                lines.append(line)
+                logging.info("%s $ %s", self, line.rstrip('\r\n'))
+
+            proc.wait()
+
+            if proc.returncode != 0:
+                raise subprocess.CalledProcessError(proc.returncode, cmd, ''.join(lines))
+            else:
+                return lines
+
+    def _setup_sysctl(self):
+        self.bash(f'sysctl net.ipv6.conf.{self.ETH_DEV}.accept_ra=2')
+
+
+class OtCli:
+
+    def __init__(self, nodeid, is_mtd=False, version=None, is_bbr=False, **kwargs):
         self.verbose = int(float(os.getenv('VERBOSE', 0)))
         self.node_type = os.getenv('NODE_TYPE', 'sim')
         self.env_version = os.getenv('THREAD_VERSION', '1.1')
         self.is_bbr = is_bbr
         self._initialized = False
+        if os.getenv('COVERAGE', 0) and os.getenv('CC', 'gcc') == 'gcc':
+            self._cmd_prefix = '/usr/bin/env GCOV_PREFIX=%s/ot-run/%s/ot-gcda.%d ' % (os.getenv(
+                'top_srcdir', '.'), sys.argv[0], nodeid)
+        else:
+            self._cmd_prefix = ''
 
         if version is not None:
             self.version = version
         else:
             self.version = self.env_version
-
-        self.simulator = simulator
-        if self.simulator:
-            self.simulator.add_node(self)
 
         mode = os.environ.get('USE_MTD') == '1' and is_mtd and 'mtd' or 'ftd'
 
@@ -79,8 +254,6 @@ class Node:
             self.pexpect.logfile_read = sys.stdout.buffer
 
         self._initialized = True
-
-        self.set_extpanid(config.EXTENDED_PANID)
 
     def __init_sim(self, nodeid, mode):
         """ Initialize a simulation node. """
@@ -108,8 +281,8 @@ class Node:
                     cmd = '%s/examples/apps/cli/ot-cli-%s' % (srcdir, mode)
 
             if 'RADIO_DEVICE' in os.environ:
-                cmd += ' --real-time-signal=+1 -v spinel+hdlc+uart://%s?forkpty-arg=%d' % (
-                    os.environ['RADIO_DEVICE'], nodeid)
+                cmd += ' --real-time-signal=+1 -v spinel+hdlc+uart://%s?forkpty-arg=%d' % (os.environ['RADIO_DEVICE'],
+                                                                                           nodeid)
             else:
                 cmd += ' %d' % nodeid
 
@@ -130,7 +303,7 @@ class Node:
 
         print("%s" % cmd)
 
-        self.pexpect = pexpect.popen_spawn.PopenSpawn(cmd, timeout=10)
+        self.pexpect = pexpect.popen_spawn.PopenSpawn(self._cmd_prefix + cmd, timeout=10)
 
         # Add delay to ensure that the process is ready to receive commands.
         timeout = 0.4
@@ -151,8 +324,8 @@ class Node:
         # If Thread version of node matches the testing environment version.
         if self.version == self.env_version:
             if 'RADIO_DEVICE' in os.environ:
-                args = ' --real-time-signal=+1 spinel+hdlc+uart://%s?forkpty-arg=%d' % (
-                    os.environ['RADIO_DEVICE'], nodeid)
+                args = ' --real-time-signal=+1 spinel+hdlc+uart://%s?forkpty-arg=%d' % (os.environ['RADIO_DEVICE'],
+                                                                                        nodeid)
             else:
                 args = ''
 
@@ -190,8 +363,8 @@ class Node:
         # Load Thread 1.1 node when testing Thread 1.2 scenarios for interoperability.
         elif self.version == '1.1':
             if 'RADIO_DEVICE_1_1' in os.environ:
-                args = ' --real-time-signal=+1 spinel+hdlc+uart://%s?forkpty-arg=%d' % (
-                    os.environ['RADIO_DEVICE_1_1'], nodeid)
+                args = ' --real-time-signal=+1 spinel+hdlc+uart://%s?forkpty-arg=%d' % (os.environ['RADIO_DEVICE_1_1'],
+                                                                                        nodeid)
             else:
                 args = ''
 
@@ -211,12 +384,49 @@ class Node:
         cmd += ' %d' % nodeid
         print("%s" % cmd)
 
-        self.pexpect = pexpect.spawn(cmd, timeout=10)
+        self.pexpect = pexpect.spawn(self._cmd_prefix + cmd, timeout=10)
 
         # Add delay to ensure that the process is ready to receive commands.
         time.sleep(0.2)
         self._expect('spinel-cli >')
         self.debug(int(os.getenv('DEBUG', '0')))
+
+    def __init_soc(self, nodeid):
+        """ Initialize a System-on-a-chip node connected via UART. """
+        import fdpexpect
+
+        serialPort = '/dev/ttyUSB%d' % ((nodeid - 1) * 2)
+        self.pexpect = fdpexpect.fdspawn(os.open(serialPort, os.O_RDWR | os.O_NONBLOCK | os.O_NOCTTY))
+
+    def destroy(self):
+        if not self._initialized:
+            return
+
+        if (hasattr(self.pexpect, 'proc') and self.pexpect.proc.poll() is None or
+                not hasattr(self.pexpect, 'proc') and self.pexpect.isalive()):
+            print("%d: exit" % self.nodeid)
+            self.pexpect.send('exit\n')
+            self.pexpect.expect(pexpect.EOF)
+            self.pexpect.wait()
+            self._initialized = False
+
+
+class NodeImpl:
+    is_host = False
+    is_otbr = False
+
+    def __init__(self, nodeid, name=None, simulator=None, **kwargs):
+        self.nodeid = nodeid
+        self.name = name or ('Node%d' % nodeid)
+
+        self.simulator = simulator
+        if self.simulator:
+            self.simulator.add_node(self)
+
+        super().__init__(nodeid, **kwargs)
+
+        self.set_extpanid(config.EXTENDED_PANID)
+        self.set_addr64('%016x' % (thread_cert.EXTENDED_ADDRESS_BASE + nodeid))
 
     def _expect(self, pattern, timeout=-1, *args, **kwargs):
         """ Process simulator events until expected the pattern. """
@@ -264,7 +474,7 @@ class Node:
             The matched line.
         """
         results = self._expect_results(pattern, *args, **kwargs)
-        assert len(results) == 1
+        assert len(results) == 1, results
         return results[0]
 
     def _expect_results(self, pattern, *args, **kwargs):
@@ -283,29 +493,36 @@ class Node:
 
         return results
 
-    def __init_soc(self, nodeid):
-        """ Initialize a System-on-a-chip node connected via UART. """
-        import fdpexpect
+    def _expect_command_output(self, cmd: str):
+        lines = []
+        cmd_output_started = False
 
-        serialPort = '/dev/ttyUSB%d' % ((nodeid - 1) * 2)
-        self.pexpect = fdpexpect.fdspawn(
-            os.open(serialPort, os.O_RDWR | os.O_NONBLOCK | os.O_NOCTTY))
+        while True:
+            self._expect(r"[^\n]+")
+            line = self.pexpect.match.group(0).decode('utf8').strip()
 
-    def __del__(self):
-        self.destroy()
+            if line.startswith('> '):
+                line = line[2:]
 
-    def destroy(self):
-        if not self._initialized:
-            return
+            if line == '':
+                continue
 
-        if (hasattr(self.pexpect, 'proc') and self.pexpect.proc.poll() is None
-                or
-                not hasattr(self.pexpect, 'proc') and self.pexpect.isalive()):
-            print("%d: exit" % self.nodeid)
-            self.pexpect.send('exit\n')
-            self.pexpect.expect(pexpect.EOF)
-            self.pexpect.wait()
-            self._initialized = False
+            if line == cmd:
+                cmd_output_started = True
+                continue
+
+            if not cmd_output_started:
+                continue
+
+            if line == 'Done':
+                break
+            elif line.startswith('Error '):
+                raise Exception(line)
+            else:
+                lines.append(line)
+
+        print(f'_expect_command_output({cmd!r}) returns {lines!r}')
+        return lines
 
     def read_cert_messages_in_commissioning_log(self, timeout=-1):
         """Get the log of the traffic after DTLS handshake.
@@ -316,8 +533,7 @@ class Node:
         dummy_format_str = br"\[THCI\].*?type=%s.*?"
         join_ent_ntf = dummy_format_str % br"JOIN_ENT\.ntf"
         join_ent_rsp = dummy_format_str % br"JOIN_ENT\.rsp"
-        pattern = (b"(" + join_fin_req + b")|(" + join_fin_rsp + b")|(" +
-                   join_ent_ntf + b")|(" + join_ent_rsp + b")")
+        pattern = (b"(" + join_fin_req + b")|(" + join_fin_rsp + b")|(" + join_ent_ntf + b")|(" + join_ent_rsp + b")")
 
         messages = []
         # There are at most 4 cert messages both for joiner and commissioner
@@ -351,14 +567,9 @@ class Node:
                 res = re.search(hex_pattern, log)
                 if not res:
                     break
-                data = [
-                    int(hex, 16)
-                    for hex in res.group(0)[1:-1].split(b' ')
-                    if hex and hex != b'..'
-                ]
+                data = [int(hex, 16) for hex in res.group(0)[1:-1].split(b' ') if hex and hex != b'..']
                 payload += bytearray(data)
                 log = log[res.end() - 1:]
-
         assert len(payload) == payload_len
         return (direction, type, payload)
 
@@ -412,8 +623,23 @@ class Node:
         self.send_command(cmd)
         self._expect('Done')
 
+    def commissioner_stop(self):
+        cmd = 'commissioner stop'
+        self.send_command(cmd)
+        self._expect('Done')
+
+    def commissioner_state(self):
+        states = [r'disabled', r'petitioning', r'active']
+        self.send_command('commissioner state')
+        return self._expect_result(states)
+
     def commissioner_add_joiner(self, addr, psk):
         cmd = 'commissioner joiner add %s %s' % (addr, psk)
+        self.send_command(cmd)
+        self._expect('Done')
+
+    def commissioner_set_provisioning_url(self, provisioning_url=''):
+        cmd = 'commissioner provisioningurl %s' % provisioning_url
         self.send_command(cmd)
         self._expect('Done')
 
@@ -422,22 +648,22 @@ class Node:
         self.send_command(cmd)
         self._expect('Done')
 
-    def clear_whitelist(self):
+    def clear_allowlist(self):
         cmd = 'macfilter addr clear'
         self.send_command(cmd)
         self._expect('Done')
 
-    def enable_whitelist(self):
-        cmd = 'macfilter addr whitelist'
+    def enable_allowlist(self):
+        cmd = 'macfilter addr allowlist'
         self.send_command(cmd)
         self._expect('Done')
 
-    def disable_whitelist(self):
+    def disable_allowlist(self):
         cmd = 'macfilter addr disable'
         self.send_command(cmd)
         self._expect('Done')
 
-    def add_whitelist(self, addr, rssi=None):
+    def add_allowlist(self, addr, rssi=None):
         cmd = 'macfilter addr add %s' % addr
 
         if rssi is not None:
@@ -474,6 +700,10 @@ class Node:
         states = [r'Disabled', r'Primary', r'Secondary']
         self.send_command('bbr state')
         return self._expect_result(states)
+
+    @property
+    def is_primary_backbone_router(self) -> bool:
+        return self.get_backbone_router_state() == 'Primary'
 
     def get_backbone_router(self):
         cmd = 'bbr config'
@@ -522,7 +752,23 @@ class Node:
         self.remove_prefix(prefix)
         self.register_netdata()
 
-    def set_dua_iid(self, iid):
+    def set_next_dua_response(self, status: Union[str, int], iid=None):
+        # Convert 5.00 to COAP CODE 160
+        if isinstance(status, str):
+            assert '.' in status
+            status = status.split('.')
+            status = (int(status[0]) << 5) + int(status[1])
+
+        cmd = 'bbr mgmt dua {}'.format(status)
+        if iid is not None:
+            cmd += ' ' + str(iid)
+        self.send_command(cmd)
+        self._expect('Done')
+
+    def set_dua_iid(self, iid: str):
+        assert len(iid) == 16
+        int(iid, 16)
+
         cmd = 'dua iid {}'.format(iid)
         self.send_command(cmd)
         self._expect('Done')
@@ -532,12 +778,69 @@ class Node:
         self.send_command(cmd)
         self._expect('Done')
 
+    def multicast_listener_list(self) -> Dict[ipaddress.IPv6Address, int]:
+        cmd = 'bbr mgmt mlr listener'
+        self.send_command(cmd)
+
+        table = {}
+        for line in self._expect_results("\S+ \d+"):
+            line = line.split()
+            assert len(line) == 2, line
+            ip = ipaddress.IPv6Address(line[0])
+            timeout = int(line[1])
+            assert ip not in table
+
+            table[ip] = timeout
+
+        return table
+
+    def multicast_listener_clear(self):
+        cmd = f'bbr mgmt mlr listener clear'
+        self.send_command(cmd)
+        self._expect("Done")
+
+    def multicast_listener_add(self, ip: Union[ipaddress.IPv6Address, str], timeout: int = 0):
+        if not isinstance(ip, ipaddress.IPv6Address):
+            ip = ipaddress.IPv6Address(ip)
+
+        cmd = f'bbr mgmt mlr listener add {ip.compressed} {timeout}'
+        self.send_command(cmd)
+        self._expect(r"(Done|Error .*)")
+
+    def set_next_mlr_response(self, status: int):
+        cmd = 'bbr mgmt mlr response {}'.format(status)
+        self.send_command(cmd)
+        self._expect('Done')
+
+    def register_multicast_listener(self, *ipaddrs: Union[ipaddress.IPv6Address, str], timeout=None):
+        assert len(ipaddrs) > 0, ipaddrs
+
+        cmd = f'mlr reg {" ".join(ipaddrs)}'
+        if timeout is not None:
+            cmd += f' {int(timeout)}'
+        self.send_command(cmd)
+        self.simulator.go(3)
+        lines = self._expect_command_output(cmd)
+        m = re.match(r'status (\d+), (\d+) failed', lines[0])
+        assert m is not None, lines
+        status = int(m.group(1))
+        failed_num = int(m.group(2))
+        assert failed_num == len(lines) - 1
+        failed_ips = list(map(ipaddress.IPv6Address, lines[1:]))
+        print(f"register_multicast_listener {ipaddrs} => status: {status}, failed ips: {failed_ips}")
+        return status, failed_ips
+
     def set_link_quality(self, addr, lqi):
         cmd = 'macfilter rss add-lqi %s %s' % (addr, lqi)
         self.send_command(cmd)
         self._expect('Done')
 
-    def remove_whitelist(self, addr):
+    def set_outbound_link_quality(self, lqi):
+        cmd = 'macfilter rss add-lqi * %s' % (lqi)
+        self.send_command(cmd)
+        self._expect('Done')
+
+    def remove_allowlist(self, addr):
         cmd = 'macfilter addr remove %s' % addr
         self.send_command(cmd)
         self._expect('Done')
@@ -555,7 +858,10 @@ class Node:
         self.send_command('extaddr')
         return self._expect_result('[0-9a-fA-F]{16}')
 
-    def set_addr64(self, addr64):
+    def set_addr64(self, addr64: str):
+        # Make sure `addr64` is a hex string of length 16
+        assert len(addr64) == 16
+        int(addr64, 16)
         self.send_command('extaddr %s' % addr64)
         self._expect('Done')
 
@@ -647,12 +953,12 @@ class Node:
         self.send_command(cmd)
         self._expect('Done')
 
-    def get_partition_id(self):
-        self.send_command('leaderpartitionid')
+    def get_preferred_partition_id(self):
+        self.send_command('partitionid preferred')
         return self._expect_result(r'\d+')
 
-    def set_partition_id(self, partition_id):
-        cmd = 'leaderpartitionid %d' % partition_id
+    def set_preferred_partition_id(self, partition_id):
+        cmd = 'partitionid preferred %d' % partition_id
         self.send_command(cmd)
         self._expect('Done')
 
@@ -662,6 +968,30 @@ class Node:
 
     def set_pollperiod(self, pollperiod):
         self.send_command('pollperiod %d' % pollperiod)
+        self._expect('Done')
+
+    def get_csl_info(self):
+        self.send_command('csl')
+        self._expect('Done')
+
+    def set_csl_channel(self, csl_channel):
+        self.send_command('csl channel %d' % csl_channel)
+        self._expect('Done')
+
+    def set_csl_period(self, csl_period):
+        self.send_command('csl period %d' % csl_period)
+        self._expect('Done')
+
+    def set_csl_timeout(self, csl_timeout):
+        self.send_command('csl timeout %d' % csl_timeout)
+        self._expect('Done')
+
+    def send_mac_emptydata(self):
+        self.send_command('mac send emptydata')
+        self._expect('Done')
+
+    def send_mac_datarequest(self):
+        self.send_command('mac send datarequest')
         self._expect('Done')
 
     def set_router_upgrade_threshold(self, threshold):
@@ -674,6 +1004,20 @@ class Node:
         self.send_command(cmd)
         self._expect('Done')
 
+    def get_router_downgrade_threshold(self) -> int:
+        self.send_command('routerdowngradethreshold')
+        return int(self._expect_result(r'\d+'))
+
+    def set_router_eligible(self, enable: bool):
+        cmd = f'routereligible {"enable" if enable else "disable"}'
+        self.send_command(cmd)
+        self._expect('Done')
+
+    def get_router_eligible(self) -> bool:
+        states = [r'Disabled', r'Enabled']
+        self.send_command('routereligible')
+        return self._expect_result(states) == 'Enabled'
+
     def prefer_router_id(self, router_id):
         cmd = 'preferrouterid %d' % router_id
         self.send_command(cmd)
@@ -685,7 +1029,7 @@ class Node:
         self._expect('Done')
 
     def get_state(self):
-        states = [r'detached', r'child', r'router', r'leader']
+        states = [r'detached', r'child', r'router', r'leader', r'disabled']
         self.send_command('state')
         return self._expect_result(states)
 
@@ -719,6 +1063,11 @@ class Node:
 
     def add_ipaddr(self, ipaddr):
         cmd = 'ipaddr add %s' % ipaddr
+        self.send_command(cmd)
+        self._expect('Done')
+
+    def del_ipaddr(self, ipaddr):
+        cmd = 'ipaddr del %s' % ipaddr
         self.send_command(cmd)
         self._expect('Done')
 
@@ -790,8 +1139,7 @@ class Node:
         addrs = self.get_addrs()
         for addr in addrs:
             segs = addr.split(':')
-            if (segs[4] == '0' and segs[5] == 'ff' and segs[6] == 'fe00' and
-                    segs[7] == 'fc00'):
+            if (segs[4] == '0' and segs[5] == 'ff' and segs[6] == 'fe00' and segs[7] == 'fc00'):
                 return addr
         return None
 
@@ -831,31 +1179,26 @@ class Node:
     def __getGlobalAddress(self):
         global_address = []
         for ip6Addr in self.get_addrs():
-            if ((not re.match(config.LINK_LOCAL_REGEX_PATTERN, ip6Addr, re.I))
-                    and (not re.match(config.MESH_LOCAL_PREFIX_REGEX_PATTERN,
-                                      ip6Addr, re.I)) and
-                (not re.match(config.ROUTING_LOCATOR_REGEX_PATTERN, ip6Addr,
-                              re.I))):
+            if ((not re.match(config.LINK_LOCAL_REGEX_PATTERN, ip6Addr, re.I)) and
+                (not re.match(config.MESH_LOCAL_PREFIX_REGEX_PATTERN, ip6Addr, re.I)) and
+                (not re.match(config.ROUTING_LOCATOR_REGEX_PATTERN, ip6Addr, re.I))):
                 global_address.append(ip6Addr)
 
         return global_address
 
     def __getRloc(self):
         for ip6Addr in self.get_addrs():
-            if (re.match(config.MESH_LOCAL_PREFIX_REGEX_PATTERN, ip6Addr, re.I)
-                    and re.match(config.ROUTING_LOCATOR_REGEX_PATTERN, ip6Addr,
-                                 re.I) and
-                    not (re.match(config.ALOC_FLAG_REGEX_PATTERN, ip6Addr,
-                                  re.I))):
+            if (re.match(config.MESH_LOCAL_PREFIX_REGEX_PATTERN, ip6Addr, re.I) and
+                    re.match(config.ROUTING_LOCATOR_REGEX_PATTERN, ip6Addr, re.I) and
+                    not (re.match(config.ALOC_FLAG_REGEX_PATTERN, ip6Addr, re.I))):
                 return ip6Addr
         return None
 
     def __getAloc(self):
         aloc = []
         for ip6Addr in self.get_addrs():
-            if (re.match(config.MESH_LOCAL_PREFIX_REGEX_PATTERN, ip6Addr, re.I)
-                    and re.match(config.ROUTING_LOCATOR_REGEX_PATTERN, ip6Addr,
-                                 re.I) and
+            if (re.match(config.MESH_LOCAL_PREFIX_REGEX_PATTERN, ip6Addr, re.I) and
+                    re.match(config.ROUTING_LOCATOR_REGEX_PATTERN, ip6Addr, re.I) and
                     re.match(config.ALOC_FLAG_REGEX_PATTERN, ip6Addr, re.I)):
                 aloc.append(ip6Addr)
 
@@ -863,10 +1206,15 @@ class Node:
 
     def __getMleid(self):
         for ip6Addr in self.get_addrs():
-            if re.match(
-                    config.MESH_LOCAL_PREFIX_REGEX_PATTERN, ip6Addr,
-                    re.I) and not (re.match(
-                        config.ROUTING_LOCATOR_REGEX_PATTERN, ip6Addr, re.I)):
+            if re.match(config.MESH_LOCAL_PREFIX_REGEX_PATTERN, ip6Addr,
+                        re.I) and not (re.match(config.ROUTING_LOCATOR_REGEX_PATTERN, ip6Addr, re.I)):
+                return ip6Addr
+
+        return None
+
+    def __getDua(self) -> Optional[str]:
+        for ip6Addr in self.get_addrs():
+            if re.match(config.DOMAIN_PREFIX_REGEX_PATTERN, ip6Addr, re.I):
                 return ip6Addr
 
         return None
@@ -890,10 +1238,12 @@ class Node:
             return self.__getAloc()
         elif address_type == config.ADDRESS_TYPE.ML_EID:
             return self.__getMleid()
+        elif address_type == config.ADDRESS_TYPE.DUA:
+            return self.__getDua()
+        elif address_type == config.ADDRESS_TYPE.BACKBONE_GUA:
+            return self._getBackboneGua()
         else:
             return None
-
-        return None
 
     def get_context_reuse_delay(self):
         self.send_command('contextreusedelay')
@@ -914,8 +1264,11 @@ class Node:
         self.send_command(cmd)
         self._expect('Done')
 
-    def add_route(self, prefix, prf='med'):
-        cmd = 'route add %s %s' % (prefix, prf)
+    def add_route(self, prefix, stable=False, prf='med'):
+        cmd = 'route add %s ' % prefix
+        if stable:
+            cmd += 's'
+        cmd += ' %s' % prf
         self.send_command(cmd)
         self._expect('Done')
 
@@ -925,12 +1278,11 @@ class Node:
         self._expect('Done')
 
     def register_netdata(self):
-        self.send_command('netdataregister')
+        self.send_command('netdata register')
         self._expect('Done')
 
     def send_network_diag_get(self, addr, tlv_types):
-        self.send_command('networkdiagnostic get %s %s' %
-                          (addr, ' '.join([str(t.value) for t in tlv_types])))
+        self.send_command('networkdiagnostic get %s %s' % (addr, ' '.join([str(t.value) for t in tlv_types])))
 
         if isinstance(self.simulator, simulator.VirtualTime):
             self.simulator.go(8)
@@ -941,8 +1293,7 @@ class Node:
         self._expect('Done', timeout=timeout)
 
     def send_network_diag_reset(self, addr, tlv_types):
-        self.send_command('networkdiagnostic reset %s %s' %
-                          (addr, ' '.join([str(t.value) for t in tlv_types])))
+        self.send_command('networkdiagnostic reset %s %s' % (addr, ' '.join([str(t.value) for t in tlv_types])))
 
         if isinstance(self.simulator, simulator.VirtualTime):
             self.simulator.go(8)
@@ -985,9 +1336,7 @@ class Node:
     def scan(self):
         self.send_command('scan')
 
-        return self._expect_results(
-            r'\|\s(\S+)\s+\|\s(\S+)\s+\|\s([0-9a-fA-F]{4})\s\|\s([0-9a-fA-F]{16})\s\|\s(\d+)'
-        )
+        return self._expect_results(r'\|\s(\S+)\s+\|\s(\S+)\s+\|\s([0-9a-fA-F]{4})\s\|\s([0-9a-fA-F]{16})\s\|\s(\d+)')
 
     def ping(self, ipaddr, num_responses=1, size=None, timeout=5):
         cmd = 'ping %s' % ipaddr
@@ -1067,18 +1416,13 @@ class Node:
             self._expect('Done')
 
         # Set the meshlocal prefix in config.py
-        self.send_command('dataset meshlocalprefix %s' %
-                          config.MESH_LOCAL_PREFIX.split('/')[0])
+        self.send_command('dataset meshlocalprefix %s' % config.MESH_LOCAL_PREFIX.split('/')[0])
         self._expect('Done')
 
         self.send_command('dataset commit active')
         self._expect('Done')
 
-    def set_pending_dataset(self,
-                            pendingtimestamp,
-                            activetimestamp,
-                            panid=None,
-                            channel=None):
+    def set_pending_dataset(self, pendingtimestamp, activetimestamp, panid=None, channel=None, delay=None):
         self.send_command('dataset clear')
         self._expect('Done')
 
@@ -1100,9 +1444,13 @@ class Node:
             self.send_command(cmd)
             self._expect('Done')
 
+        if delay is not None:
+            cmd = 'dataset delay %d' % delay
+            self.send_command(cmd)
+            self._expect('Done')
+
         # Set the meshlocal prefix in config.py
-        self.send_command('dataset meshlocalprefix %s' %
-                          config.MESH_LOCAL_PREFIX.split('/')[0])
+        self.send_command('dataset meshlocalprefix %s' % config.MESH_LOCAL_PREFIX.split('/')[0])
         self._expect('Done')
 
         self.send_command('dataset commit pending')
@@ -1157,7 +1505,37 @@ class Node:
             cmd += 'networkname %s ' % self._escape_escapable(network_name)
 
         if binary is not None:
-            cmd += 'binary %s ' % binary
+            cmd += '-x %s ' % binary
+
+        self.send_command(cmd)
+        self._expect('Done')
+
+    def send_mgmt_active_get(self, addr='', tlvs=[]):
+        cmd = 'dataset mgmtgetcommand active'
+
+        if addr != '':
+            cmd += ' address '
+            cmd += addr
+
+        if len(tlvs) != 0:
+            tlv_str = ''.join('%02x' % tlv for tlv in tlvs)
+            cmd += ' -x '
+            cmd += tlv_str
+
+        self.send_command(cmd)
+        self._expect('Done')
+
+    def send_mgmt_pending_get(self, addr='', tlvs=[]):
+        cmd = 'dataset mgmtgetcommand pending'
+
+        if addr != '':
+            cmd += ' address '
+            cmd += addr
+
+        if len(tlvs) != 0:
+            tlv_str = ''.join('%02x' % tlv for tlv in tlvs)
+            cmd += ' -x '
+            cmd += tlv_str
 
         self.send_command(cmd)
         self._expect('Done')
@@ -1265,10 +1643,9 @@ class Node:
         else:
             timeout = 5
 
-        self._expect(
-            r'coap response from ([\da-f:]+)(?: OBS=(\d+))?'
-            r'(?: with payload: ([\da-f]+))?\b',
-            timeout=timeout)
+        self._expect(r'coap response from ([\da-f:]+)(?: OBS=(\d+))?'
+                     r'(?: with payload: ([\da-f]+))?\b',
+                     timeout=timeout)
         (source, observe, payload) = self.pexpect.match.groups()
         source = source.decode('UTF-8')
 
@@ -1291,10 +1668,9 @@ class Node:
         else:
             timeout = 5
 
-        self._expect(
-            r'coap request from ([\da-f:]+)(?: OBS=(\d+))?'
-            r'(?: with payload: ([\da-f]+))?\b',
-            timeout=timeout)
+        self._expect(r'coap request from ([\da-f:]+)(?: OBS=(\d+))?'
+                     r'(?: with payload: ([\da-f]+))?\b',
+                     timeout=timeout)
         (source, observe, payload) = self.pexpect.match.groups()
         source = source.decode('UTF-8')
 
@@ -1329,10 +1705,7 @@ class Node:
         else:
             timeout = 5
 
-        self._expect(
-            r'Received ACK in reply to notification '
-            r'from ([\da-f:]+)\b',
-            timeout=timeout)
+        self._expect(r'Received ACK in reply to notification ' r'from ([\da-f:]+)\b', timeout=timeout)
         (source,) = self.pexpect.match.groups()
         source = source.decode('UTF-8')
 
@@ -1442,8 +1815,15 @@ class Node:
 
         self._expect('coaps response', timeout=timeout)
 
+    def commissioner_mgmtget(self, tlvs_binary=None):
+        cmd = 'commissioner mgmtget'
+        if tlvs_binary is not None:
+            cmd += ' -x %s' % tlvs_binary
+        self.send_command(cmd)
+        self._expect('Done')
+
     def commissioner_mgmtset(self, tlvs_binary):
-        cmd = 'commissioner mgmtset binary %s' % tlvs_binary
+        cmd = 'commissioner mgmtset -x %s' % tlvs_binary
         self.send_command(cmd)
         self._expect('Done')
 
@@ -1481,13 +1861,18 @@ class Node:
     def udp_check_rx(self, bytes_should_rx):
         self._expect('%d bytes' % bytes_should_rx)
 
+    def set_routereligible(self, enable: bool):
+        cmd = f'routereligible {"enable" if enable else "disable"}'
+        self.send_command(cmd)
+        self._expect('Done')
+
     def router_list(self):
         cmd = 'router list'
         self.send_command(cmd)
         self._expect([r'(\d+)((\s\d+)*)'])
 
         g = self.pexpect.match.groups()
-        router_list = g[0] + ' ' + g[1]
+        router_list = g[0].decode('utf8') + ' ' + g[1].decode('utf8')
         router_list = [int(x) for x in router_list.split()]
         self._expect('Done')
         return router_list
@@ -1498,7 +1883,7 @@ class Node:
 
         self._expect(r'(.*)Done')
         g = self.pexpect.match.groups()
-        output = g[0]
+        output = g[0].decode('utf8')
         lines = output.strip().split('\n')
         lines = [l.strip() for l in lines]
         router_table = {}
@@ -1543,6 +1928,217 @@ class Node:
             }
 
         return router_table
+
+    def link_metrics_query_single_probe(self, dst_addr: str, linkmetrics_flags: str):
+        cmd = 'linkmetrics query %s single %s' % (dst_addr, linkmetrics_flags)
+        self.send_command(cmd)
+        self._expect('Done')
+
+    def link_metrics_query_forward_tracking_series(self, dst_addr: str, series_id: int):
+        cmd = 'linkmetrics query %s forward %d' % (dst_addr, series_id)
+        self.send_command(cmd)
+        self._expect('Done')
+
+    def link_metrics_mgmt_req_enhanced_ack_based_probing(self,
+                                                         dst_addr: str,
+                                                         enable: bool,
+                                                         metrics_flags: str,
+                                                         ext_flags=''):
+        cmd = "linkmetrics mgmt %s enhanced-ack" % (dst_addr)
+        if enable:
+            cmd = cmd + (" register %s %s" % (metrics_flags, ext_flags))
+        else:
+            cmd = cmd + " clear"
+        self.send_command(cmd)
+        self._expect('Done')
+
+    def link_metrics_mgmt_req_forward_tracking_series(self, dst_addr: str, series_id: int, series_flags: str,
+                                                      metrics_flags: str):
+        cmd = "linkmetrics mgmt %s forward %d %s %s" % (dst_addr, series_id, series_flags, metrics_flags)
+        self.send_command(cmd)
+        self._expect('Done')
+
+    def link_metrics_send_link_probe(self, dst_addr: str, series_id: int, length: int):
+        cmd = "linkmetrics probe %s %d %d" % (dst_addr, series_id, length)
+        self.send_command(cmd)
+        self._expect('Done')
+
+    def send_address_notification(self, dst: str, target: str, mliid: str):
+        cmd = f'fake /a/an {dst} {target} {mliid}'
+        self.send_command(cmd)
+        self._expect("Done")
+
+    def send_proactive_backbone_notification(self, target: str, mliid: str, ltt: int):
+        cmd = f'fake /b/ba {target} {mliid} {ltt}'
+        self.send_command(cmd)
+        self._expect("Done")
+
+
+class Node(NodeImpl, OtCli):
+    pass
+
+
+class LinuxHost():
+    PING_RESPONSE_PATTERN = re.compile(r'\d+ bytes from .*:.*')
+    ETH_DEV = config.BACKBONE_IFNAME
+
+    def get_ether_addrs(self):
+        output = self.bash(f'ip -6 addr list dev {self.ETH_DEV}')
+
+        addrs = []
+        for line in output:
+            # line example: "inet6 fe80::42:c0ff:fea8:903/64 scope link"
+            line = line.strip().split()
+
+            if line and line[0] == 'inet6':
+                addr = line[1]
+                if '/' in addr:
+                    addr = addr.split('/')[0]
+                addrs.append(addr)
+
+        logging.debug('%s: get_ether_addrs: %r', self, addrs)
+        return addrs
+
+    def get_ether_mac(self):
+        output = self.bash(f'ip addr list dev {self.ETH_DEV}')
+        for line in output:
+            # link/ether 02:42:ac:11:00:02 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+            line = line.strip().split()
+            if line and line[0] == 'link/ether':
+                return line[1]
+
+        assert False, output
+
+    def add_ipmaddr_ether(self, ip: str):
+        cmd = f'python3 /app/third_party/openthread/repo/tests/scripts/thread-cert/mcast6.py {self.ETH_DEV} {ip} &'
+        self.bash(cmd)
+
+    def ping_ether(self, ipaddr, num_responses=1, size=None, timeout=5, ttl=None) -> int:
+        cmd = f'ping -6 {ipaddr} -I eth0 -c {num_responses} -W {timeout}'
+        if size is not None:
+            cmd += f' -s {size}'
+
+        if ttl is not None:
+            cmd += f' -t {ttl}'
+
+        resp_count = 0
+
+        try:
+            for line in self.bash(cmd):
+                if self.PING_RESPONSE_PATTERN.match(line):
+                    resp_count += 1
+        except subprocess.CalledProcessError:
+            pass
+
+        return resp_count
+
+    def _getBackboneGua(self) -> Optional[str]:
+        for ip6Addr in self.get_addrs():
+            if re.match(config.BACKBONE_PREFIX_REGEX_PATTERN, ip6Addr, re.I):
+                return ip6Addr
+
+        return None
+
+    def ping(self, *args, **kwargs):
+        backbone = kwargs.pop('backbone', False)
+        if backbone:
+            return self.ping_ether(*args, **kwargs)
+        else:
+            return super().ping(*args, **kwargs)
+
+    def add_ipmaddr(self, *args, **kwargs):
+        backbone = kwargs.pop('backbone', False)
+        if backbone:
+            return self.add_ipmaddr_ether(*args, **kwargs)
+        else:
+            return super().add_ipmaddr(*args, **kwargs)
+
+    def ip_neighbors_flush(self):
+        # clear neigh cache on linux
+        self.bash(f'ip -6 neigh list dev {self.ETH_DEV}')
+        self.bash(f'ip -6 neigh flush nud all nud failed nud noarp dev {self.ETH_DEV}')
+        self.bash('ip -6 neigh list nud all dev %s | cut -d " " -f1 | sudo xargs -I{} ip -6 neigh delete {} dev %s' %
+                  (self.ETH_DEV, self.ETH_DEV))
+        self.bash(f'ip -6 neigh list dev {self.ETH_DEV}')
+
+
+class OtbrNode(LinuxHost, NodeImpl, OtbrDocker):
+    is_otbr = True
+    is_bbr = True  # OTBR is also BBR
+    node_type = 'otbr-docker'
+
+    def __repr__(self):
+        return f'Otbr<{self.nodeid}>'
+
+    def get_addrs(self) -> List[str]:
+        return super().get_addrs() + self.get_ether_addrs()
+
+    def start(self):
+        self._setup_sysctl()
+        super().start()
+
+
+class HostNode(LinuxHost, OtbrDocker):
+    is_host = True
+
+    def __init__(self, nodeid, name=None, **kwargs):
+        self.nodeid = nodeid
+        self.name = name or ('Host%d' % nodeid)
+        super().__init__(nodeid, **kwargs)
+
+    def start(self):
+        self._setup_sysctl()
+        self._service_radvd_start()
+
+    def stop(self):
+        self._service_radvd_stop()
+
+    def get_addrs(self) -> List[str]:
+        return self.get_ether_addrs()
+
+    def __repr__(self):
+        return f'Host<{self.nodeid}>'
+
+    def get_ip6_address(self, address_type: config.ADDRESS_TYPE):
+        """Get specific type of IPv6 address configured on thread device.
+
+        Args:
+            address_type: the config.ADDRESS_TYPE type of IPv6 address.
+
+        Returns:
+            IPv6 address string.
+        """
+        assert address_type == config.ADDRESS_TYPE.BACKBONE_GUA
+
+        if address_type == config.ADDRESS_TYPE.BACKBONE_GUA:
+            return self._getBackboneGua()
+        else:
+            return None
+
+    def _service_radvd_start(self):
+        self.bash("""cat >/etc/radvd.conf <<EOF
+interface eth0
+{
+	AdvSendAdvert on;
+
+	MinRtrAdvInterval 3;
+	MaxRtrAdvInterval 30;
+	AdvDefaultPreference low;
+
+	prefix %s
+	{
+		AdvOnLink on;
+		AdvAutonomous off;
+		AdvRouterAddr off;
+	};
+};
+EOF
+""" % config.DOMAIN_PREFIX)
+        self.bash('service radvd start')
+        self.bash('service radvd status')  # Make sure radvd service is running
+
+    def _service_radvd_stop(self):
+        self.bash('service radvd stop')
 
 
 if __name__ == '__main__':

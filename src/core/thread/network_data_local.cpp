@@ -56,7 +56,18 @@ Local::Local(Instance &aInstance)
 #if OPENTHREAD_CONFIG_BORDER_ROUTER_ENABLE
 otError Local::AddOnMeshPrefix(const OnMeshPrefixConfig &aConfig)
 {
+    otError  error;
     uint16_t flags = 0;
+
+    // Add Prefix validation check:
+    // Thread 1.1 Specification 5.13.2 says
+    // "A valid prefix MUST NOT allow both DHCPv6 and SLAAC for address configuration"
+    VerifyOrExit(!aConfig.mDhcp || !aConfig.mSlaac, error = OT_ERROR_INVALID_ARGS);
+
+    // RFC 4944 Section 6 says:
+    // An IPv6 address prefix used for stateless autoconfiguration [RFC4862]
+    // of an IEEE 802.15.4 interface MUST have a length of 64 bits.
+    VerifyOrExit(!aConfig.mSlaac || aConfig.mPrefix.mLength == OT_IP6_PREFIX_BITSIZE, error = OT_ERROR_INVALID_ARGS);
 
     if (aConfig.mPreferred)
     {
@@ -100,38 +111,40 @@ otError Local::AddOnMeshPrefix(const OnMeshPrefixConfig &aConfig)
     }
 #endif
 
-    return AddPrefix(aConfig.mPrefix.mPrefix.mFields.m8, aConfig.mPrefix.mLength, NetworkDataTlv::kTypeBorderRouter,
-                     aConfig.mPreference, flags, aConfig.mStable);
+    error =
+        AddPrefix(aConfig.GetPrefix(), NetworkDataTlv::kTypeBorderRouter, aConfig.mPreference, flags, aConfig.mStable);
+
+exit:
+    return error;
 }
 
-otError Local::RemoveOnMeshPrefix(const uint8_t *aPrefix, uint8_t aPrefixLength)
+otError Local::RemoveOnMeshPrefix(const Ip6::Prefix &aPrefix)
 {
-    return RemovePrefix(aPrefix, aPrefixLength, NetworkDataTlv::kTypeBorderRouter);
+    return RemovePrefix(aPrefix, NetworkDataTlv::kTypeBorderRouter);
 }
 
-otError Local::AddHasRoutePrefix(const uint8_t *aPrefix, uint8_t aPrefixLength, int8_t aPrf, bool aStable)
+otError Local::AddHasRoutePrefix(const ExternalRouteConfig &aConfig)
 {
-    return AddPrefix(aPrefix, aPrefixLength, NetworkDataTlv::kTypeHasRoute, aPrf, /* aFlags */ 0, aStable);
+    return AddPrefix(aConfig.GetPrefix(), NetworkDataTlv::kTypeHasRoute, aConfig.mPreference, /* aFlags */ 0,
+                     aConfig.mStable);
 }
 
-otError Local::RemoveHasRoutePrefix(const uint8_t *aPrefix, uint8_t aPrefixLength)
+otError Local::RemoveHasRoutePrefix(const Ip6::Prefix &aPrefix)
 {
-    return RemovePrefix(aPrefix, aPrefixLength, NetworkDataTlv::kTypeHasRoute);
+    return RemovePrefix(aPrefix, NetworkDataTlv::kTypeHasRoute);
 }
 
-otError Local::AddPrefix(const uint8_t *      aPrefix,
-                         uint8_t              aPrefixLength,
+otError Local::AddPrefix(const Ip6::Prefix &  aPrefix,
                          NetworkDataTlv::Type aSubTlvType,
                          int8_t               aPrf,
                          uint16_t             aFlags,
                          bool                 aStable)
 {
-    otError    error             = OT_ERROR_NONE;
-    uint8_t    prefixLengthBytes = BitVectorBytes(aPrefixLength);
+    otError    error = OT_ERROR_NONE;
     uint8_t    subTlvLength;
     PrefixTlv *prefixTlv;
 
-    VerifyOrExit(aPrefixLength > 0 && prefixLengthBytes <= sizeof(Ip6::Address), error = OT_ERROR_INVALID_ARGS);
+    VerifyOrExit((aPrefix.GetLength() > 0) && aPrefix.IsValid(), error = OT_ERROR_INVALID_ARGS);
 
     switch (aPrf)
     {
@@ -143,20 +156,18 @@ otError Local::AddPrefix(const uint8_t *      aPrefix,
         ExitNow(error = OT_ERROR_INVALID_ARGS);
     }
 
-    VerifyOrExit(Ip6::Address::PrefixMatch(aPrefix, Get<Mle::MleRouter>().GetMeshLocalPrefix().m8, prefixLengthBytes) <
-                     Mle::MeshLocalPrefix::kLength,
-                 error = OT_ERROR_INVALID_ARGS);
+    VerifyOrExit(!aPrefix.ContainsPrefix(Get<Mle::MleRouter>().GetMeshLocalPrefix()), error = OT_ERROR_INVALID_ARGS);
 
-    IgnoreError(RemovePrefix(aPrefix, aPrefixLength, aSubTlvType));
+    IgnoreError(RemovePrefix(aPrefix, aSubTlvType));
 
     subTlvLength = (aSubTlvType == NetworkDataTlv::kTypeBorderRouter)
                        ? sizeof(BorderRouterTlv) + sizeof(BorderRouterEntry)
                        : sizeof(HasRouteTlv) + sizeof(HasRouteEntry);
 
-    prefixTlv = static_cast<PrefixTlv *>(AppendTlv(sizeof(PrefixTlv) + prefixLengthBytes + subTlvLength));
+    prefixTlv = static_cast<PrefixTlv *>(AppendTlv(sizeof(PrefixTlv) + aPrefix.GetBytesSize() + subTlvLength));
     VerifyOrExit(prefixTlv != nullptr, error = OT_ERROR_NO_BUFS);
 
-    prefixTlv->Init(0, aPrefixLength, aPrefix);
+    prefixTlv->Init(0, aPrefix);
     prefixTlv->SetSubTlvsLength(subTlvLength);
 
     if (aSubTlvType == NetworkDataTlv::kTypeBorderRouter)
@@ -189,12 +200,12 @@ exit:
     return error;
 }
 
-otError Local::RemovePrefix(const uint8_t *aPrefix, uint8_t aPrefixLength, NetworkDataTlv::Type aSubTlvType)
+otError Local::RemovePrefix(const Ip6::Prefix &aPrefix, NetworkDataTlv::Type aSubTlvType)
 {
     otError    error = OT_ERROR_NONE;
     PrefixTlv *tlv;
 
-    VerifyOrExit((tlv = FindPrefix(aPrefix, aPrefixLength)) != nullptr, error = OT_ERROR_NOT_FOUND);
+    VerifyOrExit((tlv = FindPrefix(aPrefix)) != nullptr, error = OT_ERROR_NOT_FOUND);
     VerifyOrExit(FindTlv(tlv->GetSubTlvs(), tlv->GetNext(), aSubTlvType) != nullptr, error = OT_ERROR_NOT_FOUND);
     RemoveTlv(tlv);
 
@@ -203,11 +214,11 @@ exit:
     return error;
 }
 
-void Local::UpdateRloc(PrefixTlv &aPrefix)
+void Local::UpdateRloc(PrefixTlv &aPrefixTlv)
 {
     uint16_t rloc16 = Get<Mle::MleRouter>().GetRloc16();
 
-    for (NetworkDataTlv *cur = aPrefix.GetSubTlvs(); cur < aPrefix.GetNext(); cur = cur->GetNext())
+    for (NetworkDataTlv *cur = aPrefixTlv.GetSubTlvs(); cur < aPrefixTlv.GetNext(); cur = cur->GetNext())
     {
         switch (cur->GetType())
         {
@@ -382,7 +393,7 @@ otError Local::UpdateInconsistentServerData(Coap::ResponseHandler aHandler, void
         mOldRloc = Mac::kShortAddrInvalid;
     }
 
-    SuccessOrExit(error = NetworkData::SendServerDataNotification(mOldRloc, aHandler, aContext));
+    SuccessOrExit(error = SendServerDataNotification(mOldRloc, aHandler, aContext));
     mOldRloc = rloc;
 
 exit:

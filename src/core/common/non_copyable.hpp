@@ -37,18 +37,17 @@
 namespace ot {
 
 /**
- * This class makes any class that derives from it non-copyable. It is
- * intended to be used as a private base class.
+ * This class makes any class that derives from it non-copyable. It is intended to be used as a private base class.
+ *
  */
 class NonCopyable
 {
-protected:
-    NonCopyable(void) {}
-    ~NonCopyable(void) {}
+public:
+    NonCopyable(const NonCopyable &) = delete;
+    NonCopyable &operator=(const NonCopyable &) = delete;
 
-private:
-    NonCopyable(const NonCopyable &);
-    NonCopyable &operator=(const NonCopyable &);
+protected:
+    NonCopyable(void) = default;
 };
 
 } // namespace ot

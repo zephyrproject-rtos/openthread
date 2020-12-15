@@ -72,11 +72,14 @@
  * @{
  *
  * @defgroup api-link-link            Link
+ * @defgroup api-link-metrics         Link Metrics
  * @defgroup api-link-raw             Raw Link
  *
  * @}
  *
  * @defgroup api-message              Message
+ *
+ * @defgroup api-multi-radio          Multi Radio Link
  *
  * @defgroup api-thread               Thread
  *
@@ -145,7 +148,6 @@
  * @{
  *
  * @defgroup plat-alarm               Alarm
- * @defgroup plat-ble                 BLE Host
  * @defgroup plat-entropy             Entropy
  * @defgroup plat-factory-diagnostics Factory Diagnostics
  * @defgroup plat-logging             Logging
@@ -158,6 +160,7 @@
  * @defgroup plat-spi-slave           SPI Slave
  * @defgroup plat-time                Time Service
  * @defgroup plat-toolchain           Toolchain
+ * @defgroup plat-trel                TREL
  * @defgroup plat-uart                UART
  *
  * @}

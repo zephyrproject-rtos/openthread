@@ -81,11 +81,7 @@ struct Event
 
 enum
 {
-#if OPENTHREAD_CONFIG_OTNS_ENABLE
-    WELLKNOWN_NODE_ID = 1000, ///< Well-known Unique ID used by a simulated radio that supports promiscuous mode.
-#else
-    WELLKNOWN_NODE_ID = 34, ///< Well-known Unique ID used by a simulated radio that supports promiscuous mode.
-#endif
+    MAX_NETWORK_SIZE = OPENTHREAD_SIMULATION_MAX_NETWORK_SIZE,
 };
 
 /**
@@ -103,10 +99,10 @@ void platformAlarmInit(uint32_t aSpeedUpFactor);
 /**
  * This function retrieves the time remaining until the alarm fires.
  *
- * @param[out]  aTimeval  A pointer to the timeval struct.
+ * @param[out]  aTimeout  A pointer to the timeval struct.
  *
  */
-void platformAlarmUpdateTimeout(struct timeval *tv);
+void platformAlarmUpdateTimeout(struct timeval *aTimeout);
 
 /**
  * This function performs alarm driver processing.
@@ -234,5 +230,44 @@ void otSimSendUartWriteEvent(const uint8_t *aData, uint16_t aLength);
  *
  */
 bool platformRadioIsTransmitPending(void);
+
+#if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
+
+/**
+ * This function initializes the TREL service.
+ *
+ * @param[in] aSpeedUpFactor   The time speed-up factor.
+ *
+ */
+void platformTrelInit(uint32_t aSpeedUpFactor);
+
+/**
+ * This function shuts down the TREL service.
+ *
+ */
+void platformTrelDeinit(void);
+
+/**
+ * This function updates the file descriptor sets with file descriptors used by the TREL.
+ *
+ * @param[inout]  aReadFdSet   A pointer to the read file descriptors.
+ * @param[inout]  aWriteFdSet  A pointer to the write file descriptors.
+ * @param[inout]  aTimeout     A pointer to the timeout.
+ * @param[inout]  aMaxFd       A pointer to the max file descriptor.
+ *
+ */
+void platformTrelUpdateFdSet(fd_set *aReadFdSet, fd_set *aWriteFdSet, struct timeval *aTimeout, int *aMaxFd);
+
+/**
+ * This function performs TREL processing.
+ *
+ * @param[in]  aInstance    The OpenThread instance structure.
+ * @param[in]  aReadFdSet   A pointer to the read file descriptors.
+ * @param[in]  aWriteFdSet  A pointer to the write file descriptors.
+ *
+ */
+void platformTrelProcess(otInstance *aInstance, const fd_set *aReadFdSet, const fd_set *aWriteFdSet);
+
+#endif // OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
 
 #endif // PLATFORM_SIMULATION_H_

@@ -38,6 +38,7 @@
 
 #include "common/code_utils.hpp"
 #include "common/locator.hpp"
+#include "common/non_copyable.hpp"
 #include "common/timer.hpp"
 #include "mac/mac.hpp"
 #include "mac/mac_frame.hpp"
@@ -60,7 +61,7 @@ class Child;
  * This class implements the data poll (mac data request command) handler.
  *
  */
-class DataPollHandler : public InstanceLocator
+class DataPollHandler : public InstanceLocator, private NonCopyable
 {
     friend class Mac::Mac;
 
@@ -89,6 +90,9 @@ public:
     class ChildInfo
     {
         friend class DataPollHandler;
+#if !OPENTHREAD_MTD && OPENTHREAD_CONFIG_MAC_CSL_TRANSMITTER_ENABLE
+        friend class CslTxScheduler;
+#endif
 
     private:
         bool IsDataPollPending(void) const { return mDataPollPending; }
@@ -101,7 +105,6 @@ public:
         void    SetIndirectKeyId(uint8_t aKeyId) { mIndirectKeyId = aKeyId; }
 
         uint8_t GetIndirectTxAttempts(void) const { return mIndirectTxAttempts; }
-        void    SetIndirectTxAttemptsToMax(void) { mIndirectTxAttempts = kMaxPollTriggeredTxAttempts; }
         void    ResetIndirectTxAttempts(void) { mIndirectTxAttempts = 0; }
         void    IncrementIndirectTxAttempts(void) { mIndirectTxAttempts++; }
 
@@ -114,6 +117,11 @@ public:
         bool IsFrameReplacePending(void) const { return mFrameReplacePending; }
         void SetFrameReplacePending(bool aReplacePending) { mFrameReplacePending = aReplacePending; }
 
+#if OPENTHREAD_CONFIG_MULTI_RADIO
+        Mac::RadioType GetLastPollRadioType(void) const { return mLastPollRadioType; }
+        void           SetLastPollRadioType(Mac::RadioType aRadioType) { mLastPollRadioType = aRadioType; }
+#endif
+
         uint32_t mIndirectFrameCounter;    // Frame counter for current indirect frame (used for retx).
         uint8_t  mIndirectKeyId;           // Key Id for current indirect frame (used for retx).
         uint8_t  mIndirectDsn;             // MAC level Data Sequence Number (DSN) for retx attempts.
@@ -121,6 +129,9 @@ public:
         bool     mDataPollPending : 1;     // Indicates whether or not a Data Poll was received.
         bool     mFramePurgePending : 1;   // Indicates a pending purge request for the current indirect frame.
         bool     mFrameReplacePending : 1; // Indicates a pending replace request for the current indirect frame.
+#if OPENTHREAD_CONFIG_MULTI_RADIO
+        Mac::RadioType mLastPollRadioType; // The radio link last data poll frame was received on.
+#endif
 
         static_assert(kMaxPollTriggeredTxAttempts < (1 << 5), "mIndirectTxAttempts cannot fit max!");
     };
@@ -160,7 +171,7 @@ public:
          * @param[out] aContext  A reference to a `FrameContext` where the context for the new frame would be placed.
          * @param[in]  aChild    The child for which to prepare the frame.
          *
-         * @retval OT_ERROR_NONE   Frame was prepared successfully
+         * @retval OT_ERROR_NONE   Frame was prepared successfully.
          * @retval OT_ERROR_ABORT  Indirect transmission to child should be aborted (no frame for the child).
          *
          */
@@ -259,9 +270,9 @@ public:
 
 private:
     // Callbacks from MAC
-    void    HandleDataPoll(Mac::RxFrame &aFrame);
-    otError HandleFrameRequest(Mac::TxFrame &aFrame);
-    void    HandleSentFrame(const Mac::TxFrame &aFrame, otError aError);
+    void          HandleDataPoll(Mac::RxFrame &aFrame);
+    Mac::TxFrame *HandleFrameRequest(Mac::TxFrames &aTxFrames);
+    void          HandleSentFrame(const Mac::TxFrame &aFrame, otError aError);
 
     void HandleSentFrame(const Mac::TxFrame &aFrame, otError aError, Child &aChild);
     void ProcessPendingPolls(void);

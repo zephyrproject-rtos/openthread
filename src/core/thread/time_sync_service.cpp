@@ -51,7 +51,6 @@ namespace ot {
 
 TimeSync::TimeSync(Instance &aInstance)
     : InstanceLocator(aInstance)
-    , Notifier::Receiver(aInstance, TimeSync::HandleNotifierEvents)
     , mTimeSyncRequired(false)
     , mTimeSyncSeq(OT_TIME_SYNC_INVALID_SEQ)
     , mTimeSyncPeriod(OPENTHREAD_CONFIG_TIME_SYNC_PERIOD)
@@ -81,7 +80,7 @@ void TimeSync::HandleTimeSyncMessage(const Message &aMessage)
     const int64_t origNetworkTimeOffset = mNetworkTimeOffset;
     int8_t        timeSyncSeqDelta;
 
-    VerifyOrExit(aMessage.GetTimeSyncSeq() != OT_TIME_SYNC_INVALID_SEQ, OT_NOOP);
+    VerifyOrExit(aMessage.GetTimeSyncSeq() != OT_TIME_SYNC_INVALID_SEQ);
 
     timeSyncSeqDelta = static_cast<int8_t>(aMessage.GetTimeSyncSeq() - mTimeSyncSeq);
 
@@ -162,7 +161,7 @@ void TimeSync::ProcessTimeSync(void)
 
     if (mTimeSyncRequired)
     {
-        VerifyOrExit(Get<Mle::MleRouter>().SendTimeSync() == OT_ERROR_NONE, OT_NOOP);
+        VerifyOrExit(Get<Mle::MleRouter>().SendTimeSync() == OT_ERROR_NONE);
 
         mLastTimeSyncSent = TimerMilli::GetNow();
         mTimeSyncRequired = false;
@@ -207,11 +206,6 @@ void TimeSync::HandleNotifierEvents(Events aEvents)
 void TimeSync::HandleTimeout(void)
 {
     CheckAndHandleChanges(false);
-}
-
-void TimeSync::HandleNotifierEvents(Notifier::Receiver &aReceiver, Events aEvents)
-{
-    static_cast<TimeSync &>(aReceiver).HandleNotifierEvents(aEvents);
 }
 
 void TimeSync::HandleTimeout(Timer &aTimer)

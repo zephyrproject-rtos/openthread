@@ -41,6 +41,47 @@
 
 namespace ot {
 
+bool Neighbor::AddressMatcher::Matches(const Neighbor &aNeighbor) const
+{
+    bool matches = false;
+
+    VerifyOrExit(aNeighbor.MatchesFilter(mStateFilter));
+
+    if (mShortAddress != Mac::kShortAddrInvalid)
+    {
+        VerifyOrExit(mShortAddress == aNeighbor.GetRloc16());
+    }
+
+    if (mExtAddress != nullptr)
+    {
+        VerifyOrExit(*mExtAddress == aNeighbor.GetExtAddress());
+    }
+
+    matches = true;
+
+exit:
+    return matches;
+}
+
+void Neighbor::Info::SetFrom(const Neighbor &aNeighbor)
+{
+    Clear();
+
+    mExtAddress       = aNeighbor.GetExtAddress();
+    mAge              = Time::MsecToSec(TimerMilli::GetNow() - aNeighbor.GetLastHeard());
+    mRloc16           = aNeighbor.GetRloc16();
+    mLinkFrameCounter = aNeighbor.GetLinkFrameCounters().GetMaximum();
+    mMleFrameCounter  = aNeighbor.GetMleFrameCounter();
+    mLinkQualityIn    = aNeighbor.GetLinkInfo().GetLinkQuality();
+    mAverageRssi      = aNeighbor.GetLinkInfo().GetAverageRss();
+    mLastRssi         = aNeighbor.GetLinkInfo().GetLastRss();
+    mFrameErrorRate   = aNeighbor.GetLinkInfo().GetFrameErrorRate();
+    mMessageErrorRate = aNeighbor.GetLinkInfo().GetMessageErrorRate();
+    mRxOnWhenIdle     = aNeighbor.IsRxOnWhenIdle();
+    mFullThreadDevice = aNeighbor.IsFullThreadDevice();
+    mFullNetworkData  = aNeighbor.IsFullNetworkData();
+}
+
 void Neighbor::Init(Instance &aInstance)
 {
     InstanceLocatorInit::Init(aInstance);
@@ -93,12 +134,20 @@ bool Neighbor::MatchesFilter(StateFilter aFilter) const
         matches = IsStateValidOrAttaching();
         break;
 
+    case kInStateInvalid:
+        matches = IsStateInvalid();
+        break;
+
     case kInStateAnyExceptInvalid:
         matches = !IsStateInvalid();
         break;
 
     case kInStateAnyExceptValidOrRestoring:
         matches = !IsStateValidOrRestoring();
+        break;
+
+    case kInStateAny:
+        matches = true;
         break;
     }
 
@@ -109,6 +158,87 @@ void Neighbor::GenerateChallenge(void)
 {
     IgnoreError(
         Random::Crypto::FillBuffer(mValidPending.mPending.mChallenge, sizeof(mValidPending.mPending.mChallenge)));
+}
+
+#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_ENABLE
+void Neighbor::AggregateLinkMetrics(uint8_t aSeriesId, uint8_t aFrameType, uint8_t aLqi, int8_t aRss)
+{
+    for (LinkMetricsSeriesInfo *entry = mLinkMetricsSeriesInfoList.GetHead(); entry != nullptr;
+         entry                        = entry->GetNext())
+    {
+        if (aSeriesId == 0 || aSeriesId == entry->GetSeriesId())
+        {
+            entry->AggregateLinkMetrics(aFrameType, aLqi, aRss);
+        }
+    }
+}
+
+LinkMetricsSeriesInfo *Neighbor::GetForwardTrackingSeriesInfo(const uint8_t &aSeriesId)
+{
+    return mLinkMetricsSeriesInfoList.FindMatching(aSeriesId);
+}
+
+void Neighbor::AddForwardTrackingSeriesInfo(LinkMetricsSeriesInfo &aLinkMetricsSeriesInfo)
+{
+    mLinkMetricsSeriesInfoList.Push(aLinkMetricsSeriesInfo);
+}
+
+LinkMetricsSeriesInfo *Neighbor::RemoveForwardTrackingSeriesInfo(const uint8_t &aSeriesId)
+{
+    return mLinkMetricsSeriesInfoList.RemoveMatching(aSeriesId);
+}
+
+void Neighbor::RemoveAllForwardTrackingSeriesInfo(void)
+{
+    while (!mLinkMetricsSeriesInfoList.IsEmpty())
+    {
+        LinkMetricsSeriesInfo *seriesInfo = mLinkMetricsSeriesInfoList.Pop();
+        Get<LinkMetrics>().mLinkMetricsSeriesInfoPool.Free(*seriesInfo);
+    }
+}
+#endif // OPENTHREAD_CONFIG_MLE_LINK_METRICS_ENABLE
+
+const char *Neighbor::StateToString(State aState)
+{
+    static const char *kStateStrings[] = {
+        "Invalid",        // kStateInvalid
+        "Restored",       // kStateRestored
+        "ParentReq",      // kStateParentRequest
+        "ParentRes",      // kStateParentResponse
+        "ChildIdReq",     // kStateChildIdRequest
+        "LinkReq",        // kStateLinkRequest
+        "ChildUpdateReq", // kStateChildUpdateRequest
+        "Valid",          // kStateValid
+    };
+
+    return static_cast<uint8_t>(aState) < OT_ARRAY_LENGTH(kStateStrings) ? kStateStrings[aState] : "Unknown";
+}
+
+void Child::Info::SetFrom(const Child &aChild)
+{
+    Clear();
+    mExtAddress         = aChild.GetExtAddress();
+    mTimeout            = aChild.GetTimeout();
+    mRloc16             = aChild.GetRloc16();
+    mChildId            = Mle::Mle::ChildIdFromRloc16(aChild.GetRloc16());
+    mNetworkDataVersion = aChild.GetNetworkDataVersion();
+    mAge                = Time::MsecToSec(TimerMilli::GetNow() - aChild.GetLastHeard());
+    mLinkQualityIn      = aChild.GetLinkInfo().GetLinkQuality();
+    mAverageRssi        = aChild.GetLinkInfo().GetAverageRss();
+    mLastRssi           = aChild.GetLinkInfo().GetLastRss();
+    mFrameErrorRate     = aChild.GetLinkInfo().GetFrameErrorRate();
+    mMessageErrorRate   = aChild.GetLinkInfo().GetMessageErrorRate();
+    mQueuedMessageCnt   = aChild.GetIndirectMessageCount();
+    mVersion            = aChild.GetVersion();
+    mRxOnWhenIdle       = aChild.IsRxOnWhenIdle();
+    mFullThreadDevice   = aChild.IsFullThreadDevice();
+    mFullNetworkData    = aChild.IsFullNetworkData();
+    mIsStateRestoring   = aChild.IsStateRestoring();
+#if !OPENTHREAD_MTD && OPENTHREAD_CONFIG_MAC_CSL_TRANSMITTER_ENABLE
+    mIsCslSynced = aChild.IsCslSynchronized();
+#else
+    mIsCslSynced = false;
+#endif
 }
 
 const Ip6::Address *Child::AddressIterator::GetAddress(void) const
@@ -136,7 +266,7 @@ void Child::AddressIterator::Update(void)
 
         VerifyOrExit((address != nullptr) && !address->IsUnspecified(), mIndex = kMaxIndex);
 
-        VerifyOrExit(!address->MatchesFilter(mFilter), OT_NOOP);
+        VerifyOrExit(!address->MatchesFilter(mFilter));
         mIndex++;
     }
 
@@ -156,6 +286,10 @@ void Child::ClearIp6Addresses(void)
 {
     mMeshLocalIid.Clear();
     memset(mIp6Address, 0, sizeof(mIp6Address));
+#if OPENTHREAD_FTD && OPENTHREAD_CONFIG_TMF_PROXY_MLR_ENABLE
+    mMlrToRegisterMask.Clear();
+    mMlrRegisteredMask.Clear();
+#endif
 }
 
 otError Child::GetMeshLocalIp6Address(Ip6::Address &aAddress) const
@@ -221,7 +355,7 @@ otError Child::RemoveIp6Address(const Ip6::Address &aAddress)
 
     for (index = 0; index < kNumIp6Addresses; index++)
     {
-        VerifyOrExit(!mIp6Address[index].IsUnspecified(), OT_NOOP);
+        VerifyOrExit(!mIp6Address[index].IsUnspecified());
 
         if (mIp6Address[index] == aAddress)
         {
@@ -247,7 +381,7 @@ bool Child::HasIp6Address(const Ip6::Address &aAddress) const
 {
     bool retval = false;
 
-    VerifyOrExit(!aAddress.IsUnspecified(), OT_NOOP);
+    VerifyOrExit(!aAddress.IsUnspecified());
 
     if (Get<Mle::MleRouter>().IsMeshLocalAddress(aAddress))
     {
@@ -257,7 +391,7 @@ bool Child::HasIp6Address(const Ip6::Address &aAddress) const
 
     for (const Ip6::Address &ip6Address : mIp6Address)
     {
-        VerifyOrExit(!ip6Address.IsUnspecified(), OT_NOOP);
+        VerifyOrExit(!ip6Address.IsUnspecified());
 
         if (ip6Address == aAddress)
         {
@@ -269,9 +403,89 @@ exit:
     return retval;
 }
 
+#if OPENTHREAD_FTD && OPENTHREAD_CONFIG_TMF_PROXY_DUA_ENABLE
+const Ip6::Address *Child::GetDomainUnicastAddress(void) const
+{
+    const Ip6::Address *addr = nullptr;
+
+    for (const Ip6::Address &ip6Address : mIp6Address)
+    {
+        VerifyOrExit(!ip6Address.IsUnspecified());
+
+        if (Get<BackboneRouter::Leader>().IsDomainUnicast(ip6Address))
+        {
+            ExitNow(addr = &ip6Address);
+        }
+    }
+
+exit:
+    return addr;
+}
+#endif
+
 void Child::GenerateChallenge(void)
 {
     IgnoreError(Random::Crypto::FillBuffer(mAttachChallenge, sizeof(mAttachChallenge)));
+}
+
+#if OPENTHREAD_FTD && OPENTHREAD_CONFIG_TMF_PROXY_MLR_ENABLE
+bool Child::HasMlrRegisteredAddress(const Ip6::Address &aAddress) const
+{
+    bool has = false;
+
+    VerifyOrExit(mMlrRegisteredMask.HasAny());
+
+    for (const Ip6::Address &address : IterateIp6Addresses(Ip6::Address::kTypeMulticastLargerThanRealmLocal))
+    {
+        if (GetAddressMlrState(address) == kMlrStateRegistered && address == aAddress)
+        {
+            ExitNow(has = true);
+        }
+    }
+
+exit:
+    return has;
+}
+
+MlrState Child::GetAddressMlrState(const Ip6::Address &aAddress) const
+{
+    uint16_t addressIndex;
+
+    OT_ASSERT(&mIp6Address[0] <= &aAddress && &aAddress < OT_ARRAY_END(mIp6Address));
+
+    addressIndex = static_cast<uint16_t>(&aAddress - mIp6Address);
+
+    return mMlrToRegisterMask.Get(addressIndex)
+               ? kMlrStateToRegister
+               : (mMlrRegisteredMask.Get(addressIndex) ? kMlrStateRegistered : kMlrStateRegistering);
+}
+
+void Child::SetAddressMlrState(const Ip6::Address &aAddress, MlrState aState)
+{
+    uint16_t addressIndex;
+
+    OT_ASSERT(&mIp6Address[0] <= &aAddress && &aAddress < OT_ARRAY_END(mIp6Address));
+
+    addressIndex = static_cast<uint16_t>(&aAddress - mIp6Address);
+
+    mMlrToRegisterMask.Set(addressIndex, aState == kMlrStateToRegister);
+    mMlrRegisteredMask.Set(addressIndex, aState == kMlrStateRegistered);
+}
+#endif // OPENTHREAD_FTD && OPENTHREAD_CONFIG_TMF_PROXY_MLR_ENABLE
+
+void Router::Info::SetFrom(const Router &aRouter)
+{
+    Clear();
+    mRloc16          = aRouter.GetRloc16();
+    mRouterId        = Mle::Mle::RouterIdFromRloc16(mRloc16);
+    mExtAddress      = aRouter.GetExtAddress();
+    mAllocated       = true;
+    mNextHop         = aRouter.GetNextHop();
+    mLinkEstablished = aRouter.IsStateValid();
+    mPathCost        = aRouter.GetCost();
+    mLinkQualityIn   = aRouter.GetLinkInfo().GetLinkQuality();
+    mLinkQualityOut  = aRouter.GetLinkQualityOut();
+    mAge             = static_cast<uint8_t>(Time::MsecToSec(TimerMilli::GetNow() - aRouter.GetLastHeard()));
 }
 
 void Router::Clear(void)

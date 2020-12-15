@@ -33,7 +33,7 @@ on: [push, pull_request]
 jobs:
 
   cancel-previous-runs:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
     - uses: rokroskar/workflow-run-cleanup-action@master
       env:
@@ -42,7 +42,7 @@ jobs:
 
 
   posix-cli:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     env:
       COVERAGE: 1
       PYTHONUNBUFFERED: 1
@@ -55,7 +55,7 @@ jobs:
     - name: Bootstrap
       run: |
         sudo rm /etc/apt/sources.list.d/* && sudo apt-get update
-        sudo apt-get --no-install-recommends install -y libreadline6-dev
+        sudo apt-get --no-install-recommends install -y libreadline6-dev python3-setuptools python3-wheel lcov
         python3 -m pip install -r tests/scripts/thread-cert/requirements.txt
     - name: Build
       run: |
@@ -64,12 +64,22 @@ jobs:
         make -f src/posix/Makefile-posix
     - name: Run
       run: |
-        VERBOSE=1 OT_CLI_PATH="$(pwd)/$(ls output/posix/*/bin/ot-cli) -v" RADIO_DEVICE="$(pwd)/$(ls output/*/bin/ot-rcp)" make -f src/posix/Makefile-posix check
-    - name: Codecov
-      uses: codecov/codecov-action@v1
+        VERBOSE=1 OT_CLI_PATH="$PWD/output/posix/bin/ot-cli -v" RADIO_DEVICE="$PWD/output/simulation/bin/ot-rcp" make -f src/posix/Makefile-posix check
+    - uses: actions/upload-artifact@v2
+      if: ${{ failure() }}
+      with:
+        name: posix-cli-thread-cert
+        path: build/posix/tests/scripts/thread-cert
+    - name: Generate Coverage
+      run: |
+        ./script/test generate_coverage gcc
+    - uses: actions/upload-artifact@v2
+      with:
+        name: cov-posix-cli
+        path: tmp/coverage.info
 
   posix-ncp:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     env:
       COVERAGE: 1
       NODE_TYPE: ncp-sim
@@ -83,7 +93,7 @@ jobs:
     - name: Bootstrap
       run: |
         sudo rm /etc/apt/sources.list.d/* && sudo apt-get update
-        sudo apt-get --no-install-recommends install -y libreadline6-dev python3-setuptools
+        sudo apt-get --no-install-recommends install -y libreadline6-dev python3-setuptools python3-wheel lcov
         python3 -m pip install -r tests/scripts/thread-cert/requirements.txt
         sudo python3 -m pip install git+https://github.com/openthread/pyspinel
     - name: Build
@@ -93,12 +103,22 @@ jobs:
         make -f src/posix/Makefile-posix
     - name: Run
       run: |
-        VERBOSE=1 OT_NCP_PATH="$(pwd)/$(ls output/posix/*/bin/ot-ncp)" RADIO_DEVICE="$(pwd)/$(ls output/*/bin/ot-rcp)" make -f src/posix/Makefile-posix check
-    - name: Codecov
-      uses: codecov/codecov-action@v1
+        VERBOSE=1 OT_NCP_PATH="$PWD/output/posix/bin/ot-ncp" RADIO_DEVICE="$PWD/output/simulation/bin/ot-rcp" make -f src/posix/Makefile-posix check
+    - uses: actions/upload-artifact@v2
+      if: ${{ failure() }}
+      with:
+        name: posix-ncp-thread-cert
+        path: build/posix/tests/scripts/thread-cert
+    - name: Generate Coverage
+      run: |
+        ./script/test generate_coverage gcc
+    - uses: actions/upload-artifact@v2
+      with:
+        name: cov-posix-ncp
+        path: tmp/coverage.info
 
   posix-ncp-rcp-migrate:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     env:
       COVERAGE: 1
     steps:
@@ -106,7 +126,7 @@ jobs:
     - name: Bootstrap
       run: |
         sudo rm /etc/apt/sources.list.d/* && sudo apt-get update
-        sudo apt-get --no-install-recommends install -y expect
+        sudo apt-get --no-install-recommends install -y expect lcov
     - name: Build
       run: |
         ./bootstrap
@@ -114,11 +134,16 @@ jobs:
     - name: Run
       run: |
         script/check-ncp-rcp-migrate check
-    - name: Codecov
-      uses: codecov/codecov-action@v1
+    - name: Generate Coverage
+      run: |
+        ./script/test generate_coverage gcc
+    - uses: actions/upload-artifact@v2
+      with:
+        name: cov-posix-ncp-rcp-migrate
+        path: tmp/coverage.info
 
   posix-pty:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     env:
       COVERAGE: 1
     steps:
@@ -126,7 +151,7 @@ jobs:
     - name: Bootstrap
       run: |
         sudo rm /etc/apt/sources.list.d/* && sudo apt-get update
-        sudo apt-get --no-install-recommends install -y socat expect
+        sudo apt-get --no-install-recommends install -y socat expect lcov net-tools
         cd /tmp
         wget https://github.com/obgm/libcoap/archive/bsd-licensed.tar.gz
         tar xvf bsd-licensed.tar.gz
@@ -142,11 +167,16 @@ jobs:
     - name: Run
       run: |
         script/check-posix-pty check
-    - name: Codecov
-      uses: codecov/codecov-action@v1
+    - name: Generate Coverage
+      run: |
+        ./script/test generate_coverage gcc
+    - uses: actions/upload-artifact@v2
+      with:
+        name: cov-posix-pty
+        path: tmp/coverage.info
 
   posix-pty-daemon:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     env:
       COVERAGE: 1
       DAEMON: 1
@@ -155,7 +185,7 @@ jobs:
     - name: Bootstrap
       run: |
         sudo rm /etc/apt/sources.list.d/* && sudo apt-get update
-        sudo apt-get --no-install-recommends install -y socat expect
+        sudo apt-get --no-install-recommends install -y socat expect lcov net-tools
         cd /tmp
         wget https://github.com/obgm/libcoap/archive/bsd-licensed.tar.gz
         tar xvf bsd-licensed.tar.gz
@@ -171,5 +201,40 @@ jobs:
     - name: Run
       run: |
         script/check-posix-pty check
-    - name: Codecov
-      uses: codecov/codecov-action@v1
+    - name: Generate Coverage
+      run: |
+        ./script/test generate_coverage gcc
+    - uses: actions/upload-artifact@v2
+      with:
+        name: cov-posix-pty-daemon
+        path: tmp/coverage.info
+
+  upload-coverage:
+    needs:
+    - posix-cli
+    - posix-ncp
+    - posix-ncp-rcp-migrate
+    - posix-pty
+    - posix-pty-daemon
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v2
+    - name: Bootstrap
+      run: |
+        sudo apt-get --no-install-recommends install -y lcov
+    - uses: actions/download-artifact@v2
+      with:
+        path: coverage/
+    - name: Upload Coverage
+      run: |
+        script/test upload_codecov
+
+  delete-coverage-artifacts:
+    needs: upload-coverage
+    if: always()
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: geekyeggo/delete-artifact@1-glob-support
+      with:
+        name: cov-*
+        useGlob: true

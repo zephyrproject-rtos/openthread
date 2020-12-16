@@ -48,6 +48,7 @@ build_all_features()
         "-DOPENTHREAD_CONFIG_COAP_API_ENABLE=1"
         "-DOPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE=1"
         "-DOPENTHREAD_CONFIG_COMMISSIONER_ENABLE=1"
+        "-DOPENTHREAD_CONFIG_DATASET_UPDATER_ENABLE=1"
         "-DOPENTHREAD_CONFIG_DHCP6_CLIENT_ENABLE=1"
         "-DOPENTHREAD_CONFIG_DHCP6_SERVER_ENABLE=1"
         "-DOPENTHREAD_CONFIG_DIAG_ENABLE=1"
@@ -86,7 +87,9 @@ build_all_features()
 
     local options_1_2=(
         "-DOPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE=1"
+        "-DOPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE=1"
         "-DOPENTHREAD_CONFIG_DUA_ENABLE=1"
+        "-DOPENTHREAD_CONFIG_MLR_ENABLE=1"
     )
 
     export CPPFLAGS="${options[*]} -DOPENTHREAD_CONFIG_LOG_LEVEL=OT_LOG_LEVEL_NONE"
@@ -95,6 +98,9 @@ build_all_features()
 
     export CPPFLAGS="${options[*]}"
     reset_source
+    make -f examples/Makefile-simulation FULL_LOGS=1
+
+    export CPPFLAGS="${options[*]} -DOPENTHREAD_CONFIG_LOG_DEFINE_AS_MACRO_ONLY=1"
     make -f examples/Makefile-simulation FULL_LOGS=1
 
     export CPPFLAGS="${options[*]} ${options_1_2[*]} -DOPENTHREAD_CONFIG_LOG_LEVEL=OT_LOG_LEVEL_NONE"
@@ -121,6 +127,7 @@ build_nest_common()
         "-DOPENTHREAD_CONFIG_CHANNEL_MANAGER_ENABLE=1"
         "-DOPENTHREAD_CONFIG_CHANNEL_MONITOR_ENABLE=1"
         "-DOPENTHREAD_CONFIG_CHILD_SUPERVISION_ENABLE=1"
+        "-DOPENTHREAD_CONFIG_DATASET_UPDATER_ENABLE=1"
         "-DOPENTHREAD_CONFIG_DIAG_ENABLE=1"
         "-DOPENTHREAD_CONFIG_JAM_DETECTION_ENABLE=1"
         "-DOPENTHREAD_CONFIG_LEGACY_ENABLE=1"
@@ -185,12 +192,68 @@ build_nest_common()
     cd ..
 }
 
+build_multi_radio_links()
+{
+    # TREL radio link only.
+    local options=(
+        "-DOPENTHREAD_CONFIG_NCP_UART_ENABLE=1"
+        "-DOPENTHREAD_CONFIG_PLATFORM_FLASH_API_ENABLE=1"
+        "-DOPENTHREAD_CONFIG_LOG_LEVEL=OT_LOG_LEVEL_DEBG"
+        "-DOPENTHREAD_CONFIG_RADIO_LINK_IEEE_802_15_4_ENABLE=0"
+        "-DOPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE=1"
+    )
+    export CPPFLAGS="${options[*]}"
+
+    reset_source
+    mkdir build && cd build
+    ../configure \
+        --enable-cli \
+        --enable-ftd \
+        --enable-mtd \
+        --enable-ncp \
+        --enable-radio-only \
+        --with-examples=simulation \
+        --disable-docs \
+        --disable-tests
+    make -j"${OT_BUILD_JOBS}"
+    cd ..
+
+    # Multi radio link - 15.4 and TREL.
+    options=(
+        "-DOPENTHREAD_CONFIG_NCP_UART_ENABLE=1"
+        "-DOPENTHREAD_CONFIG_PLATFORM_FLASH_API_ENABLE=1"
+        "-DOPENTHREAD_CONFIG_DIAG_ENABLE=1"
+        "-DOPENTHREAD_CONFIG_LINK_RAW_ENABLE=1"
+        "-DOPENTHREAD_CONFIG_LOG_LEVEL_DYNAMIC_ENABLE=1"
+        "-DOPENTHREAD_CONFIG_LOG_LEVEL=OT_LOG_LEVEL_DEBG"
+        "-DOPENTHREAD_CONFIG_MAC_FILTER_ENABLE=1"
+        "-DOPENTHREAD_CONFIG_RADIO_LINK_IEEE_802_15_4_ENABLE=1"
+        "-DOPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE=1"
+    )
+    export CPPFLAGS="${options[*]}"
+
+    reset_source
+    mkdir build && cd build
+    ../configure \
+        --enable-cli \
+        --enable-ftd \
+        --enable-mtd \
+        --enable-ncp \
+        --enable-radio-only \
+        --with-examples=simulation \
+        --disable-docs \
+        --disable-tests
+    make -j"${OT_BUILD_JOBS}"
+    cd ..
+}
+
 main()
 {
     ./bootstrap
 
     build_all_features
     build_nest_common
+    build_multi_radio_links
 }
 
 main "$@"

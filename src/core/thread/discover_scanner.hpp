@@ -37,6 +37,7 @@
 #include "openthread-core-config.h"
 
 #include "common/locator.hpp"
+#include "common/non_copyable.hpp"
 #include "common/timer.hpp"
 #include "mac/channel_mask.hpp"
 #include "mac/mac.hpp"
@@ -54,7 +55,7 @@ namespace Mle {
  * This class implements MLE Discover Scan.
  *
  */
-class DiscoverScanner : public InstanceLocator
+class DiscoverScanner : public InstanceLocator, private NonCopyable
 {
     friend class ot::Instance;
     friend class ot::MeshForwarder;
@@ -123,7 +124,7 @@ public:
                      bool                    aJoiner,
                      bool                    aEnableFiltering,
                      const FilterIndexes *   aFilterIndexes,
-                     Handler                 aHandler,
+                     Handler                 aCallback,
                      void *                  aContext);
 
     /**
@@ -134,6 +135,19 @@ public:
      */
     bool IsInProgress(void) const { return (mState != kStateIdle); }
 
+    /**
+     * This method sets Joiner Advertisement.
+     *
+     * @param[in]  aOui             The Vendor OUI for Joiner Advertisement.
+     * @param[in]  aAdvData         A pointer to AdvData for Joiner Advertisement.
+     * @param[in]  aAdvDataLength   The length of AdvData.
+     *
+     * @retval OT_ERROR_NONE            Successfully set Joiner Advertisement.
+     * @retval OT_ERROR_INVALID_ARGS    Invalid AdvData.
+     *
+     */
+    otError SetJoinerAdvertisement(uint32_t aOui, const uint8_t *aAdvData, uint8_t aAdvDataLength);
+
 private:
     enum State
     {
@@ -142,10 +156,15 @@ private:
         kStateScanDone,
     };
 
+    enum : uint32_t
+    {
+        kMaxOui = 0xffffff,
+    };
+
     // Methods used by `MeshForwarder`
-    otError PrepareDiscoveryRequestFrame(Mac::TxFrame &aFrame);
-    void    HandleDiscoveryRequestFrameTxDone(Message &aMessage);
-    void    Stop(void) { HandleDiscoverComplete(); }
+    Mac::TxFrame *PrepareDiscoveryRequestFrame(Mac::TxFrame &aFrame);
+    void          HandleDiscoveryRequestFrameTxDone(Message &aMessage);
+    void          Stop(void) { HandleDiscoverComplete(); }
 
     // Methods used from `Mle`
     void HandleDiscoveryResponse(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo) const;
@@ -160,7 +179,10 @@ private:
     FilterIndexes    mFilterIndexes;
     Mac::ChannelMask mScanChannels;
     State            mState;
+    uint32_t         mOui;
     uint8_t          mScanChannel;
+    uint8_t          mAdvDataLength;
+    uint8_t          mAdvData[MeshCoP::JoinerAdvertisementTlv::kAdvDataMaxLength];
     bool             mEnableFiltering : 1;
     bool             mShouldRestorePanId : 1;
 };

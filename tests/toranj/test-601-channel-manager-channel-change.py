@@ -45,13 +45,10 @@ def verify_channel(nodes, new_channel, wait_time=20):
     """
     start_time = time.time()
 
-    while not all([
-        (new_channel == int(node.get(wpan.WPAN_CHANNEL), 0)) for node in nodes
-    ]):
+    while not all([(new_channel == int(node.get(wpan.WPAN_CHANNEL), 0)) for node in nodes]):
         if time.time() - start_time > wait_time:
-            print('Took too long to switch to channel {} ({}>{} sec)'.format(
-                new_channel,
-                time.time() - start_time, wait_time))
+            print('Took too long to switch to channel {} ({}>{} sec)'.format(new_channel,
+                                                                             time.time() - start_time, wait_time))
             exit(1)
         time.sleep(0.1)
 
@@ -83,15 +80,15 @@ wpan.Node.init_all_nodes()
 for node in all_nodes:
     node.set(wpan.WPAN_OT_LOG_LEVEL, '0')
 
-r1.whitelist_node(r2)
-r2.whitelist_node(r1)
-r1.whitelist_node(r3)
-r3.whitelist_node(r1)
+r1.allowlist_node(r2)
+r2.allowlist_node(r1)
+r1.allowlist_node(r3)
+r3.allowlist_node(r1)
 
-r1.whitelist_node(sc1)
-r1.whitelist_node(ec1)
-r2.whitelist_node(sc2)
-r3.whitelist_node(sc3)
+r1.allowlist_node(sc1)
+r1.allowlist_node(ec1)
+r2.allowlist_node(sc2)
+r3.allowlist_node(sc3)
 
 r1.form('channel-manager', channel=12)
 r2.join_node(r1, node_type=wpan.JOIN_TYPE_ROUTER)
@@ -137,8 +134,7 @@ verify_channel(all_nodes, 16)
 
 # Request different channels from two routers (r1 and r2)
 
-r1.set(wpan.WPAN_CHANNEL_MANAGER_DELAY,
-       '20')  # increase the time to ensure r1 change is in process
+r1.set(wpan.WPAN_CHANNEL_MANAGER_DELAY, '20')  # increase the time to ensure r1 change is in process
 r1.set(wpan.WPAN_CHANNEL_MANAGER_NEW_CHANNEL, '17')
 time.sleep(10.5 / speedup)
 verify_channel(all_nodes, 16)

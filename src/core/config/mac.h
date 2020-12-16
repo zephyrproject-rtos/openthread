@@ -140,6 +140,16 @@
 #endif
 
 /**
+ * @def OPENTHREAD_CONFIG_MAC_CSL_REQUEST_AHEAD_US
+ *
+ * Define how many microseconds ahead should MAC deliver CSL frame to SubMac.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_MAC_CSL_REQUEST_AHEAD_US
+#define OPENTHREAD_CONFIG_MAC_CSL_REQUEST_AHEAD_US 2000
+#endif
+
+/**
  * @def OPENTHREAD_CONFIG_MAC_FILTER_ENABLE
  *
  * Define to 1 to enable MAC filter support.
@@ -296,6 +306,16 @@
 #endif
 
 /**
+ * @def OPENTHREAD_CONFIG_MAC_SOFTWARE_TX_TIMING_ENABLE
+ *
+ * Define to 1 to enable software transmission target time logic.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_MAC_SOFTWARE_TX_TIMING_ENABLE
+#define OPENTHREAD_CONFIG_MAC_SOFTWARE_TX_TIMING_ENABLE 0
+#endif
+
+/**
  * @def OPENTHREAD_CONFIG_MAC_SOFTWARE_ENERGY_SCAN_ENABLE
  *
  * Define to 1 to enable software energy scanning logic.
@@ -306,24 +326,85 @@
 #endif
 
 /**
+ * @def OPENTHREAD_CONFIG_MAC_CSL_TRANSMITTER_ENABLE
  *
- * This setting configures the CSL transmitter feature in Thread 1.2.
- * This is compulsory for 1.2 FTD.
+ * Define to 1 to enable csl transmitter logic.
  *
  */
-#define OPENTHREAD_CONFIG_MAC_CSL_TRANSMITTER_ENABLE \
-    (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2) && OPENTHREAD_FTD
+#ifndef OPENTHREAD_CONFIG_MAC_CSL_TRANSMITTER_ENABLE
+#define OPENTHREAD_CONFIG_MAC_CSL_TRANSMITTER_ENABLE (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
+#endif
 
 /**
  * @def OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
  *
  * This setting configures the CSL receiver feature in Thread 1.2.
- * This is compulsory for 1.2 MTD, optional for 1.2 FTD.
  *
  */
 #ifndef OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
-#define OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE \
-    (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2) && OPENTHREAD_MTD
+#define OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE 0
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_MAC_CSL_MIN_PERIOD
+ *
+ * This setting configures the minimum CSL period that could be used, in units of milliseconds.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_MAC_CSL_MIN_PERIOD
+#define OPENTHREAD_CONFIG_MAC_CSL_MIN_PERIOD 10
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_MAC_CSL_MAX_TIMEOUT
+ *
+ * This setting configures the maximum CSL timeout that could be used, in units of seconds.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_MAC_CSL_MAX_TIMEOUT
+#define OPENTHREAD_CONFIG_MAC_CSL_MAX_TIMEOUT 10000
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_CSL_TIMEOUT
+ *
+ * The default CSL timeout in seconds.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_CSL_TIMEOUT
+#define OPENTHREAD_CONFIG_CSL_TIMEOUT 100
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_CSL_SAMPLE_WINDOW
+ *
+ * The CSL sample window in 10 symbols.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_CSL_SAMPLE_WINDOW
+#define OPENTHREAD_CONFIG_CSL_SAMPLE_WINDOW 5
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_MAC_CSL_DEBUG_ENABLE
+ *
+ * CSL receiver debug option. When this option is enabled, a CSL receiver wouldn't actually sleep in CSL state so it
+ * can still receive packets from the CSL transmitter.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_MAC_CSL_DEBUG_ENABLE
+#define OPENTHREAD_CONFIG_MAC_CSL_DEBUG_ENABLE 0
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_CSL_RECEIVE_TIME_AHEAD
+ *
+ * For some reasons, CSL receivers wake up a little later than expected. This variable specifies how much time that
+ * CSL receiver would wake up earlier than the expected sample window. The time is in unit of 10 symbols.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_CSL_RECEIVE_TIME_AHEAD
+#define OPENTHREAD_CONFIG_CSL_RECEIVE_TIME_AHEAD 2
 #endif
 
 #endif // CONFIG_MAC_H_

@@ -45,16 +45,19 @@ libopenthread_posix_a_CPPFLAGS                                = \
 
 libopenthread_posix_a_SOURCES             = \
     alarm.cpp                               \
+    backbone.cpp                            \
     entropy.cpp                             \
     hdlc_interface.cpp                      \
     logging.cpp                             \
     misc.cpp                                \
+    multicast_routing.cpp                   \
     netif.cpp                               \
     radio.cpp                               \
     radio_url.cpp                           \
     settings.cpp                            \
     spi_interface.cpp                       \
     system.cpp                              \
+    trel_udp6.cpp                           \
     uart.cpp                                \
     udp.cpp                                 \
     virtual_time.cpp                        \
@@ -67,6 +70,7 @@ libopenthread_posix_a_LIBADD                                                    
 
 noinst_HEADERS                            = \
     hdlc_interface.hpp                      \
+    multicast_routing.hpp                   \
     openthread-posix-config.h               \
     platform-posix.h                        \
     radio_url.hpp                           \

@@ -43,8 +43,12 @@
 #include "mac/mac_types.hpp"
 
 namespace ot {
-
 namespace Mac {
+
+using ot::Encoding::LittleEndian::HostSwap16;
+using ot::Encoding::LittleEndian::HostSwap64;
+using ot::Encoding::LittleEndian::ReadUint24;
+using ot::Encoding::LittleEndian::WriteUint24;
 
 /**
  * @addtogroup core-mac
@@ -54,26 +58,18 @@ namespace Mac {
  */
 
 /**
- * This class implements IEEE 802.15.4 IE (Information Element) generation and parsing.
+ * This class implements IEEE 802.15.4 IE (Information Element) header generation and parsing.
  *
  */
 OT_TOOL_PACKED_BEGIN
 class HeaderIe
 {
 public:
-    enum
-    {
-        kIdOffset     = 7,
-        kIdMask       = 0xff << kIdOffset,
-        kLengthOffset = 0,
-        kLengthMask   = 0x7f << kLengthOffset,
-    };
-
     /**
      * This method initializes the Header IE.
      *
      */
-    void Init(void) { mHeaderIe = 0; }
+    void Init(void) { mFields.m16 = 0; }
 
     /**
      * This method returns the IE Element Id.
@@ -81,7 +77,7 @@ public:
      * @returns the IE Element Id.
      *
      */
-    uint16_t GetId(void) const { return (ot::Encoding::LittleEndian::HostSwap16(mHeaderIe) & kIdMask) >> kIdOffset; }
+    uint16_t GetId(void) const { return (HostSwap16(mFields.m16) & kIdMask) >> kIdOffset; }
 
     /**
      * This method sets the IE Element Id.
@@ -91,8 +87,7 @@ public:
      */
     void SetId(uint16_t aId)
     {
-        mHeaderIe = ot::Encoding::LittleEndian::HostSwap16(
-            (ot::Encoding::LittleEndian::HostSwap16(mHeaderIe) & ~kIdMask) | ((aId << kIdOffset) & kIdMask));
+        mFields.m16 = HostSwap16((HostSwap16(mFields.m16) & ~kIdMask) | ((aId << kIdOffset) & kIdMask));
     }
 
     /**
@@ -101,10 +96,7 @@ public:
      * @returns the IE content length.
      *
      */
-    uint16_t GetLength(void) const
-    {
-        return (ot::Encoding::LittleEndian::HostSwap16(mHeaderIe) & kLengthMask) >> kLengthOffset;
-    }
+    uint8_t GetLength(void) const { return mFields.m8[0] & kLengthMask; }
 
     /**
      * This method sets the IE content length.
@@ -112,18 +104,38 @@ public:
      * @param[in]  aLength  The IE content length.
      *
      */
-    void SetLength(uint16_t aLength)
-    {
-        mHeaderIe =
-            ot::Encoding::LittleEndian::HostSwap16((ot::Encoding::LittleEndian::HostSwap16(mHeaderIe) & ~kLengthMask) |
-                                                   ((aLength << kLengthOffset) & kLengthMask));
-    }
+    void SetLength(uint8_t aLength) { mFields.m8[0] = (mFields.m8[0] & ~kLengthMask) | (aLength & kLengthMask); }
 
 private:
-    uint16_t mHeaderIe;
+    // Header IE format:
+    //
+    // +-----------+------------+--------+
+    // | Bits: 0-6 |    7-14    |   15   |
+    // +-----------+------------+--------+
+    // | Length    | Element ID | Type=0 |
+    // +-----------+------------+--------+
+
+    enum : uint8_t
+    {
+        kSize       = 2,
+        kIdOffset   = 7,
+        kLengthMask = 0x7f
+    };
+
+    enum : uint16_t
+    {
+        kIdMask = 0x00ff << kIdOffset,
+    };
+
+    union OT_TOOL_PACKED_FIELD
+    {
+        uint8_t  m8[kSize];
+        uint16_t m16;
+    } mFields;
+
 } OT_TOOL_PACKED_END;
 
-#if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
+#if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE || OPENTHREAD_CONFIG_MLE_LINK_METRICS_ENABLE
 /**
  * This class implements vendor specific Header IE generation and parsing.
  *
@@ -132,28 +144,21 @@ OT_TOOL_PACKED_BEGIN
 class VendorIeHeader
 {
 public:
-    enum
-    {
-        kVendorOuiNest = 0x18b430,
-        kVendorOuiSize = 3,
-        kVendorIeTime  = 0x01,
-    };
-
     /**
      * This method returns the Vendor OUI.
      *
      * @returns the Vendor OUI.
      *
      */
-    const uint8_t *GetVendorOui(void) const { return mVendorOui; }
+    uint32_t GetVendorOui(void) const { return ReadUint24(mOui); }
 
     /**
      * This method sets the Vendor OUI.
      *
-     * @param[in]  aVendorOui  A pointer to the Vendor OUI.
+     * @param[in]  aVendorOui  A Vendor OUI.
      *
      */
-    void SetVendorOui(const uint8_t *aVendorOui) { memcpy(mVendorOui, aVendorOui, kVendorOuiSize); }
+    void SetVendorOui(uint32_t aVendorOui) { WriteUint24(aVendorOui, mOui); }
 
     /**
      * This method returns the Vendor IE sub-type.
@@ -172,10 +177,16 @@ public:
     void SetSubType(uint8_t aSubType) { mSubType = aSubType; }
 
 private:
-    uint8_t mVendorOui[kVendorOuiSize];
+    enum : uint8_t
+    {
+        kOuiSize = 3,
+    };
+
+    uint8_t mOui[kOuiSize];
     uint8_t mSubType;
 } OT_TOOL_PACKED_END;
 
+#if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
 /**
  * This class implements Time Header IE generation and parsing.
  *
@@ -184,17 +195,24 @@ OT_TOOL_PACKED_BEGIN
 class TimeIe : public VendorIeHeader
 {
 public:
+    enum : uint32_t
+    {
+        kVendorOuiNest = 0x18b430,
+    };
+
+    enum : uint8_t
+    {
+        kVendorIeTime = 0x01,
+    };
+
     /**
      * This method initializes the time IE.
      *
      */
     void Init(void)
     {
-        uint8_t oui[3] = {VendorIeHeader::kVendorOuiNest & 0xff, (VendorIeHeader::kVendorOuiNest >> 8) & 0xff,
-                          (VendorIeHeader::kVendorOuiNest >> 16) & 0xff};
-
-        SetVendorOui(oui);
-        SetSubType(VendorIeHeader::kVendorIeTime);
+        SetVendorOui(kVendorOuiNest);
+        SetSubType(kVendorIeTime);
     }
 
     /**
@@ -219,7 +237,7 @@ public:
      * @returns the network time, in microseconds.
      *
      */
-    uint64_t GetTime(void) const { return ot::Encoding::LittleEndian::HostSwap64(mTime); }
+    uint64_t GetTime(void) const { return HostSwap64(mTime); }
 
     /**
      * This method sets the network time.
@@ -227,13 +245,31 @@ public:
      * @param[in]  aTime  The network time.
      *
      */
-    void SetTime(uint64_t aTime) { mTime = ot::Encoding::LittleEndian::HostSwap64(aTime); }
+    void SetTime(uint64_t aTime) { mTime = HostSwap64(aTime); }
 
 private:
     uint8_t  mSequence;
     uint64_t mTime;
 } OT_TOOL_PACKED_END;
 #endif // OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
+
+#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_ENABLE
+class ThreadIe
+{
+public:
+    enum : uint32_t
+    {
+        kVendorOuiThreadCompanyId = 0xeab89b,
+    };
+
+    enum SubType : uint8_t
+    {
+        kEnhAckProbingIe = 0x00,
+    };
+};
+#endif
+
+#endif // OPENTHREAD_CONFIG_TIME_SYNC_ENABLE || OPENTHREAD_CONFIG_MLE_LINK_METRICS_ENABLE
 
 /**
  * This class implements IEEE 802.15.4 MAC frame generation and parsing.
@@ -244,13 +280,12 @@ class Frame : public otRadioFrame
 public:
     enum
     {
-        kMtu                 = OT_RADIO_FRAME_MAX_SIZE,
         kFcfSize             = sizeof(uint16_t),
         kDsnSize             = sizeof(uint8_t),
         kSecurityControlSize = sizeof(uint8_t),
         kFrameCounterSize    = sizeof(uint32_t),
         kCommandIdSize       = sizeof(uint8_t),
-        kFcsSize             = sizeof(uint16_t),
+        k154FcsSize          = sizeof(uint16_t),
 
         kFcfFrameBeacon      = 0 << 0,
         kFcfFrameData        = 1 << 0,
@@ -317,9 +352,9 @@ public:
         kHeaderIeCsl          = 0x1a,
         kHeaderIeTermination2 = 0x7f,
 
-        kInfoStringSize = 110, ///< Max chars needed for the info string representation (@sa ToInfoString()).
+        kImmAckLength = kFcfSize + kDsnSize + k154FcsSize,
 
-        kImmAckLength = kFcfSize + kDsnSize + kFcsSize,
+        kInfoStringSize = 128, ///< Max chars needed for the info string representation (@sa ToInfoString()).
     };
 
     /**
@@ -540,7 +575,7 @@ public:
      * @retval TRUE if the Source Address is present, FALSE otherwise.
      *
      */
-    bool IsSrcPanIdPresent(void) const { return IsSrcPanIdPresent(GetFrameControlField()); };
+    bool IsSrcPanIdPresent(void) const { return IsSrcPanIdPresent(GetFrameControlField()); }
 
     /**
      * This method gets the Source PAN Identifier.
@@ -716,7 +751,9 @@ public:
     otError SetCommandId(uint8_t aCommandId);
 
     /**
-     * This method indicates whether the frame is a MAC Data Request command (data poll)
+     * This method indicates whether the frame is a MAC Data Request command (data poll).
+     *
+     * For 802.15.4-2015 and above frame, the frame should be already decrypted.
      *
      * @returns TRUE if frame is a MAC Data Request command, FALSE otherwise.
      *
@@ -729,7 +766,7 @@ public:
      * @returns The MAC Frame Length.
      *
      */
-    uint16_t GetLength(void) const { return GetPsduLength(); }
+    uint16_t GetLength(void) const { return mLength; }
 
     /**
      * This method sets the MAC Frame Length.
@@ -737,7 +774,7 @@ public:
      * @param[in]  aLength  The MAC Frame Length.
      *
      */
-    void SetLength(uint16_t aLength) { SetPsduLength(aLength); }
+    void SetLength(uint16_t aLength) { mLength = aLength; }
 
     /**
      * This method returns the MAC header size.
@@ -800,14 +837,6 @@ public:
      *
      */
     uint16_t GetPsduLength(void) const { return mLength; }
-
-    /**
-     * This method sets the IEEE 802.15.4 PSDU length.
-     *
-     * @param[in]  aLength  The IEEE 802.15.4 PSDU length.
-     *
-     */
-    void SetPsduLength(uint16_t aLength) { mLength = aLength; }
 
     /**
      * This method returns a pointer to the PSDU.
@@ -928,6 +957,33 @@ public:
      */
     const uint8_t *GetHeaderIe(uint8_t aIeId) const;
 
+    /**
+     * This method returns a pointer to a specific Thread IE.
+     *
+     * A Thread IE is a vendor specific IE with Vendor OUI as `kVendorOuiThreadCompanyId`.
+     *
+     * @param[in] aSubType  The sub type of the Thread IE.
+     *
+     * @returns A pointer to the Thread IE, nullptr if not found.
+     *
+     */
+    uint8_t *GetThreadIe(uint8_t aSubType)
+    {
+        return const_cast<uint8_t *>(const_cast<const Frame *>(this)->GetThreadIe(aSubType));
+    }
+
+    /**
+     * This method returns a pointer to a specific Thread IE.
+     *
+     * A Thread IE is a vendor specific IE with Vendor OUI as `kVendorOuiThreadCompanyId`.
+     *
+     * @param[in] aSubType  The sub type of the Thread IE.
+     *
+     * @returns A pointer to the Thread IE, nullptr if not found.
+     *
+     */
+    const uint8_t *GetThreadIe(uint8_t aSubType) const;
+
 #if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
     /**
      * This method finds CSL IE in the frame and modify its content.
@@ -939,7 +995,36 @@ public:
     void SetCslIe(uint16_t aCslPeriod, uint16_t aCslPhase);
 #endif // OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
 
+#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_ENABLE
+    /**
+     * This method finds Enhanced ACK Probing (Vendor Specific) IE and set its value.
+     *
+     * @param[in] aValue  A pointer to the value to set.
+     * @param[in] aLen    The length of @p aValue.
+     *
+     */
+    void SetEnhAckProbingIe(const uint8_t *aValue, uint8_t aLen);
+#endif // OPENTHREAD_CONFIG_MLE_LINK_METRICS_ENABLE
+
 #endif // OPENTHREAD_CONFIG_MAC_HEADER_IE_SUPPORT
+
+#if OPENTHREAD_CONFIG_MULTI_RADIO
+    /**
+     * This method gets the radio link type of the frame.
+     *
+     * @returns Frame's radio link type.
+     *
+     */
+    RadioType GetRadioType(void) const { return static_cast<RadioType>(mRadioType); }
+
+    /**
+     * This method sets the radio link type of the frame.
+     *
+     * @param[in] aRadioType  A radio link type.
+     *
+     */
+    void SetRadioType(RadioType aRadioType) { mRadioType = static_cast<uint8_t>(aRadioType); }
+#endif
 
     /**
      * This method returns the maximum transmission unit size (MTU).
@@ -947,7 +1032,14 @@ public:
      * @returns The maximum transmission unit (MTU).
      *
      */
-    uint16_t GetMtu(void) const { return kMtu; }
+    uint16_t GetMtu(void) const
+#if !OPENTHREAD_CONFIG_MULTI_RADIO && OPENTHREAD_CONFIG_RADIO_LINK_IEEE_802_15_4_ENABLE
+    {
+        return OT_RADIO_FRAME_MAX_SIZE;
+    }
+#else
+        ;
+#endif
 
     /**
      * This method returns the FCS size.
@@ -955,7 +1047,14 @@ public:
      * @returns This method returns the FCS size.
      *
      */
-    uint16_t GetFcsSize(void) const { return kFcsSize; }
+    uint8_t GetFcsSize(void) const
+#if !OPENTHREAD_CONFIG_MULTI_RADIO && OPENTHREAD_CONFIG_RADIO_LINK_IEEE_802_15_4_ENABLE
+    {
+        return k154FcsSize;
+    }
+#else
+        ;
+#endif
 
     /**
      * This method returns information about the frame object as an `InfoString` object.
@@ -1064,6 +1163,19 @@ public:
      *
      */
     const uint64_t &GetTimestamp(void) const { return mInfo.mRxInfo.mTimestamp; }
+
+    /**
+     * This method performs AES CCM on the frame which is received.
+     *
+     * @param[in]  aExtAddress  A reference to the extended address, which will be used to generate nonce
+     *                          for AES CCM computation.
+     * @param[in]  aMacKey      A reference to the MAC key to decrypt the received frame.
+     *
+     * @retval OT_ERROR_NONE      Process of received frame AES CCM succeeded.
+     * @retval OT_ERROR_SECURITY  Received frame MIC check failed.
+     *
+     */
+    otError ProcessReceiveAesCcm(const ExtAddress &aExtAddress, const Key &aMacKey);
 
 #if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
     /**
@@ -1189,7 +1301,7 @@ public:
     void SetAesKey(const Mac::Key &aAesKey) { mInfo.mTxInfo.mAesKey = &aAesKey; }
 
     /**
-     * This method copies the PSDU and all attributes from another frame.
+     * This method copies the PSDU and all attributes (except for frame link type) from another frame.
      *
      * @note This method performs a deep copy meaning the content of PSDU buffer from the given frame is copied into
      * the PSDU buffer of the current frame.
@@ -1287,6 +1399,24 @@ public:
      *
      */
     otError GenerateEnhAck(const RxFrame &aFrame, bool aIsFramePending, const uint8_t *aIeData, uint8_t aIeLength);
+
+#if OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2
+    /**
+     * Set TX delay field for the frame.
+     *
+     * @param[in]    aTxDelay    The delay time for the TX frame.
+     *
+     */
+    void SetTxDelay(uint32_t aTxDelay) { mInfo.mTxInfo.mTxDelay = aTxDelay; }
+
+    /**
+     * Set TX delay base time field for the frame.
+     *
+     * @param[in]    aTxDelayBaseTime    The delay base time for the TX frame.
+     *
+     */
+    void SetTxDelayBaseTime(uint32_t aTxDelayBaseTime) { mInfo.mTxInfo.mTxDelayBaseTime = aTxDelayBaseTime; }
+#endif
 };
 
 OT_TOOL_PACKED_BEGIN
@@ -1304,7 +1434,7 @@ public:
      */
     void Init(void)
     {
-        mSuperframeSpec     = ot::Encoding::LittleEndian::HostSwap16(kSuperFrameSpec);
+        mSuperframeSpec     = HostSwap16(kSuperFrameSpec);
         mGtsSpec            = 0;
         mPendingAddressSpec = 0;
     }
@@ -1318,8 +1448,7 @@ public:
      */
     bool IsValid(void) const
     {
-        return (mSuperframeSpec == ot::Encoding::LittleEndian::HostSwap16(kSuperFrameSpec)) && (mGtsSpec == 0) &&
-               (mPendingAddressSpec == 0);
+        return (mSuperframeSpec == HostSwap16(kSuperFrameSpec)) && (mGtsSpec == 0) && (mPendingAddressSpec == 0);
     }
 
     /**
@@ -1519,7 +1648,7 @@ public:
      * @returns the CSL Period.
      *
      */
-    uint16_t GetPeriod(void) const { return Encoding::LittleEndian::HostSwap16(mPeriod); }
+    uint16_t GetPeriod(void) const { return HostSwap16(mPeriod); }
 
     /**
      * This method sets the CSL Period.
@@ -1527,7 +1656,7 @@ public:
      * @param[in]  aPeriod  The CSL Period.
      *
      */
-    void SetPeriod(uint16_t aPeriod) { mPeriod = Encoding::LittleEndian::HostSwap16(aPeriod); }
+    void SetPeriod(uint16_t aPeriod) { mPeriod = HostSwap16(aPeriod); }
 
     /**
      * This method returns the CSL Phase.
@@ -1535,7 +1664,7 @@ public:
      * @returns the CSL Phase.
      *
      */
-    uint16_t GetPhase(void) const { return Encoding::LittleEndian::HostSwap16(mPhase); }
+    uint16_t GetPhase(void) const { return HostSwap16(mPhase); }
 
     /**
      * This method sets the CSL Phase.
@@ -1543,7 +1672,7 @@ public:
      * @param[in]  aPhase  The CSL Phase.
      *
      */
-    void SetPhase(uint16_t aPhase) { mPhase = Encoding::LittleEndian::HostSwap16(aPhase); }
+    void SetPhase(uint16_t aPhase) { mPhase = HostSwap16(aPhase); }
 
 private:
     uint16_t mPhase;

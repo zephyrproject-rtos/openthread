@@ -86,8 +86,6 @@
 #define OPENTHREAD_CONFIG_IP6_SLAAC_ENABLE 1
 #endif
 
-#define OPENTHREAD_CONFIG_UART_CLI_RAW 1
-
 /**
  * @def OPENTHREAD_CONFIG_NCP_UART_ENABLE
  *
@@ -116,6 +114,16 @@
 #define OPENTHREAD_CONFIG_PLATFORM_UDP_ENABLE 1
 #endif
 
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_LOG_MAX_SIZE
+ *
+ * The maximum log string size (number of chars).
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_LOG_MAX_SIZE
+#define OPENTHREAD_CONFIG_LOG_MAX_SIZE 1024
 #endif
 
 #endif // OPENTHREAD_CORE_POSIX_CONFIG_H_

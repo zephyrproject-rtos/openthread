@@ -106,6 +106,13 @@ enum
                           1000, ///< Minimum timeout(in seconds) for data poll
     kMinTimeout = (kMinTimeoutKeepAlive >= kMinTimeoutDataPoll ? kMinTimeoutKeepAlive
                                                                : kMinTimeoutDataPoll), ///< Minimum timeout(in seconds)
+
+#if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
+    kLinkAcceptMaxRouters = 3, ///< Maximum Route TLV entries in a Link Accept message.
+#else
+    kLinkAcceptMaxRouters = 20, ///< Maximum Route TLV entries in a Link Accept message.
+#endif
+    kLinkAcceptSequenceRollback = 64, ///< Route Sequence value rollback in a Link Accept message.
 };
 
 enum
@@ -249,24 +256,53 @@ enum
     kServiceMaxId = 0x0f, ///< Maximal Service ID.
 };
 
-#if OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE || OPENTHREAD_CONFIG_MLR_ENABLE
+#if OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2
 
 /**
- * Backbone Router / MLR constants
+ * Backbone Router / DUA / MLR constants
  *
  */
 enum
 {
-    kRegistrationDelayDefault         = 1200, //< In seconds.
-    kMlrTimeoutDefault                = 3600, //< In seconds.
-    kMlrTimeoutMin                    = 300,  //< In seconds.
-    kBackboneRouterRegistrationJitter = 5,    //< In seconds.
+    kRegistrationDelayDefault         = 1200,              ///< In seconds.
+    kMlrTimeoutDefault                = 3600,              ///< In seconds.
+    kMlrTimeoutMin                    = 300,               ///< In seconds.
+    kMlrTimeoutMax                    = 0x7fffffff / 1000, ///< In seconds (about 24 days).
+    kBackboneRouterRegistrationJitter = 5,                 ///< In seconds.
+    kParentAggregateDelay             = 5,                 ///< In seconds.
+    kNoBufDelay                       = 5,                 ///< In seconds.
+    kImmediateReRegisterDelay         = 1,                 ///< In seconds.
+    KResponseTimeoutDelay             = 30,                ///< In seconds.
+    kDuaDadPeriod                     = 100,               ///< In seconds. Time period after which the address
+                                                           ///< becomes "Preferred" if no duplicate address error.
+    kDuaDadRepeats = 3,  ///< Maximum number of times the multicast DAD query and wait time DUA_DAD_QUERY_TIMEOUT are
+                         ///< repeated by the BBR, as part of the DAD process.
+    kDuaRecentTime = 20, ///< Time period (in seconds) during which a DUA registration is considered 'recent' at a BBR.
+    kTimeSinceLastTransactionMax = 10 * 86400, ///< In seconds (10 days).
+    kDefaultBackboneHoplimit     = 1,          ///< default hoplimit for Thread Backbone Link Protocol messages
 };
 
-static_assert(kMlrTimeoutDefault >= kMlrTimeoutMin,
+static_assert(kMlrTimeoutDefault >= kMlrTimeoutMin && kMlrTimeoutDefault <= kMlrTimeoutMax,
               "kMlrTimeoutDefault must be larger than or equal to kMlrTimeoutMin");
 
-#endif // OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE || OPENTHREAD_CONFIG_MLR_ENABLE
+static_assert(Mle::kParentAggregateDelay > 1, "kParentAggregateDelay should be larger than 1 second");
+static_assert(kMlrTimeoutMax * 1000 > kMlrTimeoutMax, "SecToMsec(kMlrTimeoutMax) will overflow");
+
+static_assert(kTimeSinceLastTransactionMax * 1000 > kTimeSinceLastTransactionMax,
+              "SecToMsec(kTimeSinceLastTransactionMax) will overflow");
+
+/**
+ * State change of Child's DUA
+ *
+ */
+enum class ChildDuaState : uint8_t
+{
+    kAdded,   ///< A new DUA registered by the Child via Address Registration.
+    kChanged, ///< A different DUA registered by the Child via Address Registration.
+    kRemoved, ///< DUA registered by the Child is removed and not in Address Registration.
+};
+
+#endif // OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2
 
 /**
  * This type represents a MLE device mode.
@@ -277,10 +313,10 @@ class DeviceMode : public Equatable<DeviceMode>
 public:
     enum
     {
-        kModeRxOnWhenIdle      = 1 << 3, ///< If the device has its receiver on when not transmitting.
-        kModeSecureDataRequest = 1 << 2, ///< If the device uses link layer security for all data requests.
-        kModeFullThreadDevice  = 1 << 1, ///< If the device is an FTD.
-        kModeFullNetworkData   = 1 << 0, ///< If the device requires the full Network Data.
+        kModeRxOnWhenIdle     = 1 << 3, ///< If the device has its receiver on when not transmitting.
+        kModeReserved         = 1 << 2, ///< Set to 1 on transmission, ignore on reception.
+        kModeFullThreadDevice = 1 << 1, ///< If the device is an FTD.
+        kModeFullNetworkData  = 1 << 0, ///< If the device requires the full Network Data.
 
         kInfoStringSize = 45, ///< String buffer size used for `ToString()`.
     };
@@ -301,7 +337,7 @@ public:
      * This is the default constructor for `DeviceMode` object.
      *
      */
-    DeviceMode(void) {}
+    DeviceMode(void) = default;
 
     /**
      * This constructor initializes a `DeviceMode` object from a given mode TLV bitmask.
@@ -336,7 +372,7 @@ public:
      * @param[in] aMode   A mode TLV bitmask.
      *
      */
-    void Set(uint8_t aMode) { mMode = aMode; }
+    void Set(uint8_t aMode) { mMode = aMode | kModeReserved; }
 
     /**
      * This method gets the device mode as a mode configuration structure.
@@ -362,15 +398,6 @@ public:
      *
      */
     bool IsRxOnWhenIdle(void) const { return (mMode & kModeRxOnWhenIdle) != 0; }
-
-    /**
-     * This method indicates whether or not the device uses secure IEEE 802.15.4 Data Request messages.
-     *
-     * @retval TRUE   If the device uses secure IEEE 802.15.4 Data Request (data poll) messages.
-     * @retval FALSE  If the device uses any IEEE 802.15.4 Data Request (data poll) messages.
-     *
-     */
-    bool IsSecureDataRequest(void) const { return (mMode & kModeSecureDataRequest) != 0; }
 
     /**
      * This method indicates whether or not the device is a Full Thread Device.

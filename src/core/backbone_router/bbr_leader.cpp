@@ -54,7 +54,7 @@ void Leader::Reset(void)
     mConfig.mServer16 = Mac::kShortAddrInvalid;
 
     // Domain Prefix Length 0 indicates no available Domain Prefix in the Thread network.
-    mDomainPrefix.mLength = 0;
+    mDomainPrefix.SetLength(0);
 }
 
 otError Leader::GetConfig(BackboneRouterConfig &aConfig) const
@@ -97,12 +97,9 @@ void Leader::LogBackboneRouterPrimary(State aState, const BackboneRouterConfig &
     }
 }
 
-void Leader::LogDomainPrefix(DomainPrefixState aState, const otIp6Prefix &aPrefix) const
+void Leader::LogDomainPrefix(DomainPrefixState aState, const Ip6::Prefix &aPrefix) const
 {
-    otLogInfoBbr("Domain Prefix: %s/%d, state: %s",
-                 aPrefix.mLength == 0 ? ""
-                                      : static_cast<const Ip6::Address *>(&aPrefix.mPrefix)->ToString().AsCString(),
-                 aPrefix.mLength, DomainPrefixStateToString(aState));
+    otLogInfoBbr("Domain Prefix: %s, state: %s", aPrefix.ToString().AsCString(), DomainPrefixStateToString(aState));
 }
 
 const char *Leader::StateToString(State aState)
@@ -183,6 +180,7 @@ void Leader::UpdateBackboneRouterPrimary(void)
 {
     BackboneRouterConfig config;
     State                state;
+    uint32_t             origMlrTimeout;
 
     IgnoreError(Get<NetworkData::Leader>().GetBackboneRouterPrimary(config));
 
@@ -220,6 +218,23 @@ void Leader::UpdateBackboneRouterPrimary(void)
         state = kStateUnchanged;
     }
 
+    // Restrain the range of MLR timeout to be always valid
+    if (config.mServer16 != Mac::kShortAddrInvalid)
+    {
+        origMlrTimeout     = config.mMlrTimeout;
+        config.mMlrTimeout = config.mMlrTimeout < static_cast<uint32_t>(Mle::kMlrTimeoutMin)
+                                 ? static_cast<uint32_t>(Mle::kMlrTimeoutMin)
+                                 : config.mMlrTimeout;
+        config.mMlrTimeout = config.mMlrTimeout > static_cast<uint32_t>(Mle::kMlrTimeoutMax)
+                                 ? static_cast<uint32_t>(Mle::kMlrTimeoutMax)
+                                 : config.mMlrTimeout;
+
+        if (config.mMlrTimeout != origMlrTimeout)
+        {
+            otLogNoteBbr("Leader MLR Timeout is normalized from %u to %u", origMlrTimeout, config.mMlrTimeout);
+        }
+    }
+
     mConfig = config;
     LogBackboneRouterPrimary(state, mConfig);
 
@@ -227,8 +242,12 @@ void Leader::UpdateBackboneRouterPrimary(void)
     Get<BackboneRouter::Local>().HandleBackboneRouterPrimaryUpdate(state, mConfig);
 #endif
 
-#if OPENTHREAD_CONFIG_MLR_ENABLE
+#if OPENTHREAD_CONFIG_MLR_ENABLE || (OPENTHREAD_FTD && OPENTHREAD_CONFIG_TMF_PROXY_MLR_ENABLE)
     Get<MlrManager>().HandleBackboneRouterPrimaryUpdate(state, mConfig);
+#endif
+
+#if OPENTHREAD_CONFIG_DUA_ENABLE || (OPENTHREAD_FTD && OPENTHREAD_CONFIG_TMF_PROXY_DUA_ENABLE)
+    Get<DuaManager>().HandleBackboneRouterPrimaryUpdate(state, mConfig);
 #endif
 }
 
@@ -250,20 +269,18 @@ void Leader::UpdateDomainPrefixConfig(void)
 
     if (!found)
     {
-        if (mDomainPrefix.mLength != 0)
+        if (mDomainPrefix.GetLength() != 0)
         {
             // Domain Prefix does not exist any more.
-            mDomainPrefix.mLength = 0;
-            state                 = kDomainPrefixRemoved;
+            mDomainPrefix.SetLength(0);
+            state = kDomainPrefixRemoved;
         }
         else
         {
             state = kDomainPrefixNone;
         }
     }
-    else if (config.mPrefix.mLength == mDomainPrefix.mLength &&
-             Ip6::Address::PrefixMatch(mDomainPrefix.mPrefix.mFields.m8, config.mPrefix.mPrefix.mFields.m8,
-                                       BitVectorBytes(mDomainPrefix.mLength)) >= mDomainPrefix.mLength)
+    else if (config.GetPrefix() == mDomainPrefix)
     {
         state = kDomainPrefixUnchanged;
     }
@@ -278,23 +295,26 @@ void Leader::UpdateDomainPrefixConfig(void)
             state = kDomainPrefixRefreshed;
         }
 
-        mDomainPrefix = config.mPrefix;
+        mDomainPrefix = config.GetPrefix();
     }
 
     LogDomainPrefix(state, mDomainPrefix);
 
 #if OPENTHREAD_FTD && OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE
-    Get<Local>().UpdateAllDomainBackboneRouters(state);
+    Get<Local>().HandleDomainPrefixUpdate(state);
+#if OPENTHREAD_CONFIG_BACKBONE_ROUTER_DUA_NDPROXYING_ENABLE
+    Get<NdProxyTable>().HandleDomainPrefixUpdate(state);
+#endif
 #endif
 
-#if OPENTHREAD_CONFIG_DUA_ENABLE
-    Get<DuaManager>().UpdateDomainUnicastAddress(state);
+#if OPENTHREAD_CONFIG_DUA_ENABLE || (OPENTHREAD_FTD && OPENTHREAD_CONFIG_TMF_PROXY_DUA_ENABLE)
+    Get<DuaManager>().HandleDomainPrefixUpdate(state);
 #endif
 }
 
 bool Leader::IsDomainUnicast(const Ip6::Address &aAddress) const
 {
-    return HasDomainPrefix() && aAddress.PrefixMatch(mDomainPrefix.mPrefix) >= mDomainPrefix.mLength;
+    return HasDomainPrefix() && aAddress.MatchesPrefix(mDomainPrefix);
 }
 
 } // namespace BackboneRouter

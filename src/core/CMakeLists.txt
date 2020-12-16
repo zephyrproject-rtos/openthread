@@ -26,41 +26,6 @@
 #  POSSIBILITY OF SUCH DAMAGE.
 #
 
-add_library(openthread-ftd)
-add_library(openthread-mtd)
-add_library(openthread-radio)
-
-set_target_properties(
-    openthread-ftd openthread-mtd openthread-radio
-    PROPERTIES
-        C_STANDARD 99
-        CXX_STANDARD 11
-)
-
-target_compile_definitions(openthread-ftd PRIVATE
-    OPENTHREAD_FTD=1
-)
-
-target_compile_definitions(openthread-mtd PRIVATE
-    OPENTHREAD_MTD=1
-)
-
-target_compile_definitions(openthread-radio PRIVATE
-    OPENTHREAD_RADIO=1
-)
-
-target_compile_options(openthread-ftd PRIVATE
-    ${OT_CFLAGS}
-)
-
-target_compile_options(openthread-mtd PRIVATE
-    ${OT_CFLAGS}
-)
-
-target_compile_options(openthread-radio PRIVATE
-    ${OT_CFLAGS}
-)
-
 set(COMMON_INCLUDES
     ${PROJECT_SOURCE_DIR}/src/core
 )
@@ -78,6 +43,7 @@ set(COMMON_SOURCES
     api/crypto_api.cpp
     api/dataset_api.cpp
     api/dataset_ftd_api.cpp
+    api/dataset_updater_api.cpp
     api/diags_api.cpp
     api/dns_api.cpp
     api/entropy_api.cpp
@@ -88,9 +54,11 @@ set(COMMON_SOURCES
     api/jam_detection_api.cpp
     api/joiner_api.cpp
     api/link_api.cpp
+    api/link_metrics_api.cpp
     api/link_raw_api.cpp
     api/logging_api.cpp
     api/message_api.cpp
+    api/multi_radio_api.cpp
     api/netdata_api.cpp
     api/netdiag_api.cpp
     api/network_time_api.cpp
@@ -102,9 +70,12 @@ set(COMMON_SOURCES
     api/thread_api.cpp
     api/thread_ftd_api.cpp
     api/udp_api.cpp
+    backbone_router/backbone_tmf.cpp
     backbone_router/bbr_leader.cpp
     backbone_router/bbr_local.cpp
     backbone_router/bbr_manager.cpp
+    backbone_router/multicast_listeners_table.cpp
+    backbone_router/ndproxy_table.cpp
     coap/coap.cpp
     coap/coap_message.cpp
     coap/coap_secure.cpp
@@ -117,12 +88,14 @@ set(COMMON_SOURCES
     common/settings.cpp
     common/string.cpp
     common/tasklet.cpp
+    common/time_ticker.cpp
     common/timer.cpp
     common/tlvs.cpp
     common/trickle_timer.cpp
     crypto/aes_ccm.cpp
     crypto/aes_ecb.cpp
     crypto/ecdsa.cpp
+    crypto/hkdf_sha256.cpp
     crypto/hmac_sha256.cpp
     crypto/mbedtls.cpp
     crypto/pbkdf2_cmac.cpp
@@ -135,6 +108,7 @@ set(COMMON_SOURCES
     mac/mac.cpp
     mac/mac_filter.cpp
     mac/mac_frame.cpp
+    mac/mac_links.cpp
     mac/mac_types.cpp
     mac/sub_mac.cpp
     mac/sub_mac_callbacks.cpp
@@ -154,9 +128,11 @@ set(COMMON_SOURCES
     meshcop/meshcop_tlvs.cpp
     meshcop/panid_query_client.cpp
     meshcop/timestamp.cpp
+    net/checksum.cpp
     net/dhcp6_client.cpp
     net/dhcp6_server.cpp
     net/dns_client.cpp
+    net/dns_headers.cpp
     net/icmp6.cpp
     net/ip6.cpp
     net/ip6_address.cpp
@@ -169,15 +145,20 @@ set(COMMON_SOURCES
     radio/radio.cpp
     radio/radio_callbacks.cpp
     radio/radio_platform.cpp
+    radio/trel_interface.cpp
+    radio/trel_link.cpp
+    radio/trel_packet.cpp
     thread/address_resolver.cpp
     thread/announce_begin_server.cpp
     thread/announce_sender.cpp
     thread/child_table.cpp
+    thread/csl_tx_scheduler.cpp
     thread/discover_scanner.cpp
     thread/dua_manager.cpp
     thread/energy_scan_server.cpp
     thread/indirect_sender.cpp
     thread/key_manager.cpp
+    thread/link_metrics.cpp
     thread/link_quality.cpp
     thread/lowpan.cpp
     thread/mesh_forwarder.cpp
@@ -187,6 +168,7 @@ set(COMMON_SOURCES
     thread/mle_router.cpp
     thread/mle_types.cpp
     thread/mlr_manager.cpp
+    thread/neighbor_table.cpp
     thread/network_data.cpp
     thread/network_data_leader.cpp
     thread/network_data_leader_ftd.cpp
@@ -194,71 +176,41 @@ set(COMMON_SOURCES
     thread/network_data_notifier.cpp
     thread/network_diagnostic.cpp
     thread/panid_query_server.cpp
+    thread/radio_selector.cpp
     thread/router_table.cpp
     thread/src_match_controller.cpp
     thread/thread_netif.cpp
     thread/time_sync_service.cpp
+    thread/tmf.cpp
     thread/topology.cpp
+    thread/uri_paths.cpp
     utils/channel_manager.cpp
     utils/channel_monitor.cpp
     utils/child_supervision.cpp
+    utils/dataset_updater.cpp
     utils/flash.cpp
     utils/heap.cpp
     utils/jam_detector.cpp
+    utils/lookup_table.cpp
     utils/otns.cpp
     utils/parse_cmdline.cpp
     utils/slaac_address.cpp
 )
 
-target_include_directories(openthread-ftd PUBLIC ${OT_PUBLIC_INCLUDES} PRIVATE ${COMMON_INCLUDES})
-target_include_directories(openthread-mtd PUBLIC ${OT_PUBLIC_INCLUDES} PRIVATE ${COMMON_INCLUDES})
-target_include_directories(openthread-radio PUBLIC ${OT_PUBLIC_INCLUDES} PRIVATE ${COMMON_INCLUDES})
+set(OT_VENDOR_EXTENSION "" CACHE STRING "specify a C++ source file built as part of OpenThread core library")
+if(OT_VENDOR_EXTENSION)
+  target_compile_definitions(ot-config INTERFACE "OPENTHREAD_ENABLE_VENDOR_EXTENSION=1")
+  list(APPEND COMMON_SOURCES ${OT_VENDOR_EXTENSION})
+endif()
 
-target_sources(openthread-ftd PRIVATE ${COMMON_SOURCES})
-target_sources(openthread-mtd PRIVATE ${COMMON_SOURCES})
+if(OT_FTD)
+    include(ftd.cmake)
+endif()
 
-target_sources(openthread-radio PRIVATE
-    api/diags_api.cpp
-    api/instance_api.cpp
-    api/link_raw_api.cpp
-    api/logging_api.cpp
-    api/random_noncrypto_api.cpp
-    api/tasklet_api.cpp
-    common/instance.cpp
-    common/logging.cpp
-    common/random_manager.cpp
-    common/string.cpp
-    common/tasklet.cpp
-    common/timer.cpp
-    crypto/aes_ccm.cpp
-    crypto/aes_ecb.cpp
-    diags/factory_diags.cpp
-    mac/link_raw.cpp
-    mac/mac_frame.cpp
-    mac/mac_types.cpp
-    mac/sub_mac.cpp
-    mac/sub_mac_callbacks.cpp
-    radio/radio.cpp
-    radio/radio_callbacks.cpp
-    radio/radio_platform.cpp
-    thread/link_quality.cpp
-    utils/parse_cmdline.cpp
-)
+if(OT_MTD)
+    include(mtd.cmake)
+endif()
 
-target_link_libraries(openthread-ftd
-    PRIVATE
-        ${OT_MBEDTLS}
-        ot-config
-)
-
-target_link_libraries(openthread-mtd
-    PRIVATE
-        ${OT_MBEDTLS}
-        ot-config
-)
-
-target_link_libraries(openthread-radio
-    PRIVATE
-        ${OT_MBEDTLS}
-        ot-config
-)
+if(OT_RCP)
+    include(radio.cmake)
+endif()

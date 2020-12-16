@@ -39,6 +39,7 @@
 #if OPENTHREAD_FTD
 
 #include "common/locator.hpp"
+#include "common/non_copyable.hpp"
 #include "thread/topology.hpp"
 
 namespace ot {
@@ -47,8 +48,9 @@ namespace ot {
  * This class represents the Thread child table.
  *
  */
-class ChildTable : public InstanceLocator
+class ChildTable : public InstanceLocator, private NonCopyable
 {
+    friend class NeighborTable;
     class IteratorBuilder;
 
 public:
@@ -159,7 +161,7 @@ public:
         bool operator!=(const Iterator &aOther) const { return mChild != aOther.mChild; }
 
     private:
-        Iterator(Instance &aInstance)
+        explicit Iterator(Instance &aInstance)
             : InstanceLocator(aInstance)
             , mFilter(Child::StateFilter::kInStateValid)
             , mChild(nullptr)
@@ -232,24 +234,24 @@ public:
      * This method searches the child table for a `Child` with a given extended address also matching a given state
      * filter.
      *
-     * @param[in]  aAddress A reference to an extended address.
-     * @param[in]  aFilter  A child state filter.
+     * @param[in]  aExtAddress A reference to an extended address.
+     * @param[in]  aFilter     A child state filter.
      *
      * @returns  A pointer to the `Child` entry if one is found, or `nullptr` otherwise.
      *
      */
-    Child *FindChild(const Mac::ExtAddress &aAddress, Child::StateFilter aFilter);
+    Child *FindChild(const Mac::ExtAddress &aExtAddress, Child::StateFilter aFilter);
 
     /**
      * This method searches the child table for a `Child` with a given address also matching a given state filter.
      *
-     * @param[in]  aAddress A reference to a MAC address.
-     * @param[in]  aFilter  A child state filter.
+     * @param[in]  aMacAddress A reference to a MAC address.
+     * @param[in]  aFilter     A child state filter.
      *
      * @returns  A pointer to the `Child` entry if one is found, or `nullptr` otherwise.
      *
      */
-    Child *FindChild(const Mac::Address &aAddress, Child::StateFilter aFilter);
+    Child *FindChild(const Mac::Address &aMacAddress, Child::StateFilter aFilter);
 
     /**
      * This method indicates whether the child table contains any child matching a given state filter.
@@ -320,6 +322,61 @@ public:
      */
     IteratorBuilder Iterate(Child::StateFilter aFilter) { return IteratorBuilder(GetInstance(), aFilter); }
 
+    /**
+     * This method retains diagnostic information for an attached child by Child ID or RLOC16.
+     *
+     * @param[in]   aChildId    The Child ID or RLOC16 for an attached child.
+     * @param[out]  aChildInfo  A reference to a `Child::Info` to populate with the child information.
+     *
+     */
+    otError GetChildInfoById(uint16_t aChildId, Child::Info &aChildInfo);
+
+    /**
+     * This method retains diagnostic information for an attached child by the internal table index.
+     *
+     * @param[in]   aChildIndex  The table index.
+     * @param[out]  aChildInfo   A reference to a `Child::Info` to populate with the child information.
+     *
+     */
+    otError GetChildInfoByIndex(uint16_t aChildIndex, Child::Info &aChildInfo);
+
+    /**
+     * This method restores child table from non-volatile memory.
+     *
+     */
+    void Restore(void);
+
+    /**
+     * This method removes a stored child information from non-volatile memory.
+     *
+     * @param[in]  aChildRloc16     A reference to the child to remove from non-volatile memory.
+     *
+     */
+    void RemoveStoredChild(const Child &aChild);
+
+    /**
+     * This method store a child information into non-volatile memory.
+     *
+     * @param[in]  aChild          A reference to the child to store.
+     *
+     * @retval  OT_ERROR_NONE      Successfully store child.
+     * @retval  OT_ERROR_NO_BUFS   Insufficient available buffers to store child.
+     *
+     */
+    otError StoreChild(const Child &aChild);
+
+    /**
+     * This method indicates whether the child table contains any sleepy child (in states valid or restoring) with a
+     * given IPv6 address.
+     *
+     * @param[in]  aIp6Address  An IPv6 address.
+     *
+     * @retval TRUE   If the child table contains any sleepy child with @p aIp6Address.
+     * @retval FALSE  If the child table does not contain any sleepy child with @p aIp6Address.
+     *
+     */
+    bool HasSleepyChildWithAddress(const Ip6::Address &aIp6Address) const;
+
 private:
     enum
     {
@@ -341,6 +398,14 @@ private:
     private:
         Child::StateFilter mFilter;
     };
+
+    Child *FindChild(const Child::AddressMatcher &aMatcher)
+    {
+        return const_cast<Child *>(const_cast<const ChildTable *>(this)->FindChild(aMatcher));
+    }
+
+    const Child *FindChild(const Child::AddressMatcher &aMatcher) const;
+    void         RefreshStoredChildren(void);
 
     uint16_t mMaxChildrenAllowed;
     Child    mChildren[kMaxChildren];

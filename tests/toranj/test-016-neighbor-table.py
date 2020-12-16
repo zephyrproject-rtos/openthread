@@ -74,21 +74,21 @@ wpan.Node.init_all_nodes()
 # Build network topology
 #
 
-# whitelist all routers with one another
+# allowlist all routers with one another
 for i in range(NUM_ROUTERS):
     for j in range(NUM_ROUTERS):
         if i != j:
-            routers[i].whitelist_node(routers[j])
+            routers[i].allowlist_node(routers[j])
 
 # All children should attach to routers[0]
 for num in range(NUM_CHILDREN):
-    children[num].whitelist_node(routers[0])
-    routers[0].whitelist_node(children[num])
+    children[num].allowlist_node(routers[0])
+    routers[0].allowlist_node(children[num])
 
-# whitelist the end-device ed with its corresponding router
+# allowlist the end-device ed with its corresponding router
 for num in range(1, NUM_ROUTERS):
-    ed[num].whitelist_node(routers[num])
-    routers[num].whitelist_node(ed[num])
+    ed[num].allowlist_node(routers[num])
+    routers[num].allowlist_node(ed[num])
 
 routers[0].form("neigh-table")
 
@@ -109,8 +109,7 @@ for router in routers[1:]:
     verify(router.get(wpan.WPAN_NODE_TYPE) == wpan.NODE_TYPE_ROUTER)
 
 # Get and parse the neighbor table on routers[0].
-neighbor_table = wpan.parse_neighbor_table_result(routers[0].get(
-    wpan.WPAN_THREAD_NEIGHBOR_TABLE))
+neighbor_table = wpan.parse_neighbor_table_result(routers[0].get(wpan.WPAN_THREAD_NEIGHBOR_TABLE))
 
 verify(len(neighbor_table) == NUM_ROUTERS - 1 + NUM_CHILDREN)
 
@@ -121,9 +120,7 @@ for child in children:
         if entry.ext_address == ext_addr:
             break
     else:
-        raise wpan.VerifyError(
-            'Failed to find a child entry for extended address {} in table'.
-            format(ext_addr))
+        raise wpan.VerifyError('Failed to find a child entry for extended address {} in table'.format(ext_addr))
 
     verify(int(entry.rloc16, 16) == int(child.get(wpan.WPAN_THREAD_RLOC16), 16))
     verify(entry.is_rx_on_when_idle() is False)
@@ -137,12 +134,9 @@ for router in routers[1:]:
         if entry.ext_address == ext_addr:
             break
     else:
-        raise wpan.VerifyError(
-            'Failed to find a router entry for extended address {} in table'.
-            format(ext_addr))
+        raise wpan.VerifyError('Failed to find a router entry for extended address {} in table'.format(ext_addr))
 
-    verify(
-        int(entry.rloc16, 16) == int(router.get(wpan.WPAN_THREAD_RLOC16), 16))
+    verify(int(entry.rloc16, 16) == int(router.get(wpan.WPAN_THREAD_RLOC16), 16))
     verify(entry.is_rx_on_when_idle())
     verify(entry.is_ftd())
     verify(entry.is_child() is False)

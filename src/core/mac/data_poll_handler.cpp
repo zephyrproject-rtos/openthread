@@ -129,15 +129,19 @@ void DataPollHandler::HandleDataPoll(Mac::RxFrame &aFrame)
     Child *      child;
     uint16_t     indirectMsgCount;
 
-    VerifyOrExit(aFrame.GetSecurityEnabled(), OT_NOOP);
-    VerifyOrExit(!Get<Mle::MleRouter>().IsDetached(), OT_NOOP);
+    VerifyOrExit(aFrame.GetSecurityEnabled());
+    VerifyOrExit(!Get<Mle::MleRouter>().IsDetached());
 
     SuccessOrExit(aFrame.GetSrcAddr(macSource));
     child = Get<ChildTable>().FindChild(macSource, Child::kInStateValidOrRestoring);
-    VerifyOrExit(child != nullptr, OT_NOOP);
+    VerifyOrExit(child != nullptr);
 
     child->SetLastHeard(TimerMilli::GetNow());
     child->ResetLinkFailures();
+#if OPENTHREAD_CONFIG_MULTI_RADIO
+    child->SetLastPollRadioType(aFrame.GetRadioType());
+#endif
+
     indirectMsgCount = child->GetIndirectMessageCount();
 
     otLogInfoMac("Rx data poll, src:0x%04x, qed_msgs:%d, rss:%d, ack-fp:%d", child->GetRloc16(), indirectMsgCount,
@@ -167,13 +171,20 @@ exit:
     return;
 }
 
-otError DataPollHandler::HandleFrameRequest(Mac::TxFrame &aFrame)
+Mac::TxFrame *DataPollHandler::HandleFrameRequest(Mac::TxFrames &aTxFrames)
 {
-    otError error = OT_ERROR_NONE;
+    Mac::TxFrame *frame = nullptr;
 
-    VerifyOrExit(mIndirectTxChild != nullptr, error = OT_ERROR_ABORT);
+    VerifyOrExit(mIndirectTxChild != nullptr);
 
-    SuccessOrExit(error = mCallbacks.PrepareFrameForChild(aFrame, mFrameContext, *mIndirectTxChild));
+#if OPENTHREAD_CONFIG_MULTI_RADIO
+    frame = &aTxFrames.GetTxFrame(mIndirectTxChild->GetLastPollRadioType());
+#else
+    frame = &aTxFrames.GetTxFrame();
+#endif
+
+    VerifyOrExit(mCallbacks.PrepareFrameForChild(*frame, mFrameContext, *mIndirectTxChild) == OT_ERROR_NONE,
+                 frame = nullptr);
 
     if (mIndirectTxChild->GetIndirectTxAttempts() > 0)
     {
@@ -181,29 +192,29 @@ otError DataPollHandler::HandleFrameRequest(Mac::TxFrame &aFrame)
         // child, we ensure to use the same frame counter, key id, and
         // data sequence number as the previous attempt.
 
-        aFrame.SetIsARetransmission(true);
-        aFrame.SetSequence(mIndirectTxChild->GetIndirectDataSequenceNumber());
+        frame->SetIsARetransmission(true);
+        frame->SetSequence(mIndirectTxChild->GetIndirectDataSequenceNumber());
 
-        if (aFrame.GetSecurityEnabled())
+        if (frame->GetSecurityEnabled())
         {
-            aFrame.SetFrameCounter(mIndirectTxChild->GetIndirectFrameCounter());
-            aFrame.SetKeyId(mIndirectTxChild->GetIndirectKeyId());
+            frame->SetFrameCounter(mIndirectTxChild->GetIndirectFrameCounter());
+            frame->SetKeyId(mIndirectTxChild->GetIndirectKeyId());
         }
     }
     else
     {
-        aFrame.SetIsARetransmission(false);
+        frame->SetIsARetransmission(false);
     }
 
 exit:
-    return error;
+    return frame;
 }
 
 void DataPollHandler::HandleSentFrame(const Mac::TxFrame &aFrame, otError aError)
 {
     Child *child = mIndirectTxChild;
 
-    VerifyOrExit(child != nullptr, OT_NOOP);
+    VerifyOrExit(child != nullptr);
 
     mIndirectTxChild = nullptr;
     HandleSentFrame(aFrame, aError, *child);

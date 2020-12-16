@@ -28,6 +28,7 @@
 
 #include "test_platform.h"
 
+#include <stdio.h>
 #include <sys/time.h>
 
 bool                 g_testPlatAlarmSet     = false;
@@ -140,16 +141,16 @@ void otPlatAlarmMilliStartAt(otInstance *aInstance, uint32_t aT0, uint32_t aDt)
 
 uint32_t otPlatAlarmMilliGetNow(void)
 {
+    struct timeval tv;
+
     if (g_testPlatAlarmGetNow)
     {
         return g_testPlatAlarmGetNow();
     }
-    else
-    {
-        struct timeval tv;
-        gettimeofday(&tv, nullptr);
-        return (uint32_t)((tv.tv_sec * 1000) + (tv.tv_usec / 1000) + 123456);
-    }
+
+    gettimeofday(&tv, nullptr);
+
+    return (uint32_t)((tv.tv_sec * 1000) + (tv.tv_usec / 1000) + 123456);
 }
 
 void otPlatAlarmMicroStop(otInstance *aInstance)
@@ -179,16 +180,16 @@ void otPlatAlarmMicroStartAt(otInstance *aInstance, uint32_t aT0, uint32_t aDt)
 
 uint32_t otPlatAlarmMicroGetNow(void)
 {
+    struct timeval tv;
+
     if (g_testPlatAlarmGetNow)
     {
         return g_testPlatAlarmGetNow();
     }
-    else
-    {
-        struct timeval tv;
-        gettimeofday(&tv, nullptr);
-        return (uint32_t)((tv.tv_sec * 1000000) + tv.tv_usec + 123456);
-    }
+
+    gettimeofday(&tv, nullptr);
+
+    return (uint32_t)((tv.tv_sec * 1000000) + tv.tv_usec + 123456);
 }
 
 //
@@ -215,11 +216,11 @@ void otPlatRadioSetExtendedAddress(otInstance *aInstance, const otExtAddress *aE
     }
 }
 
-void otPlatRadioSetShortAddress(otInstance *aInstance, uint16_t aShortAddr)
+void otPlatRadioSetShortAddress(otInstance *aInstance, uint16_t aShortAddress)
 {
     if (g_testPlatRadioSetShortAddress)
     {
-        g_testPlatRadioSetShortAddress(aInstance, aShortAddr);
+        g_testPlatRadioSetShortAddress(aInstance, aShortAddress);
     }
 }
 
@@ -233,10 +234,8 @@ bool otPlatRadioIsEnabled(otInstance *aInstance)
     {
         return g_testPlatRadioIsEnabled(aInstance);
     }
-    else
-    {
-        return true;
-    }
+
+    return true;
 }
 
 otError otPlatRadioEnable(otInstance *aInstance)
@@ -245,10 +244,8 @@ otError otPlatRadioEnable(otInstance *aInstance)
     {
         return g_testPlatRadioEnable(aInstance);
     }
-    else
-    {
-        return OT_ERROR_NONE;
-    }
+
+    return OT_ERROR_NONE;
 }
 
 otError otPlatRadioDisable(otInstance *aInstance)
@@ -257,10 +254,8 @@ otError otPlatRadioDisable(otInstance *aInstance)
     {
         return g_testPlatRadioDisable(aInstance);
     }
-    else
-    {
-        return OT_ERROR_NONE;
-    }
+
+    return OT_ERROR_NONE;
 }
 
 otError otPlatRadioSleep(otInstance *)
@@ -274,10 +269,8 @@ otError otPlatRadioReceive(otInstance *aInstance, uint8_t aChannel)
     {
         return g_testPlatRadioReceive(aInstance, aChannel);
     }
-    else
-    {
-        return OT_ERROR_NONE;
-    }
+
+    return OT_ERROR_NONE;
 }
 
 otError otPlatRadioTransmit(otInstance *aInstance, otRadioFrame *aFrame)
@@ -288,10 +281,8 @@ otError otPlatRadioTransmit(otInstance *aInstance, otRadioFrame *aFrame)
     {
         return g_testPlatRadioTransmit(aInstance);
     }
-    else
-    {
-        return OT_ERROR_NONE;
-    }
+
+    return OT_ERROR_NONE;
 }
 
 otRadioFrame *otPlatRadioGetTransmitBuffer(otInstance *aInstance)
@@ -300,10 +291,8 @@ otRadioFrame *otPlatRadioGetTransmitBuffer(otInstance *aInstance)
     {
         return g_testPlatRadioGetTransmitBuffer(aInstance);
     }
-    else
-    {
-        return (otRadioFrame *)0;
-    }
+
+    return nullptr;
 }
 
 int8_t otPlatRadioGetRssi(otInstance *)
@@ -392,10 +381,29 @@ otError otPlatEntropyGet(uint8_t *aOutput, uint16_t aOutputLength)
 
     VerifyOrExit(aOutput, error = OT_ERROR_INVALID_ARGS);
 
+#if __SANITIZE_ADDRESS__ == 0
+    {
+        FILE * file = nullptr;
+        size_t readLength;
+
+        file = fopen("/dev/urandom", "rb");
+        VerifyOrExit(file != nullptr, error = OT_ERROR_FAILED);
+
+        readLength = fread(aOutput, 1, aOutputLength, file);
+
+        if (readLength != aOutputLength)
+        {
+            error = OT_ERROR_FAILED;
+        }
+
+        fclose(file);
+    }
+#else
     for (uint16_t length = 0; length < aOutputLength; length++)
     {
         aOutput[length] = (uint8_t)rand();
     }
+#endif
 
 exit:
     return error;
@@ -592,20 +600,28 @@ void otPlatFlashWrite(otInstance *aInstance, uint8_t aSwapIndex, uint32_t aOffse
 }
 
 #if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
-uint64_t otPlatTimeGet(void)
-{
-    struct timeval tv;
-
-    gettimeofday(&tv, nullptr);
-
-    return (uint64_t)tv.tv_sec * 1000000 + (uint64_t)tv.tv_usec;
-}
-
 uint16_t otPlatTimeGetXtalAccuracy(void)
 {
     return 0;
 }
-#endif // OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
+#endif
+
+#if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
+otError otPlatRadioEnableCsl(otInstance *aInstance, uint32_t aCslPeriod, const otExtAddress *aExtAddr)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    OT_UNUSED_VARIABLE(aCslPeriod);
+    OT_UNUSED_VARIABLE(aExtAddr);
+
+    return OT_ERROR_NONE;
+}
+
+void otPlatRadioUpdateCslSampleTime(otInstance *aInstance, uint32_t aCslSampleTime)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    OT_UNUSED_VARIABLE(aCslSampleTime);
+}
+#endif // OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
 
 #if OPENTHREAD_CONFIG_OTNS_ENABLE
 void otPlatOtnsStatus(const char *aStatus)
@@ -613,5 +629,69 @@ void otPlatOtnsStatus(const char *aStatus)
     OT_UNUSED_VARIABLE(aStatus);
 }
 #endif // OPENTHREAD_CONFIG_OTNS_ENABLE
+
+#if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
+
+void otPlatTrelUdp6Init(otInstance *aInstance, const otIp6Address *aUnicastAddress, uint16_t aUdpPort)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    OT_UNUSED_VARIABLE(aUnicastAddress);
+    OT_UNUSED_VARIABLE(aUdpPort);
+}
+
+void otPlatTrelUdp6UpdateAddress(otInstance *aInstance, const otIp6Address *aUnicastAddress)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    OT_UNUSED_VARIABLE(aUnicastAddress);
+}
+
+void otPlatTrelUdp6SubscribeMulticastAddress(otInstance *aInstance, const otIp6Address *aMulticastAddress)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    OT_UNUSED_VARIABLE(aMulticastAddress);
+}
+
+otError otPlatTrelUdp6SendTo(otInstance *        aInstance,
+                             const uint8_t *     aBuffer,
+                             uint16_t            aLength,
+                             const otIp6Address *aDestAddress)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    OT_UNUSED_VARIABLE(aBuffer);
+    OT_UNUSED_VARIABLE(aLength);
+    OT_UNUSED_VARIABLE(aDestAddress);
+
+    return OT_ERROR_ABORT;
+}
+
+otError otPlatTrelUdp6SetTestMode(otInstance *aInstance, bool aEnable)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    OT_UNUSED_VARIABLE(aEnable);
+    return OT_ERROR_NOT_IMPLEMENTED;
+}
+
+#endif // OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
+
+#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_ENABLE
+otError otPlatRadioConfigureEnhAckProbing(otInstance *         aInstance,
+                                          otLinkMetrics        aLinkMetrics,
+                                          const otShortAddress aShortAddress,
+                                          const otExtAddress * aExtAddress)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    OT_UNUSED_VARIABLE(aLinkMetrics);
+    OT_UNUSED_VARIABLE(aShortAddress);
+    OT_UNUSED_VARIABLE(aExtAddress);
+
+    return OT_ERROR_NONE;
+}
+
+otLinkMetrics otPlatRadioGetEnhAckProbingMetrics(otInstance *aInstance, const otShortAddress aShortAddress)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    OT_UNUSED_VARIABLE(aShortAddress);
+}
+#endif
 
 } // extern "C"

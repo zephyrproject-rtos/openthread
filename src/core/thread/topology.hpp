@@ -38,24 +38,42 @@
 
 #include <openthread/thread_ftd.h>
 
+#include "common/clearable.hpp"
+#include "common/linked_list.hpp"
 #include "common/locator.hpp"
 #include "common/message.hpp"
 #include "common/random.hpp"
 #include "common/timer.hpp"
 #include "mac/mac_types.hpp"
 #include "net/ip6.hpp"
+#include "radio/trel_link.hpp"
+#include "thread/csl_tx_scheduler.hpp"
 #include "thread/indirect_sender.hpp"
+#include "thread/link_metrics.hpp"
 #include "thread/link_quality.hpp"
 #include "thread/mle_tlvs.hpp"
 #include "thread/mle_types.hpp"
+#include "thread/radio_selector.hpp"
 
 namespace ot {
+
+#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_ENABLE
+class LinkMetricsSeriesInfo; ///< Forward declaration for including each other with `link_metrics.hpp`
+#endif
 
 /**
  * This class represents a Thread neighbor.
  *
  */
 class Neighbor : public InstanceLocatorInit
+#if OPENTHREAD_CONFIG_MULTI_RADIO
+    ,
+                 public RadioSelector::NeighborInfo
+#endif
+#if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
+    ,
+                 public Trel::NeighborInfo
+#endif
 {
 public:
     /**
@@ -82,12 +100,112 @@ public:
      */
     enum StateFilter
     {
-        kInStateValid,                     ///< Accept child only in `kStateValid`.
-        kInStateValidOrRestoring,          ///< Accept child with `IsStateValidOrRestoring()` being `true`.
-        kInStateChildIdRequest,            ///< Accept child only in `Child:kStateChildIdRequest`.
-        kInStateValidOrAttaching,          ///< Accept child with `IsStateValidOrAttaching()` being `true`.
-        kInStateAnyExceptInvalid,          ///< Accept child in any state except `kStateInvalid`.
-        kInStateAnyExceptValidOrRestoring, ///< Accept child in any state except `IsStateValidOrRestoring()`.
+        kInStateValid,                     ///< Accept neighbor only in `kStateValid`.
+        kInStateValidOrRestoring,          ///< Accept neighbor with `IsStateValidOrRestoring()` being `true`.
+        kInStateChildIdRequest,            ///< Accept neighbor only in `Child:kStateChildIdRequest`.
+        kInStateValidOrAttaching,          ///< Accept neighbor with `IsStateValidOrAttaching()` being `true`.
+        kInStateInvalid,                   ///< Accept neighbor only in `kStateInvalid`.
+        kInStateAnyExceptInvalid,          ///< Accept neighbor in any state except `kStateInvalid`.
+        kInStateAnyExceptValidOrRestoring, ///< Accept neighbor in any state except `IsStateValidOrRestoring()`.
+        kInStateAny,                       ///< Accept neighbor in any state.
+    };
+
+    /**
+     * This class represents an Address Matcher used to find a neighbor (child/router) with a given MAC address also
+     * matching a given state filter.
+     *
+     */
+    class AddressMatcher
+    {
+    public:
+        /**
+         * This constructor initializes the `AddressMatcher` with a given MAC short address (RCOC16) and state filter.
+         *
+         * @param[in]  aShortAddress   A MAC short address (RLOC16).
+         * @param[in]  aStateFilter    A state filter.
+         *
+         */
+        AddressMatcher(Mac::ShortAddress aShortAddress, StateFilter aStateFilter)
+            : AddressMatcher(aStateFilter, aShortAddress, nullptr)
+        {
+        }
+
+        /**
+         * This constructor initializes the `AddressMatcher` with a given MAC extended address and state filter.
+         *
+         * @param[in]  aExtAddress     A MAC extended address.
+         * @param[in]  aStateFilter    A state filter.
+         *
+         */
+        AddressMatcher(const Mac::ExtAddress &aExtAddress, StateFilter aStateFilter)
+            : AddressMatcher(aStateFilter, Mac::kShortAddrInvalid, &aExtAddress)
+        {
+        }
+
+        /**
+         * This constructor initializes the `AddressMatcher` with a given MAC address and state filter.
+         *
+         * @param[in]  aMacAddress     A MAC address.
+         * @param[in]  aStateFilter    A state filter.
+         *
+         */
+        AddressMatcher(const Mac::Address &aMacAddress, StateFilter aStateFilter)
+            : AddressMatcher(aStateFilter,
+                             aMacAddress.IsShort() ? aMacAddress.GetShort()
+                                                   : static_cast<Mac::ShortAddress>(Mac::kShortAddrInvalid),
+                             aMacAddress.IsExtended() ? &aMacAddress.GetExtended() : nullptr)
+        {
+        }
+
+        /**
+         * This constructor initializes the `AddressMatcher` with a given state filter (it accepts any address).
+         *
+         * @param[in]  aStateFilter    A state filter.
+         *
+         */
+        explicit AddressMatcher(StateFilter aStateFilter)
+            : AddressMatcher(aStateFilter, Mac::kShortAddrInvalid, nullptr)
+        {
+        }
+
+        /**
+         * This method indicates if a given neighbor matches the address and state filter of `AddressMatcher`.
+         *
+         * @param[in] aNeighbor   A neighbor.
+         *
+         * @retval TRUE   Neighbor @p aNeighbor matches the address and state filter.
+         * @retval FALSE  Neighbor @p aNeighbor does not match the address or state filter.
+         *
+         */
+        bool Matches(const Neighbor &aNeighbor) const;
+
+    private:
+        AddressMatcher(StateFilter aStateFilter, Mac::ShortAddress aShortAddress, const Mac::ExtAddress *aExtAddress)
+            : mStateFilter(aStateFilter)
+            , mShortAddress(aShortAddress)
+            , mExtAddress(aExtAddress)
+        {
+        }
+
+        StateFilter            mStateFilter;
+        Mac::ShortAddress      mShortAddress;
+        const Mac::ExtAddress *mExtAddress;
+    };
+
+    /**
+     * This type represents diagnostic information for a neighboring node.
+     *
+     */
+    class Info : public otNeighborInfo, public Clearable<Info>
+    {
+    public:
+        /**
+         * This method sets the `Info` instance from a given `Neighbor`.
+         *
+         * @param[in] aNeighbor   A neighbor.
+         *
+         */
+        void SetFrom(const Neighbor &aNeighbor);
     };
 
     /**
@@ -194,6 +312,16 @@ public:
     bool MatchesFilter(StateFilter aFilter) const;
 
     /**
+     * This method indicates whether neighbor matches a given `AddressMatcher`.
+     *
+     * @param[in]  aMatcher   An `AddressMatcher` to match against.
+     *
+     * @returns TRUE if the neighbor matches the address and state filter of @p aMatcher, FALSE otherwise.
+     *
+     */
+    bool Matches(const AddressMatcher &aMatcher) const { return aMatcher.Matches(*this); }
+
+    /**
      * This method gets the device mode flags.
      *
      * @returns The device mode flags.
@@ -224,14 +352,6 @@ public:
      *
      */
     bool IsFullThreadDevice(void) const { return GetDeviceMode().IsFullThreadDevice(); }
-
-    /**
-     * This method indicates whether or not the device uses secure IEEE 802.15.4 Data Request messages.
-     *
-     * @returns TRUE if using secure IEEE 802.15.4 Data Request messages, FALSE otherwise.
-     *
-     */
-    bool IsSecureDataRequest(void) const { return GetDeviceMode().IsSecureDataRequest(); }
 
     /**
      * This method indicates whether or not the device requests Full Network Data.
@@ -296,20 +416,45 @@ public:
     void SetLastHeard(TimeMilli aLastHeard) { mLastHeard = aLastHeard; }
 
     /**
-     * This method gets the link frame counter value.
+     * This method gets the link frame counters.
      *
-     * @returns The link frame counter value.
+     * @returns A reference to `Mac::LinkFrameCounters` containing link frame counter for all supported radio links.
      *
      */
-    uint32_t GetLinkFrameCounter(void) const { return mValidPending.mValid.mLinkFrameCounter; }
+    Mac::LinkFrameCounters &GetLinkFrameCounters(void) { return mValidPending.mValid.mLinkFrameCounters; }
 
     /**
-     * This method sets the link frame counter value.
+     * This method gets the link frame counters.
      *
-     * @param[in]  aFrameCounter  The link frame counter value.
+     * @returns A reference to `Mac::LinkFrameCounters` containing link frame counter for all supported radio links.
      *
      */
-    void SetLinkFrameCounter(uint32_t aFrameCounter) { mValidPending.mValid.mLinkFrameCounter = aFrameCounter; }
+    const Mac::LinkFrameCounters &GetLinkFrameCounters(void) const { return mValidPending.mValid.mLinkFrameCounters; }
+
+#if OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2
+    /**
+     * This method gets the link ACK frame counter value.
+     *
+     * @returns The link ACK frame counter value.
+     *
+     */
+    uint32_t GetLinkAckFrameCounter(void) const { return mValidPending.mValid.mLinkAckFrameCounter; }
+#endif
+
+    /**
+     * This method sets the link ACK frame counter value.
+     *
+     * @param[in]  aAckFrameCounter  The link ACK frame counter value.
+     *
+     */
+    void SetLinkAckFrameCounter(uint32_t aAckFrameCounter)
+    {
+#if OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2
+        mValidPending.mValid.mLinkAckFrameCounter = aAckFrameCounter;
+#else
+        OT_UNUSED_VARIABLE(aAckFrameCounter);
+#endif
+    }
 
     /**
      * This method gets the MLE frame counter value.
@@ -351,6 +496,60 @@ public:
      */
     void SetRloc16(uint16_t aRloc16) { mRloc16 = aRloc16; }
 
+#if OPENTHREAD_CONFIG_MULTI_RADIO
+    /**
+     * This method clears the last received fragment tag.
+     *
+     * The last received fragment tag is used for detect duplicate frames (receievd over different radios) when
+     * multi-radio feature is enabled.
+     *
+     */
+    void ClearLastRxFragmentTag(void) { mLastRxFragmentTag = 0; }
+
+    /**
+     * This method gets the last received fragment tag.
+     *
+     * This method MUST be used only when the tag is set (and not cleared). Otherwise its behavior is undefined.
+     *
+     * @returns The last received fragment tag.
+     *
+     */
+    uint16_t GetLastRxFragmentTag(void) const { return mLastRxFragmentTag; }
+
+    /**
+     * This method set the last received fragment tag.
+     *
+     * @param[in] aTag   The new tag value.
+     *
+     */
+    void SetLastRxFragmentTag(uint16_t aTag) { mLastRxFragmentTag = (aTag == 0) ? 0xffff : aTag; }
+
+    /**
+     * This method indicates whether the last received fragment tag is set or not.
+     *
+     * @returns TRUE if the last received fragment tag is set, FALSE otherwise.
+     *
+     */
+    bool IsLastRxFragmentTagSet(void) const { return (mLastRxFragmentTag != 0); }
+
+    /**
+     * This method indicates whether the last received fragment tag is strictly after a given tag value.
+     *
+     * This method MUST be used only when the tag is set (and not cleared). Otherwise its behavior is undefined.
+     *
+     * The tag value compassion follows the Serial Number Arithmetic logic from RFC-1982. It is semantically equivalent
+     * to `LastRxFragementTag > aTag`.
+     *
+     * @param[in] aTag   A tag value to compare against.
+     *
+     * @returns TRUE if the current last rx fragment tag is strictly after @p aTag, FALSE if they are equal or it is
+     * before @p aTag.
+     *
+     */
+    bool IsLastRxFragmentTagAfter(uint16_t aTag) const { return ((aTag - mLastRxFragmentTag) & (1U << 15)) != 0; }
+
+#endif // OPENTHREAD_CONFIG_MULTI_RADIO
+
     /**
      * This method indicates whether or not it is a valid Thread 1.1 neighbor.
      *
@@ -358,6 +557,14 @@ public:
      *
      */
     bool IsThreadVersion1p1(void) const { return mState != kStateInvalid && mVersion == OT_THREAD_VERSION_1_1; }
+
+    /**
+     * This method indicates whether or not it is a valid Thread 1.2 neighbor.
+     *
+     * @returns TRUE if it is a valid Thread 1.2 neighbor, FALSE otherwise.
+     *
+     */
+    bool IsThreadVersion1p2(void) const { return mState != kStateInvalid && mVersion == OT_THREAD_VERSION_1_2; }
 
     /**
      * This method indicates whether Enhanced Keep-Alive is supported or not.
@@ -413,6 +620,14 @@ public:
     LinkQualityInfo &GetLinkInfo(void) { return mLinkInfo; }
 
     /**
+     * This method returns the LinkQualityInfo object.
+     *
+     * @returns The LinkQualityInfo object.
+     *
+     */
+    const LinkQualityInfo &GetLinkInfo(void) const { return mLinkInfo; }
+
+    /**
      * This method generates a new challenge value for MLE Link Request/Response exchanges.
      *
      */
@@ -452,6 +667,98 @@ public:
     void SetTimeSyncEnabled(bool aEnabled) { mTimeSyncEnabled = aEnabled; }
 #endif
 
+#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_ENABLE
+    /**
+     * This method aggregates the Link Metrics data into all the series that is running for this neighbor.
+     *
+     * If a series wants to account frames of @p aFrameType, it would add count by 1 and aggregrate @p aLqi and
+     * @p aRss into its averagers.
+     *
+     * @param[in] aSeriesId     Series ID for Link Probe. Should be `0` if this method is not called by Link Probe.
+     * @param[in] aFrameType    Type of the frame that carries Link Metrics data.
+     * @param[in] aLqi          The LQI value.
+     * @param[in] aRss          The Rss value.
+     *
+     */
+    void AggregateLinkMetrics(uint8_t aSeriesId, uint8_t aFrameType, uint8_t aLqi, int8_t aRss);
+
+    /**
+     * This method adds a new LinkMetricsSeriesInfo to the neighbor's list.
+     *
+     * @param[in]    A reference to the new LinkMetricsSeriesInfo.
+     *
+     */
+    void AddForwardTrackingSeriesInfo(LinkMetricsSeriesInfo &aLinkMetricsSeriesInfo);
+
+    /**
+     * This method finds a specific LinkMetricsSeriesInfo by Series ID.
+     *
+     * @param[in] aSeriesId    A reference to the Series ID.
+     *
+     * @returns The pointer to the LinkMetricsSeriesInfo. `nullptr` if not found.
+     *
+     */
+    LinkMetricsSeriesInfo *GetForwardTrackingSeriesInfo(const uint8_t &aSeriesId);
+
+    /**
+     * This method removes a specific LinkMetricsSeriesInfo by Series ID.
+     *
+     * @param[in] aSeriesId    A reference to the Series ID to remove.
+     *
+     * @returns The pointer to the LinkMetricsSeriesInfo. `nullptr` if not found.
+     *
+     */
+    LinkMetricsSeriesInfo *RemoveForwardTrackingSeriesInfo(const uint8_t &aSeriesId);
+
+    /**
+     * This method removes all the Series and return the data structures to the Pool.
+     *
+     */
+    void RemoveAllForwardTrackingSeriesInfo(void);
+
+    /**
+     * This method gets the Enh-ACK Probing metrics (this `Neighbor` object is the Probing Subject).
+     *
+     * @returns Enh-ACK Probing metrics configured.
+     *
+     */
+    const otLinkMetrics &GetEnhAckProbingMetrics(void) const { return mEnhAckProbingMetrics; }
+
+    /**
+     * This method sets the Enh-ACK Probing metrics (this `Neighbor` object is the Probing Subject).
+     *
+     * @param[in]  aEnhAckProbingMetrics  The metrics value to set.
+     *
+     */
+    void SetEnhAckProbingMetrics(const otLinkMetrics &aEnhAckProbingMetrics)
+    {
+        mEnhAckProbingMetrics = aEnhAckProbingMetrics;
+    }
+
+    /**
+     * This method indicates if Enh-ACK Probing is configured and active for this `Neighbor` object.
+     *
+     * @retval TRUE   Enh-ACK Probing is configured and active for this `Neighbor`.
+     * @retval FALSE  Otherwise.
+     *
+     */
+    bool IsEnhAckProbingActive(void) const
+    {
+        return (mEnhAckProbingMetrics.mLqi != 0) || (mEnhAckProbingMetrics.mLinkMargin != 0) ||
+               (mEnhAckProbingMetrics.mRssi != 0);
+    }
+#endif // OPENTHREAD_CONFIG_MLE_LINK_METRICS_ENABLE
+
+    /**
+     * This method converts a given `State` to a human-readable string.
+     *
+     * @param[in] aState   A neighbor state.
+     *
+     * @returns A string representation of given state.
+     *
+     */
+    static const char *StateToString(State aState);
+
 protected:
     /**
      * This method initializes the `Neighbor` object.
@@ -468,14 +775,21 @@ private:
     {
         struct
         {
-            uint32_t mLinkFrameCounter; ///< The Link Frame Counter
-            uint32_t mMleFrameCounter;  ///< The MLE Frame Counter
+            Mac::LinkFrameCounters mLinkFrameCounters; ///< The Link Frame Counters
+            uint32_t               mMleFrameCounter;   ///< The MLE Frame Counter
+#if OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2
+            uint32_t mLinkAckFrameCounter; ///< The Link Ack Frame Counter
+#endif
         } mValid;
         struct
         {
             uint8_t mChallenge[Mle::kMaxChallengeSize]; ///< The challenge value
         } mPending;
     } mValidPending;
+
+#if OPENTHREAD_CONFIG_MULTI_RADIO
+    uint16_t mLastRxFragmentTag; ///< Last received fragment tag
+#endif
 
     uint32_t mKeySequence; ///< Current key sequence
     uint16_t mRloc16;      ///< The RLOC16
@@ -489,13 +803,28 @@ private:
 #endif
     uint8_t         mVersion;  ///< The MLE version
     LinkQualityInfo mLinkInfo; ///< Link quality info (contains average RSS, link margin and link quality)
+#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_ENABLE
+    LinkedList<LinkMetricsSeriesInfo> mLinkMetricsSeriesInfoList; ///< A list of Link Metrics Forward Tracking Series
+                                                                  ///< that is being tracked for this neighbor. Note
+                                                                  ///< that this device is the Subject and this
+                                                                  ///< this neighbor is the Initiator.
+    otLinkMetrics mEnhAckProbingMetrics; ///< Metrics configured for Enh-ACK Based Probing at the Probing Subject
+                                         ///< (this neighbor). Note that this device is the Initiator and this neighbor
+                                         ///< is the Subject.
+#endif
 };
 
 /**
  * This class represents a Thread Child.
  *
  */
-class Child : public Neighbor, public IndirectSender::ChildInfo, public DataPollHandler::ChildInfo
+class Child : public Neighbor,
+              public IndirectSender::ChildInfo,
+              public DataPollHandler::ChildInfo
+#if !OPENTHREAD_MTD && OPENTHREAD_CONFIG_MAC_CSL_TRANSMITTER_ENABLE
+    ,
+              public CslTxScheduler::ChildInfo
+#endif
 {
     class AddressIteratorBuilder;
 
@@ -503,6 +832,22 @@ public:
     enum
     {
         kMaxRequestTlvs = 5,
+    };
+
+    /**
+     * This class represents diagnostic information for a Thread Child.
+     *
+     */
+    class Info : public otChildInfo, public Clearable<Info>
+    {
+    public:
+        /**
+         * This method sets the `Info` instance from a given `Child`.
+         *
+         * @param[in] aChild   A neighbor.
+         *
+         */
+        void SetFrom(const Child &aChild);
     };
 
     /**
@@ -528,7 +873,7 @@ public:
          * @param[in] aFilter   An IPv6 address type filter restricting iterator to certain type of addresses.
          *
          */
-        AddressIterator(const Child &aChild, Ip6::Address::TypeFilter aFilter = Ip6::Address::kTypeAny)
+        explicit AddressIterator(const Child &aChild, Ip6::Address::TypeFilter aFilter = Ip6::Address::kTypeAny)
             : AddressIterator(aChild, 0, aFilter)
         {
         }
@@ -759,6 +1104,16 @@ public:
      */
     bool HasIp6Address(const Ip6::Address &aAddress) const;
 
+#if OPENTHREAD_FTD && OPENTHREAD_CONFIG_TMF_PROXY_DUA_ENABLE
+    /**
+     * This method retrieves the Domain Unicast Address registered by the child.
+     *
+     * @returns A pointer to Domain Unicast Address registered by the child if there is.
+     *
+     */
+    const Ip6::Address *GetDomainUnicastAddress(void) const;
+#endif
+
     /**
      * This method gets the child timeout.
      *
@@ -862,6 +1217,60 @@ public:
 
 #endif // #if OPENTHREAD_CONFIG_CHILD_SUPERVISION_ENABLE
 
+#if OPENTHREAD_FTD && OPENTHREAD_CONFIG_TMF_PROXY_MLR_ENABLE
+    /**
+     * This method returns MLR state of an Ip6 multicast address.
+     *
+     * @note The @p aAdddress reference MUST be from `IterateIp6Addresses()` or `AddressIterator`.
+     *
+     * @param[in] aAddress  The Ip6 multicast address.
+     *
+     * @returns MLR state of the Ip6 multicast address.
+     *
+     */
+    MlrState GetAddressMlrState(const Ip6::Address &aAddress) const;
+
+    /**
+     * This method sets MLR state of an Ip6 multicast address.
+     *
+     * @note The @p aAdddress reference MUST be from `IterateIp6Addresses()` or `AddressIterator`.
+     *
+     * @param[in] aAddress  The Ip6 multicast address.
+     * @param[in] aState    The target MLR state.
+     *
+     */
+    void SetAddressMlrState(const Ip6::Address &aAddress, MlrState aState);
+
+    /**
+     * This method returns if the Child has Ip6 address @p aAddress of MLR state `kMlrStateRegistered`.
+     *
+     * @param[in] aAddress  The Ip6 address.
+     *
+     * @retval true   If the Child has Ip6 address @p aAddress of MLR state `kMlrStateRegistered`.
+     * @retval false  If the Child does not have Ip6 address @p aAddress of MLR state `kMlrStateRegistered`.
+     *
+     */
+    bool HasMlrRegisteredAddress(const Ip6::Address &aAddress) const;
+
+    /**
+     * This method returns if the Child has any Ip6 address of MLR state `kMlrStateRegistered`.
+     *
+     * @retval true   If the Child has any Ip6 address of MLR state `kMlrStateRegistered`.
+     * @retval false  If the Child does not have any Ip6 address of MLR state `kMlrStateRegistered`.
+     *
+     */
+    bool HasAnyMlrRegisteredAddress(void) const { return mMlrRegisteredMask.HasAny(); }
+
+    /**
+     * This method returns if the Child has any Ip6 address of MLR state `kMlrStateToRegister`.
+     *
+     * @retval true   If the Child has any Ip6 address of MLR state `kMlrStateToRegister`.
+     * @retval false  If the Child does not have any Ip6 address of MLR state `kMlrStateToRegister`.
+     *
+     */
+    bool HasAnyMlrToRegisterAddress(void) const { return mMlrToRegisterMask.HasAny(); }
+#endif // OPENTHREAD_FTD && OPENTHREAD_CONFIG_TMF_PROXY_MLR_ENABLE
+
 private:
 #if OPENTHREAD_CONFIG_MLE_IP_ADDRS_PER_CHILD < 2
 #error OPENTHREAD_CONFIG_MLE_IP_ADDRS_PER_CHILD should be at least set to 2.
@@ -871,6 +1280,8 @@ private:
     {
         kNumIp6Addresses = OPENTHREAD_CONFIG_MLE_IP_ADDRS_PER_CHILD - 1,
     };
+
+    typedef BitVector<kNumIp6Addresses> ChildIp6AddressMask;
 
     class AddressIteratorBuilder
     {
@@ -889,11 +1300,16 @@ private:
         Ip6::Address::TypeFilter mFilter;
     };
 
-    uint8_t                  mNetworkDataVersion;           ///< Current Network Data version
     Ip6::InterfaceIdentifier mMeshLocalIid;                 ///< IPv6 address IID for mesh-local address
     Ip6::Address             mIp6Address[kNumIp6Addresses]; ///< Registered IPv6 addresses
+    uint32_t                 mTimeout;                      ///< Child timeout
 
-    uint32_t mTimeout; ///< Child timeout
+#if OPENTHREAD_FTD && OPENTHREAD_CONFIG_TMF_PROXY_MLR_ENABLE
+    ChildIp6AddressMask mMlrToRegisterMask;
+    ChildIp6AddressMask mMlrRegisteredMask;
+#endif
+
+    uint8_t mNetworkDataVersion; ///< Current Network Data version
 
     union
     {
@@ -915,6 +1331,22 @@ private:
 class Router : public Neighbor
 {
 public:
+    /**
+     * This class represents diagnostic information for a Thread Router.
+     *
+     */
+    class Info : public otRouterInfo, public Clearable<Info>
+    {
+    public:
+        /**
+         * This method sets the `Info` instance from a given `Router`.
+         *
+         * @param[in] aRouter   A router.
+         *
+         */
+        void SetFrom(const Router &aRouter);
+    };
+
     /**
      * This method initializes the `Router` object.
      *

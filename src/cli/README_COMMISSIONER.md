@@ -17,6 +17,7 @@ See [README_COMMISSIONING.md](README_COMMISSIONING.md).
 - [provisioningurl](#provisioningurl)
 - [sessionid](#sessionid)
 - [start](#start)
+- [state](#state)
 - [stop](#stop)
 
 ## Command Details
@@ -81,34 +82,47 @@ Energy: 00050000 0 0 0 0
 
 ### joiner add
 
-Usage: `commissioner joiner add <eui64> <pskd>`
+Usage: `commissioner joiner add <eui64>|<discerner> <pskd> [timeout]`
 
 Add a Joiner entry.
 
 - eui64: The IEEE EUI-64 of the Joiner or '\*' to match any Joiner.
+- discerner: The Joiner discerner in format `number/length`.
 - pskd: Pre-Shared Key for the Joiner.
+- timeout: joiner timeout in seconds.
 
 ```bash
 > commissioner joiner add d45e64fa83f81cf7 J01NME
 Done
 ```
 
+```bash
+> commissioner joiner add 0xabc/12 J01NME
+Done
+```
+
 ### joiner remove
 
-Usage: `commissioner joiner remove <eui64>`
+Usage: `commissioner joiner remove <eui64>|<discerner>`
 
 Remove a Joiner entry.
 
 - eui64: The IEEE EUI-64 of the Joiner or '\*' to match any Joiner.
+- discerner: The Joiner discerner in format `number/length`.
 
 ```bash
 > commissioner joiner remove d45e64fa83f81cf7
 Done
 ```
 
+```bash
+> commissioner joiner remove 0xabc/12
+Done
+```
+
 ### mgmtget
 
-Usage: `commissioner mgmtget [locator] [sessionid] [steeringdata] [joinerudpport] [binary <TLV Types>]`
+Usage: `commissioner mgmtget [locator] [sessionid] [steeringdata] [joinerudpport] [-x <TLV Types>]`
 
 Send a `MGMT_GET` message to the Leader.
 
@@ -119,7 +133,7 @@ Done
 
 ### mgmtset
 
-Usage: `commissioner mgmtset [locator <locator>] [sessionid <sessionid>] [steeringdata <steeringdata>] [joinerudpport <joinerudpport>] [binary <TLVs>]`
+Usage: `commissioner mgmtset [locator <locator>] [sessionid <sessionid>] [steeringdata <steeringdata>] [joinerudpport <joinerudpport>] [-x <TLVs>]`
 
 Send a `MGMT_SET` message to the Leader.
 
@@ -182,6 +196,20 @@ This command will cause the device to send `LEAD_PET` and `LEAD_KA` messages.
 Commissioner: petitioning
 Done
 Commissioner: active
+```
+
+### state
+
+Usage: `commissioner state`
+
+Get Commissioner state.
+
+This command will return the current Commissioner state.
+
+```bash
+> commissioner state
+active
+Done
 ```
 
 ### stop

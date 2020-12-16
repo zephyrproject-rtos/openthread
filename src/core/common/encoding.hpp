@@ -122,7 +122,36 @@ inline uint64_t HostSwap64(uint64_t v)
 #endif // LITTLE_ENDIAN
 
 /**
- * This function reads a `uint16_t` value from a given buffer assuming big-ending encoding.
+ * This template function performs host swap on a given unsigned integer value assuming big-endian encoding.
+ *
+ * @tparam  UintType   The unsigned int type.
+ *
+ * @param   aValue     The value to host swap.
+ *
+ * @returns The host swapped value.
+ *
+ */
+template <typename UintType> UintType HostSwap(UintType aValue);
+
+template <> inline uint8_t HostSwap(uint8_t aValue)
+{
+    return aValue;
+}
+template <> inline uint16_t HostSwap(uint16_t aValue)
+{
+    return HostSwap16(aValue);
+}
+template <> inline uint32_t HostSwap(uint32_t aValue)
+{
+    return HostSwap32(aValue);
+}
+template <> inline uint64_t HostSwap(uint64_t aValue)
+{
+    return HostSwap64(aValue);
+}
+
+/**
+ * This function reads a `uint16_t` value from a given buffer assuming big-endian encoding.
  *
  * @param[in] aBuffer   Pointer to buffer to read from.
  *
@@ -135,7 +164,7 @@ inline uint16_t ReadUint16(const uint8_t *aBuffer)
 }
 
 /**
- * This function reads a `uint32_t` value from a given buffer assuming big-ending encoding.
+ * This function reads a `uint32_t` value from a given buffer assuming big-endian encoding.
  *
  * @param[in] aBuffer   Pointer to buffer to read from.
  *
@@ -149,7 +178,21 @@ inline uint32_t ReadUint32(const uint8_t *aBuffer)
 }
 
 /**
- * This function reads a `uint64_t` value from a given buffer assuming big-ending encoding.
+ * This function reads a 24-bit integer value from a given buffer assuming big-endian encoding.
+ *
+ * @param[in] aBuffer   Pointer to buffer to read from.
+ *
+ * @returns The value read from buffer.
+ *
+ */
+inline uint32_t ReadUint24(const uint8_t *aBuffer)
+{
+    return ((static_cast<uint32_t>(aBuffer[0]) << 16) | (static_cast<uint32_t>(aBuffer[1]) << 8) |
+            (static_cast<uint32_t>(aBuffer[2]) << 0));
+}
+
+/**
+ * This function reads a `uint64_t` value from a given buffer assuming big-endian encoding.
  *
  * @param[in] aBuffer   Pointer to buffer to read from.
  *
@@ -165,7 +208,7 @@ inline uint64_t ReadUint64(const uint8_t *aBuffer)
 }
 
 /**
- * This function writes a `uint16_t` value to a given buffer using big-ending encoding.
+ * This function writes a `uint16_t` value to a given buffer using big-endian encoding.
  *
  * @param[in]  aValue    The value to write to buffer.
  * @param[out] aBuffer   Pointer to buffer where the value will be written.
@@ -178,7 +221,21 @@ inline void WriteUint16(uint16_t aValue, uint8_t *aBuffer)
 }
 
 /**
- * This function writes a `uint32_t` value to a given buffer using big-ending encoding.
+ * This function writes a 24-bit integer value to a given buffer using big-endian encoding.
+ *
+ * @param[in]  aValue    The value to write to buffer.
+ * @param[out] aBuffer   Pointer to buffer where the value will be written.
+ *
+ */
+inline void WriteUint24(uint32_t aValue, uint8_t *aBuffer)
+{
+    aBuffer[0] = (aValue >> 16) & 0xff;
+    aBuffer[1] = (aValue >> 8) & 0xff;
+    aBuffer[2] = (aValue >> 0) & 0xff;
+}
+
+/**
+ * This function writes a `uint32_t` value to a given buffer using big-endian encoding.
  *
  * @param[in]  aValue    The value to write to buffer.
  * @param[out] aBuffer   Pointer to buffer where the value will be written.
@@ -193,7 +250,7 @@ inline void WriteUint32(uint32_t aValue, uint8_t *aBuffer)
 }
 
 /**
- * This function writes a `uint64_t` value to a given buffer using big-ending encoding.
+ * This function writes a `uint64_t` value to a given buffer using big-endian encoding.
  *
  * @param[in]  aValue    The value to write to buffer.
  * @param[out] aBuffer   Pointer to buffer where the value will be written.
@@ -248,7 +305,36 @@ inline uint64_t HostSwap64(uint64_t v)
 #endif
 
 /**
- * This function reads a `uint16_t` value from a given buffer assuming little-ending encoding.
+ * This template function performs host swap on a given unsigned integer value assuming little-endian encoding.
+ *
+ * @tparam  UintType   The unsigned int type.
+ *
+ * @param   aValue     The value to host swap.
+ *
+ * @returns The host swapped value.
+ *
+ */
+template <typename UintType> UintType HostSwap(UintType aValue);
+
+template <> inline uint8_t HostSwap(uint8_t aValue)
+{
+    return aValue;
+}
+template <> inline uint16_t HostSwap(uint16_t aValue)
+{
+    return HostSwap16(aValue);
+}
+template <> inline uint32_t HostSwap(uint32_t aValue)
+{
+    return HostSwap32(aValue);
+}
+template <> inline uint64_t HostSwap(uint64_t aValue)
+{
+    return HostSwap64(aValue);
+}
+
+/**
+ * This function reads a `uint16_t` value from a given buffer assuming little-endian encoding.
  *
  * @param[in] aBuffer   Pointer to buffer to read from.
  *
@@ -261,7 +347,21 @@ inline uint16_t ReadUint16(const uint8_t *aBuffer)
 }
 
 /**
- * This function reads a `uint32_t` value from a given buffer assuming little-ending encoding.
+ * This function reads a 24-bit integer value from a given buffer assuming little-endian encoding.
+ *
+ * @param[in] aBuffer   Pointer to buffer to read from.
+ *
+ * @returns The value read from buffer.
+ *
+ */
+inline uint32_t ReadUint24(const uint8_t *aBuffer)
+{
+    return ((static_cast<uint32_t>(aBuffer[0]) << 0) | (static_cast<uint32_t>(aBuffer[1]) << 8) |
+            (static_cast<uint32_t>(aBuffer[2]) << 16));
+}
+
+/**
+ * This function reads a `uint32_t` value from a given buffer assuming little-endian encoding.
  *
  * @param[in] aBuffer   Pointer to buffer to read from.
  *
@@ -275,7 +375,7 @@ inline uint32_t ReadUint32(const uint8_t *aBuffer)
 }
 
 /**
- * This function reads a `uint64_t` value from a given buffer assuming little-ending encoding.
+ * This function reads a `uint64_t` value from a given buffer assuming little-endian encoding.
  *
  * @param[in] aBuffer   Pointer to buffer to read from.
  *
@@ -291,7 +391,7 @@ inline uint64_t ReadUint64(const uint8_t *aBuffer)
 }
 
 /**
- * This function writes a `uint16_t` value to a given buffer using little-ending encoding.
+ * This function writes a `uint16_t` value to a given buffer using little-endian encoding.
  *
  * @param[in]  aValue    The value to write to buffer.
  * @param[out] aBuffer   Pointer to buffer where the value will be written.
@@ -304,7 +404,21 @@ inline void WriteUint16(uint16_t aValue, uint8_t *aBuffer)
 }
 
 /**
- * This function writes a `uint32_t` value to a given buffer using little-ending encoding.
+ * This function writes a 24-bit integer value to a given buffer using little-endian encoding.
+ *
+ * @param[in]  aValue   The value to write to buffer.
+ * @param[out] aBuffer  Pointer to buffer where the value will be written.
+ *
+ */
+inline void WriteUint24(uint32_t aValue, uint8_t *aBuffer)
+{
+    aBuffer[0] = (aValue >> 0) & 0xff;
+    aBuffer[1] = (aValue >> 8) & 0xff;
+    aBuffer[2] = (aValue >> 16) & 0xff;
+}
+
+/**
+ * This function writes a `uint32_t` value to a given buffer using little-endian encoding.
  *
  * @param[in]  aValue   The value to write to buffer.
  * @param[out] aBuffer  Pointer to buffer where the value will be written.
@@ -319,7 +433,7 @@ inline void WriteUint32(uint32_t aValue, uint8_t *aBuffer)
 }
 
 /**
- * This function writes a `uint64_t` value to a given buffer using little-ending encoding.
+ * This function writes a `uint64_t` value to a given buffer using little-endian encoding.
  *
  * @param[in]  aValue   The value to write to buffer.
  * @param[out] aBuffer  Pointer to buffer where the value will be written.

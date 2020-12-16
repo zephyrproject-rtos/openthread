@@ -38,6 +38,7 @@
 
 #include "common/code_utils.hpp"
 #include "common/locator.hpp"
+#include "common/non_copyable.hpp"
 #include "common/timer.hpp"
 #include "mac/mac_frame.hpp"
 #include "thread/topology.hpp"
@@ -58,7 +59,7 @@ namespace ot {
  *
  */
 
-class DataPollSender : public InstanceLocator
+class DataPollSender : public InstanceLocator, private NonCopyable
 {
 public:
     enum
@@ -129,6 +130,19 @@ public:
      */
     uint32_t GetExternalPollPeriod(void) const { return mExternalPollPeriod; }
 
+#if OPENTHREAD_CONFIG_MULTI_RADIO
+    /**
+     * This method gets the destination MAC address for a data poll frame.
+     *
+     * @param[out] aDest       Reference to a `MAC::Address` to output the poll destination address (on success).
+     * @param[out] aRadioType  Reference to a `Mac::RadioType` to output the link type (on success).
+     *
+     * @retval OT_ERROR_NONE   @p aDest and @p aRadioType were updated successfully.
+     * @retval OT_ERROR_ABORT  Abort the data poll transmission (not currently attached to any parent).
+     *
+     */
+    otError GetPollDestinationAddress(Mac::Address &aDest, Mac::RadioType &aRadioType) const;
+#else
     /**
      * This method gets the destination MAC address for a data poll frame.
      *
@@ -139,6 +153,7 @@ public:
      *
      */
     otError GetPollDestinationAddress(Mac::Address &aDest) const;
+#endif // #if OPENTHREAD_CONFIG_MULTI_RADIO
 
     /**
      * This method informs the data poll sender of success/error status of a previously requested poll frame
@@ -210,7 +225,7 @@ public:
      * @param[in] aNumFastPolls  If non-zero, number of fast polls to send, if zero, default value is used instead.
      *
      */
-    void SendFastPolls(uint8_t aNumFastPolls);
+    void SendFastPolls(uint8_t aNumFastPolls = 0);
 
     /**
      * This method asks data poll sender to stop fast polls when the expecting response is received.

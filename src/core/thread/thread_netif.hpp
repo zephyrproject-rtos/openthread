@@ -36,9 +36,9 @@
 
 #include "openthread-core-config.h"
 
-#include "coap/coap.hpp"
 #include "coap/coap_secure.hpp"
 #include "mac/mac.hpp"
+#include "thread/tmf.hpp"
 
 #if OPENTHREAD_CONFIG_BORDER_AGENT_ENABLE
 #include "meshcop/border_agent.hpp"
@@ -51,16 +51,17 @@
 #include "backbone_router/bbr_leader.hpp"
 #endif
 #if OPENTHREAD_FTD && OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE
+#include "backbone_router/backbone_tmf.hpp"
 #include "backbone_router/bbr_local.hpp"
 #include "backbone_router/bbr_manager.hpp"
 #endif
 
-#if OPENTHREAD_CONFIG_DUA_ENABLE
-#include "thread/dua_manager.hpp"
+#if OPENTHREAD_CONFIG_MLR_ENABLE || (OPENTHREAD_FTD && OPENTHREAD_CONFIG_TMF_PROXY_MLR_ENABLE)
+#include "thread/mlr_manager.hpp"
 #endif
 
-#if OPENTHREAD_CONFIG_MLR_ENABLE
-#include "thread/mlr_manager.hpp"
+#if OPENTHREAD_CONFIG_DUA_ENABLE || (OPENTHREAD_FTD && OPENTHREAD_CONFIG_TMF_PROXY_DUA_ENABLE)
+#include "thread/dua_manager.hpp"
 #endif
 
 #include "meshcop/dataset_manager.hpp"
@@ -83,6 +84,7 @@
 #include "thread/discover_scanner.hpp"
 #include "thread/energy_scan_server.hpp"
 #include "thread/key_manager.hpp"
+#include "thread/link_metrics.hpp"
 #include "thread/mesh_forwarder.hpp"
 #include "thread/mle.hpp"
 #include "thread/mle_router.hpp"
@@ -90,6 +92,7 @@
 #include "thread/network_data_notifier.hpp"
 #include "thread/network_diagnostic.hpp"
 #include "thread/panid_query_server.hpp"
+#include "thread/radio_selector.hpp"
 #include "thread/time_sync_service.hpp"
 #include "utils/child_supervision.hpp"
 
@@ -180,24 +183,13 @@ public:
      */
     bool IsOnMesh(const Ip6::Address &aAddress) const;
 
-    /**
-     * This method returns whether Thread Management Framework Addressing Rules are met.
-     *
-     * @retval TRUE   if Thread Management Framework Addressing Rules are met.
-     * @retval FALSE  if Thread Management Framework Addressing Rules are not met.
-     *
-     */
-    bool IsTmfMessage(const Ip6::MessageInfo &aMessageInfo);
-
 private:
-    static otError TmfFilter(const Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo, void *aContext);
-
-    Coap::Coap mCoap;
+    Tmf::TmfAgent mTmfAgent;
 #if OPENTHREAD_CONFIG_DHCP6_CLIENT_ENABLE
-    Dhcp6::Dhcp6Client mDhcp6Client;
+    Dhcp6::Client mDhcp6Client;
 #endif // OPENTHREAD_CONFIG_DHCP6_CLIENT_ENABLE
 #if OPENTHREAD_CONFIG_DHCP6_SERVER_ENABLE
-    Dhcp6::Dhcp6Server mDhcp6Server;
+    Dhcp6::Server mDhcp6Server;
 #endif // OPENTHREAD_CONFIG_DHCP6_SERVER_ENABLE
 #if OPENTHREAD_CONFIG_IP6_SLAAC_ENABLE
     Utils::Slaac mSlaac;
@@ -217,6 +209,9 @@ private:
     MeshForwarder           mMeshForwarder;
     Mle::MleRouter          mMleRouter;
     Mle::DiscoverScanner    mDiscoverScanner;
+#if OPENTHREAD_CONFIG_MULTI_RADIO
+    RadioSelector mRadioSelector;
+#endif
 #if OPENTHREAD_CONFIG_BORDER_ROUTER_ENABLE || OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
     NetworkData::Local mNetworkDataLocal;
 #endif // OPENTHREAD_CONFIG_BORDER_ROUTER_ENABLE || OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
@@ -261,11 +256,11 @@ private:
     BackboneRouter::Local   mBackboneRouterLocal;
     BackboneRouter::Manager mBackboneRouterManager;
 #endif
-#if OPENTHREAD_CONFIG_DUA_ENABLE
-    DuaManager mDuaManager;
-#endif
-#if OPENTHREAD_CONFIG_MLR_ENABLE
+#if OPENTHREAD_CONFIG_MLR_ENABLE || (OPENTHREAD_FTD && OPENTHREAD_CONFIG_TMF_PROXY_MLR_ENABLE)
     MlrManager mMlrManager;
+#endif
+#if OPENTHREAD_CONFIG_DUA_ENABLE || (OPENTHREAD_FTD && OPENTHREAD_CONFIG_TMF_PROXY_DUA_ENABLE)
+    DuaManager mDuaManager;
 #endif
     Utils::ChildSupervisor     mChildSupervisor;
     Utils::SupervisionListener mSupervisionListener;
@@ -275,6 +270,9 @@ private:
 
 #if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
     TimeSync mTimeSync;
+#endif
+#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_ENABLE
+    LinkMetrics mLinkMetrics;
 #endif
 };
 

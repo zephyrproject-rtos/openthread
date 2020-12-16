@@ -45,17 +45,14 @@ def verify_neighbor_table(node, neighbors):
     """
     This function verifies that the neighbor table of a given `node` contains the node in the `neighbors` list.
     """
-    neighbor_table = wpan.parse_neighbor_table_result(
-        node.get(wpan.WPAN_THREAD_NEIGHBOR_TABLE))
+    neighbor_table = wpan.parse_neighbor_table_result(node.get(wpan.WPAN_THREAD_NEIGHBOR_TABLE))
     for neighbor in neighbors:
         ext_addr = neighbor.get(wpan.WPAN_EXT_ADDRESS)[1:-1]
         for entry in neighbor_table:
             if entry.ext_address == ext_addr:
                 break
         else:
-            raise wpan.VerifyError(
-                'Failed to find a neighbor entry for extended address {} in table'
-                .format(ext_addr))
+            raise wpan.VerifyError('Failed to find a neighbor entry for extended address {} in table'.format(ext_addr))
 
 
 # -----------------------------------------------------------------------------------------------------------------------
@@ -80,12 +77,12 @@ wpan.Node.init_all_nodes()
 
 r1.form("RtrLderRst")
 
-r1.whitelist_node(r2)
-r2.whitelist_node(r1)
+r1.allowlist_node(r2)
+r2.allowlist_node(r1)
 r2.join_node(r1, wpan.JOIN_TYPE_ROUTER)
 
-c2.whitelist_node(r2)
-r2.whitelist_node(c2)
+c2.allowlist_node(r2)
+r2.allowlist_node(c2)
 c2.join_node(r2, wpan.JOIN_TYPE_END_DEVICE)
 c2.set(wpan.WPAN_POLL_INTERVAL, '8000')
 

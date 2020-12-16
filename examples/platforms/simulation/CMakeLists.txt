@@ -38,6 +38,11 @@ if(OT_SIMULATION_VIRTUAL_TIME_UART)
     target_compile_definitions(ot-config INTERFACE "OPENTHREAD_SIMULATION_VIRTUAL_TIME_UART=1")
 endif()
 
+option(OT_SIMULATION_MAX_NETWORK_SIZE "set maximum network size (default: 33)")
+if(OT_SIMULATION_MAX_NETWORK_SIZE)
+    target_compile_definitions(ot-config INTERFACE "OPENTHREAD_SIMULATION_MAX_NETWORK_SIZE=${OT_SIMULATION_MAX_NETWORK_SIZE}")
+endif()
+
 if(NOT OT_CONFIG)
     set(OT_CONFIG "openthread-core-simulation-config.h")
     set(OT_CONFIG ${OT_CONFIG} PARENT_SCOPE)
@@ -64,9 +69,9 @@ add_library(openthread-simulation
     radio.c
     spi-stubs.c
     system.c
+    trel.c
     uart.c
     virtual_time/alarm-sim.c
-    virtual_time/otns.c
     virtual_time/platform-sim.c
     $<TARGET_OBJECTS:openthread-platform-utils>
 )

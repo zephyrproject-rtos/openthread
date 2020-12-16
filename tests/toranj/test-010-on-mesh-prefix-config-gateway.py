@@ -74,8 +74,7 @@ def verify_prefix(
     This function verifies that the `prefix` is present on all the nodes in the `node_list`.
     """
     for node in node_list:
-        prefixes = wpan.parse_on_mesh_prefix_result(
-            node.get(wpan.WPAN_THREAD_ON_MESH_PREFIXES))
+        prefixes = wpan.parse_on_mesh_prefix_result(node.get(wpan.WPAN_THREAD_ON_MESH_PREFIXES))
         for p in prefixes:
             if p.prefix == prefix:
                 verify(int(p.prefix_len) == prefix_len)
@@ -89,8 +88,7 @@ def verify_prefix(
                 verify(p.priority == priority)
                 break
         else:
-            raise wpan.VerifyError('Did not find prefix {} on node {}'.format(
-                prefix, node))
+            raise wpan.VerifyError('Did not find prefix {} on node {}'.format(prefix, node))
 
 
 # -----------------------------------------------------------------------------------------------------------------------
@@ -114,11 +112,11 @@ wpan.Node.init_all_nodes()
 # -----------------------------------------------------------------------------------------------------------------------
 # Build network topology
 
-r1.whitelist_node(r2)
-r2.whitelist_node(r1)
+r1.allowlist_node(r2)
+r2.allowlist_node(r1)
 
-r1.whitelist_node(sc1)
-r2.whitelist_node(sc2)
+r1.allowlist_node(sc1)
+r2.allowlist_node(sc2)
 
 r1.form('config-gtway')
 r2.join_node(r1, node_type=wpan.JOIN_TYPE_ROUTER)
@@ -251,7 +249,7 @@ wpan.verify_within(check_prefix4_removed_from_r1, WAIT_TIME)
 
 r1.add_prefix(
     prefix4,
-    48,
+    64,
     priority="-1",
     stable=True,
     on_mesh=False,
@@ -264,7 +262,7 @@ r1.add_prefix(
 verify_prefix(
     [r1],
     prefix4,
-    48,
+    64,
     priority="low",
     stable=True,
     on_mesh=False,

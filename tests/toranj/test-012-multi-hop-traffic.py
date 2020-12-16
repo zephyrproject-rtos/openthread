@@ -88,25 +88,25 @@ wpan.Node.init_all_nodes()
 #      /  \      |       |       /  \
 #    fed1 sed1  sed2    sed3   sed4 fed4
 
-# Whitelist routers with their corresponding sleepy children
+# Allowlist routers with their corresponding sleepy children
 
 for index in range(0, NUM_ROUTERS):
-    routers[index].whitelist_node(sed_children[index])
-    sed_children[index].whitelist_node(routers[index])
+    routers[index].allowlist_node(sed_children[index])
+    sed_children[index].allowlist_node(routers[index])
 
-# Whitelist a FED child for the first and last routers
+# Allowlist a FED child for the first and last routers
 
-routers[0].whitelist_node(fed_children[0])
-fed_children[0].whitelist_node(routers[0])
+routers[0].allowlist_node(fed_children[0])
+fed_children[0].allowlist_node(routers[0])
 
-routers[-1].whitelist_node(fed_children[-1])
-fed_children[-1].whitelist_node(routers[-1])
+routers[-1].allowlist_node(fed_children[-1])
+fed_children[-1].allowlist_node(routers[-1])
 
 # While list routers at [index-1] and [index]
 
 for index in range(1, NUM_ROUTERS):
-    routers[index - 1].whitelist_node(routers[index])
-    routers[index].whitelist_node(routers[index - 1])
+    routers[index - 1].allowlist_node(routers[index])
+    routers[index].allowlist_node(routers[index - 1])
 
 routers[0].form("multi-hop")
 sed_children[0].join_node(routers[0], wpan.JOIN_TYPE_SLEEPY_END_DEVICE)
@@ -114,8 +114,7 @@ sed_children[0].set(wpan.WPAN_POLL_INTERVAL, '500')
 
 for index in range(1, NUM_ROUTERS):
     routers[index].join_node(routers[index - 1], wpan.JOIN_TYPE_ROUTER)
-    sed_children[index].join_node(routers[index],
-                                  wpan.JOIN_TYPE_SLEEPY_END_DEVICE)
+    sed_children[index].join_node(routers[index], wpan.JOIN_TYPE_SLEEPY_END_DEVICE)
     sed_children[index].set(wpan.WPAN_POLL_INTERVAL, '500')
 
 fed_children[0].join_node(routers[0], wpan.JOIN_TYPE_END_DEVICE)
@@ -137,12 +136,10 @@ r1_rloc = int(routers[0].get(wpan.WPAN_THREAD_RLOC16), 16)
 
 
 def check_r1_router_table():
-    router_table = wpan.parse_router_table_result(routers[0].get(
-        wpan.WPAN_THREAD_ROUTER_TABLE))
+    router_table = wpan.parse_router_table_result(routers[0].get(wpan.WPAN_THREAD_ROUTER_TABLE))
     verify(len(router_table) == NUM_ROUTERS)
     for entry in router_table:
-        verify(entry.rloc16 == r1_rloc or entry.is_link_established() or
-               entry.next_hop != INVALID_ROUTER_ID)
+        verify(entry.rloc16 == r1_rloc or entry.is_link_established() or entry.next_hop != INVALID_ROUTER_ID)
 
 
 wpan.verify_within(check_r1_router_table, ROUTER_TABLE_WAIT_TIME)

@@ -41,6 +41,7 @@
 #include "common/tlvs.hpp"
 #include "meshcop/timestamp.hpp"
 #include "net/ip6_address.hpp"
+#include "thread/link_metrics_tlvs.hpp"
 #include "thread/mle_types.hpp"
 
 namespace ot {
@@ -74,33 +75,39 @@ public:
      */
     enum Type
     {
-        kSourceAddress       = 0,  ///< Source Address TLV
-        kMode                = 1,  ///< Mode TLV
-        kTimeout             = 2,  ///< Timeout TLV
-        kChallenge           = 3,  ///< Challenge TLV
-        kResponse            = 4,  ///< Response TLV
-        kLinkFrameCounter    = 5,  ///< Link-Layer Frame Counter TLV
-        kLinkQuality         = 6,  ///< Link Quality TLV
-        kNetworkParameter    = 7,  ///< Network Parameter TLV
-        kMleFrameCounter     = 8,  ///< MLE Frame Counter TLV
-        kRoute               = 9,  ///< Route64 TLV
-        kAddress16           = 10, ///< Address16 TLV
-        kLeaderData          = 11, ///< Leader Data TLV
-        kNetworkData         = 12, ///< Network Data TLV
-        kTlvRequest          = 13, ///< TLV Request TLV
-        kScanMask            = 14, ///< Scan Mask TLV
-        kConnectivity        = 15, ///< Connectivity TLV
-        kLinkMargin          = 16, ///< Link Margin TLV
-        kStatus              = 17, ///< Status TLV
-        kVersion             = 18, ///< Version TLV
-        kAddressRegistration = 19, ///< Address Registration TLV
-        kChannel             = 20, ///< Channel TLV
-        kPanId               = 21, ///< PAN ID TLV
-        kActiveTimestamp     = 22, ///< Active Timestamp TLV
-        kPendingTimestamp    = 23, ///< Pending Timestamp TLV
-        kActiveDataset       = 24, ///< Active Operational Dataset TLV
-        kPendingDataset      = 25, ///< Pending Operational Dataset TLV
-        kDiscovery           = 26, ///< Thread Discovery TLV
+        kSourceAddress         = 0,  ///< Source Address TLV
+        kMode                  = 1,  ///< Mode TLV
+        kTimeout               = 2,  ///< Timeout TLV
+        kChallenge             = 3,  ///< Challenge TLV
+        kResponse              = 4,  ///< Response TLV
+        kLinkFrameCounter      = 5,  ///< Link-Layer Frame Counter TLV
+        kLinkQuality           = 6,  ///< Link Quality TLV
+        kNetworkParameter      = 7,  ///< Network Parameter TLV
+        kMleFrameCounter       = 8,  ///< MLE Frame Counter TLV
+        kRoute                 = 9,  ///< Route64 TLV
+        kAddress16             = 10, ///< Address16 TLV
+        kLeaderData            = 11, ///< Leader Data TLV
+        kNetworkData           = 12, ///< Network Data TLV
+        kTlvRequest            = 13, ///< TLV Request TLV
+        kScanMask              = 14, ///< Scan Mask TLV
+        kConnectivity          = 15, ///< Connectivity TLV
+        kLinkMargin            = 16, ///< Link Margin TLV
+        kStatus                = 17, ///< Status TLV
+        kVersion               = 18, ///< Version TLV
+        kAddressRegistration   = 19, ///< Address Registration TLV
+        kChannel               = 20, ///< Channel TLV
+        kPanId                 = 21, ///< PAN ID TLV
+        kActiveTimestamp       = 22, ///< Active Timestamp TLV
+        kPendingTimestamp      = 23, ///< Pending Timestamp TLV
+        kActiveDataset         = 24, ///< Active Operational Dataset TLV
+        kPendingDataset        = 25, ///< Pending Operational Dataset TLV
+        kDiscovery             = 26, ///< Thread Discovery TLV
+        kCslChannel            = 80, ///< CSL Channel TLV
+        kCslTimeout            = 85, ///< CSL Timeout TLV
+        kLinkMetricsQuery      = 87, ///< Link Metrics Query TLV
+        kLinkMetricsManagement = 88, ///< Link Metrics Management TLV
+        kLinkMetricsReport     = 89, ///< Link Metrics Report TLV
+        kLinkProbe             = 90, ///< Link Probe TLV
 
         /**
          * Applicable/Required only when time synchronization service
@@ -132,6 +139,96 @@ public:
 
 } OT_TOOL_PACKED_END;
 
+/**
+ * This class defines Source Address TLV constants and types.
+ *
+ */
+typedef UintTlvInfo<Tlv::kSourceAddress, uint16_t> SourceAddressTlv;
+
+/**
+ * This class defines Mode TLV constants and types.
+ *
+ */
+typedef UintTlvInfo<Tlv::kMode, uint8_t> ModeTlv;
+
+/**
+ * This class defines Timeout TLV constants and types.
+ *
+ */
+typedef UintTlvInfo<Tlv::kTimeout, uint32_t> TimeoutTlv;
+
+/**
+ * This class defines Challenge TLV constants and types.
+ *
+ */
+typedef TlvInfo<Tlv::kChallenge> ChallengeTlv;
+
+/**
+ * This class defines Response TLV constants and types.
+ *
+ */
+typedef TlvInfo<Tlv::kResponse> ResponseTlv;
+
+/**
+ * This class defines Link Frame Counter TLV constants and types.
+ *
+ */
+typedef UintTlvInfo<Tlv::kLinkFrameCounter, uint32_t> LinkFrameCounterTlv;
+
+/**
+ * This class defines MLE Frame Counter TLV constants and types.
+ *
+ */
+typedef UintTlvInfo<Tlv::kMleFrameCounter, uint32_t> MleFrameCounterTlv;
+
+/**
+ * This class defines Address16 TLV constants and types.
+ *
+ */
+typedef UintTlvInfo<Tlv::kAddress16, uint16_t> Address16Tlv;
+
+/**
+ * This class defines Network Data TLV constants and types.
+ *
+ */
+typedef TlvInfo<Tlv::kNetworkData> NetworkDataTlv;
+
+/**
+ * This class defines TLV Request TLV constants and types.
+ *
+ */
+typedef TlvInfo<Tlv::kTlvRequest> TlvRequestTlv;
+
+/**
+ * This class defines Link Margin TLV constants and types.
+ *
+ */
+typedef UintTlvInfo<Tlv::kLinkMargin, uint8_t> LinkMarginTlv;
+
+/**
+ * This class defines Version TLV constants and types.
+ *
+ */
+typedef UintTlvInfo<Tlv::kVersion, uint16_t> VersionTlv;
+
+/**
+ * This class defines PAN ID TLV constants and types.
+ *
+ */
+typedef UintTlvInfo<Tlv::kPanId, uint16_t> PanIdTlv;
+
+/**
+ * This class defines CSL Timeout TLV constants and types.
+ *
+ */
+typedef UintTlvInfo<Tlv::kCslTimeout, uint32_t> CslTimeoutTlv;
+
+/**
+ * This class defines XTAL Accuracy TLV constants and types.
+ *
+ */
+typedef UintTlvInfo<Tlv::kXtalAccuracy, uint16_t> XtalAccuracyTlv;
+
 #if !OPENTHREAD_CONFIG_MLE_LONG_ROUTES_ENABLE
 
 /**
@@ -139,7 +236,7 @@ public:
  *
  */
 OT_TOOL_PACKED_BEGIN
-class RouteTlv : public Tlv
+class RouteTlv : public Tlv, public TlvInfo<Tlv::kRoute>
 {
 public:
     /**
@@ -316,7 +413,7 @@ private:
  *
  */
 OT_TOOL_PACKED_BEGIN
-class RouteTlv : public Tlv
+class RouteTlv : public Tlv, public TlvInfo<Tlv::kRoute>
 {
 public:
     /**
@@ -539,7 +636,7 @@ private:
  *
  */
 OT_TOOL_PACKED_BEGIN
-class LeaderDataTlv : public Tlv
+class LeaderDataTlv : public Tlv, public TlvInfo<Tlv::kLeaderData>
 {
 public:
     /**
@@ -603,7 +700,7 @@ private:
  * This class implements Scan Mask TLV generation and parsing.
  *
  */
-class ScanMaskTlv
+class ScanMaskTlv : public UintTlvInfo<Tlv::kScanMask, uint8_t>
 {
 public:
     enum
@@ -638,7 +735,7 @@ public:
  *
  */
 OT_TOOL_PACKED_BEGIN
-class ConnectivityTlv : public Tlv
+class ConnectivityTlv : public Tlv, public TlvInfo<Tlv::kConnectivity>
 {
 public:
     /**
@@ -863,12 +960,12 @@ private:
  * This class specifies Status TLV status values.
  *
  */
-struct StatusTlv
+struct StatusTlv : public UintTlvInfo<Tlv::kStatus, uint8_t>
 {
     /**
      * Status values.
      */
-    enum Status
+    enum Status : uint8_t
     {
         kError = 1, ///< Error.
     };
@@ -974,7 +1071,7 @@ private:
  *
  */
 OT_TOOL_PACKED_BEGIN
-class ChannelTlv : public Tlv
+class ChannelTlv : public Tlv, public TlvInfo<Tlv::kChannel>
 {
 public:
     /**
@@ -1035,39 +1132,17 @@ private:
 
 #if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
 /**
- * This class implements Time Request TLV generation and parsing.
+ * This class defines Time Request TLV constants and types.
  *
  */
-OT_TOOL_PACKED_BEGIN
-class TimeRequestTlv : public Tlv
-{
-public:
-    /**
-     * This method initializes the TLV.
-     *
-     */
-    void Init(void)
-    {
-        SetType(kTimeRequest);
-        SetLength(sizeof(*this) - sizeof(Tlv));
-    }
-
-    /**
-     * This method indicates whether or not the TLV appears to be well-formed.
-     *
-     * @retval TRUE   If the TLV appears to be well-formed.
-     * @retval FALSE  If the TLV does not appear to be well-formed.
-     *
-     */
-    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(Tlv); }
-} OT_TOOL_PACKED_END;
+typedef TlvInfo<Tlv::kTimeRequest> TimeRequestTlv;
 
 /**
  * This class implements Time Parameter TLV generation and parsing.
  *
  */
 OT_TOOL_PACKED_BEGIN
-class TimeParameterTlv : public Tlv
+class TimeParameterTlv : public Tlv, public TlvInfo<Tlv::kTimeParameter>
 {
 public:
     /**
@@ -1133,7 +1208,9 @@ private:
  *
  */
 OT_TOOL_PACKED_BEGIN
-class ActiveTimestampTlv : public Tlv, public MeshCoP::Timestamp
+class ActiveTimestampTlv : public Tlv,
+                           public MeshCoP::Timestamp,
+                           public SimpleTlvInfo<Tlv::kActiveTimestamp, MeshCoP::Timestamp>
 {
 public:
     /**
@@ -1142,7 +1219,7 @@ public:
      */
     void Init(void)
     {
-        SetType(Mle::Tlv::kActiveTimestamp);
+        SetType(Tlv::kActiveTimestamp);
         SetLength(sizeof(*this) - sizeof(Tlv));
         Timestamp::Init();
     }
@@ -1162,7 +1239,9 @@ public:
  *
  */
 OT_TOOL_PACKED_BEGIN
-class PendingTimestampTlv : public Tlv, public MeshCoP::Timestamp
+class PendingTimestampTlv : public Tlv,
+                            public MeshCoP::Timestamp,
+                            public SimpleTlvInfo<Tlv::kPendingTimestamp, MeshCoP::Timestamp>
 {
 public:
     /**
@@ -1171,7 +1250,7 @@ public:
      */
     void Init(void)
     {
-        SetType(Mle::Tlv::kPendingTimestamp);
+        SetType(Tlv::kPendingTimestamp);
         SetLength(sizeof(*this) - sizeof(Tlv));
         Timestamp::Init();
     }
@@ -1185,6 +1264,73 @@ public:
      */
     bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(Tlv); }
 } OT_TOOL_PACKED_END;
+
+#if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE || (!OPENTHREAD_MTD && OPENTHREAD_CONFIG_MAC_CSL_TRANSMITTER_ENABLE)
+/**
+ * This class implements CSL Channel TLV generation and parsing.
+ *
+ */
+OT_TOOL_PACKED_BEGIN
+class CslChannelTlv : public Tlv, public TlvInfo<Tlv::kCslChannel>
+{
+public:
+    /**
+     * This method initializes the TLV.
+     *
+     */
+    void Init(void)
+    {
+        SetType(kCslChannel);
+        SetLength(sizeof(*this) - sizeof(Tlv));
+    }
+
+    /**
+     * This method indicates whether or not the TLV appears to be well-formed.
+     *
+     * @retval TRUE   If the TLV appears to be well-formed.
+     * @retval FALSE  If the TLV does not appear to be well-formed.
+     *
+     */
+    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(Tlv); }
+
+    /**
+     * This method returns the Channel Page value.
+     *
+     * @returns The Channel Page value.
+     *
+     */
+    uint8_t GetChannelPage(void) const { return mChannelPage; }
+
+    /**
+     * This method sets the Channel Page value.
+     *
+     * @param[in]  aChannelPage  The Channel Page value.
+     *
+     */
+    void SetChannelPage(uint8_t aChannelPage) { mChannelPage = aChannelPage; }
+
+    /**
+     * This method returns the Channel value.
+     *
+     * @returns The Channel value.
+     *
+     */
+    uint16_t GetChannel(void) const { return HostSwap16(mChannel); }
+
+    /**
+     * This method sets the Channel value.
+     *
+     * @param[in]  aChannel  The Channel value.
+     *
+     */
+    void SetChannel(uint16_t aChannel) { mChannel = HostSwap16(aChannel); }
+
+private:
+    uint8_t  mChannelPage;
+    uint16_t mChannel;
+} OT_TOOL_PACKED_END;
+
+#endif // OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE || (!OPENTHREAD_MTD && OPENTHREAD_CONFIG_MAC_CSL_TRANSMITTER_ENABLE)
 
 /**
  * @}

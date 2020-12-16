@@ -39,6 +39,7 @@
 #include "common/debug.hpp"
 #include "common/locator.hpp"
 #include "common/message.hpp"
+#include "common/non_copyable.hpp"
 #include "mac/mac_types.hpp"
 #include "net/ip6.hpp"
 #include "net/ip6_address.hpp"
@@ -71,10 +72,9 @@ using ot::Encoding::BigEndian::HostSwap16;
  */
 struct Context
 {
-    const uint8_t *mPrefix;       ///< A pointer to the prefix.
-    uint8_t        mPrefixLength; ///< The prefix length.
-    uint8_t        mContextId;    ///< The Context ID.
-    bool           mCompressFlag; ///< The Context compression flag.
+    Ip6::Prefix mPrefix;       ///< The Prefix
+    uint8_t     mContextId;    ///< The Context ID.
+    bool        mCompressFlag; ///< The Context compression flag.
 };
 
 /**
@@ -201,7 +201,7 @@ public:
 
         VerifyOrExit(CanWrite(aLength), error = OT_ERROR_NO_BUFS);
 
-        rval = aMessage.Read(aMessage.GetOffset(), aLength, mWritePointer);
+        rval = aMessage.ReadBytes(aMessage.GetOffset(), mWritePointer, aLength);
         OT_ASSERT(rval == aLength);
 
         mWritePointer += aLength;
@@ -219,7 +219,7 @@ private:
  * This class implements LOWPAN_IPHC header compression.
  *
  */
-class Lowpan : public InstanceLocator
+class Lowpan : public InstanceLocator, private NonCopyable
 {
 public:
     /**

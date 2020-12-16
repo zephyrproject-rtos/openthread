@@ -51,12 +51,6 @@ static ot::Spinel::RadioSpinel<ot::Posix::SpiInterface, RadioProcessContext> sRa
 #error "OPENTHREAD_POSIX_CONFIG_RCP_BUS only allows OT_POSIX_RCP_BUS_UART and OT_POSIX_RCP_BUS_SPI!"
 #endif
 
-#if OPENTHREAD_POSIX_CONFIG_MAX_POWER_TABLE_ENABLE
-#include "posix/platform/max_power_table.hpp"
-
-static ot::Posix::MaxPowerTable sMaxPowerTable;
-#endif
-
 void otPlatRadioGetIeeeEui64(otInstance *aInstance, uint8_t *aIeeeEui64)
 {
     OT_UNUSED_VARIABLE(aInstance);
@@ -99,35 +93,68 @@ void platformRadioInit(otUrl *aRadioUrl)
     ot::Posix::RadioUrl &radioUrl       = *static_cast<ot::Posix::RadioUrl *>(aRadioUrl);
     bool                 resetRadio     = (radioUrl.GetValue("no-reset") == nullptr);
     bool                 restoreDataset = (radioUrl.GetValue("ncp-dataset") != nullptr);
+    const char *         parameterValue;
 #if OPENTHREAD_POSIX_CONFIG_MAX_POWER_TABLE_ENABLE
-    uint8_t     channel       = ot::Radio::kChannelMin;
-    int8_t      power         = ot::Posix::MaxPowerTable::kPowerDefault;
-    const char *maxPowerTable = radioUrl.GetValue("max-power-table");
+    const char *maxPowerTable;
+#endif
 
+    SuccessOrDie(sRadioSpinel.GetSpinelInterface().Init(radioUrl));
+    sRadioSpinel.Init(resetRadio, restoreDataset);
+
+    parameterValue = radioUrl.GetValue("fem-lnagain");
+    if (parameterValue != nullptr)
+    {
+        long femLnaGain = strtol(parameterValue, nullptr, 0);
+
+        VerifyOrDie(INT8_MIN <= femLnaGain && femLnaGain <= INT8_MAX, OT_EXIT_INVALID_ARGUMENTS);
+        SuccessOrDie(sRadioSpinel.SetFemLnaGain(static_cast<int8_t>(femLnaGain)));
+    }
+
+    parameterValue = radioUrl.GetValue("cca-threshold");
+    if (parameterValue != nullptr)
+    {
+        long ccaThreshold = strtol(parameterValue, nullptr, 0);
+
+        VerifyOrDie(INT8_MIN <= ccaThreshold && ccaThreshold <= INT8_MAX, OT_EXIT_INVALID_ARGUMENTS);
+        SuccessOrDie(sRadioSpinel.SetCcaEnergyDetectThreshold(static_cast<int8_t>(ccaThreshold)));
+    }
+
+#if OPENTHREAD_POSIX_CONFIG_MAX_POWER_TABLE_ENABLE
+    maxPowerTable = radioUrl.GetValue("max-power-table");
     if (maxPowerTable != nullptr)
     {
-        const char *str = nullptr;
+        constexpr int8_t kPowerDefault = 30; // Default power 1 watt (30 dBm).
+        const char *     str           = nullptr;
+        uint8_t          channel       = ot::Radio::kChannelMin;
+        int8_t           power         = kPowerDefault;
+        otError          error;
 
         for (str = strtok(const_cast<char *>(maxPowerTable), ","); str != nullptr && channel <= ot::Radio::kChannelMax;
              str = strtok(nullptr, ","))
         {
             power = static_cast<int8_t>(strtol(str, nullptr, 0));
-            sMaxPowerTable.SetTransmitPower(channel++, power);
+            error = sRadioSpinel.SetChannelMaxTransmitPower(channel, power);
+            if (error != OT_ERROR_NONE && error != OT_ERROR_NOT_FOUND)
+            {
+                DieNow(OT_ERROR_FAILED);
+            }
+            ++channel;
+        }
+
+        // Use the last power if omitted.
+        while (channel <= ot::Radio::kChannelMax)
+        {
+            error = sRadioSpinel.SetChannelMaxTransmitPower(channel, power);
+            if (error != OT_ERROR_NONE && error != OT_ERROR_NOT_FOUND)
+            {
+                DieNow(OT_ERROR_FAILED);
+            }
+            ++channel;
         }
 
         VerifyOrDie(str == nullptr, OT_EXIT_INVALID_ARGUMENTS);
     }
-
-    // Use the last power if omitted.
-    while (channel <= ot::Radio::kChannelMax)
-    {
-        sMaxPowerTable.SetTransmitPower(channel, power);
-        ++channel;
-    }
-#endif
-
-    SuccessOrDie(sRadioSpinel.GetSpinelInterface().Init(radioUrl));
-    sRadioSpinel.Init(resetRadio, restoreDataset);
+#endif // OPENTHREAD_POSIX_CONFIG_MAX_POWER_TABLE_ENABLE
 }
 
 void platformRadioDeinit(void)
@@ -164,12 +191,6 @@ otError otPlatRadioReceive(otInstance *aInstance, uint8_t aChannel)
 
     otError error;
 
-#if OPENTHREAD_POSIX_CONFIG_MAX_POWER_TABLE_ENABLE
-    if (sRadioSpinel.GetChannel() != aChannel)
-    {
-        SuccessOrExit(error = otPlatRadioSetTransmitPower(aInstance, sMaxPowerTable.GetTransmitPower(aChannel)));
-    }
-#endif
     SuccessOrExit(error = sRadioSpinel.Receive(aChannel));
 
 exit:
@@ -356,6 +377,19 @@ otError otPlatRadioSetCcaEnergyDetectThreshold(otInstance *aInstance, int8_t aTh
     return sRadioSpinel.SetCcaEnergyDetectThreshold(aThreshold);
 }
 
+otError otPlatRadioGetFemLnaGain(otInstance *aInstance, int8_t *aGain)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    assert(aGain != nullptr);
+    return sRadioSpinel.GetFemLnaGain(*aGain);
+}
+
+otError otPlatRadioSetFemLnaGain(otInstance *aInstance, int8_t aGain)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    return sRadioSpinel.SetFemLnaGain(aGain);
+}
+
 int8_t otPlatRadioGetReceiveSensitivity(otInstance *aInstance)
 {
     OT_UNUSED_VARIABLE(aInstance);
@@ -403,7 +437,7 @@ otError otPlatDiagProcess(otInstance *aInstance,
     char *cur                                              = cmd;
     char *end                                              = cmd + sizeof(cmd);
 
-    for (uint8_t index = 0; index < aArgsLength; index++)
+    for (uint8_t index = 0; (index < aArgsLength) && (cur < end); index++)
     {
         cur += snprintf(cur, static_cast<size_t>(end - cur), "%s ", aArgs[index]);
     }
@@ -463,21 +497,13 @@ void otPlatDiagAlarmCallback(otInstance *aInstance)
 uint32_t otPlatRadioGetSupportedChannelMask(otInstance *aInstance)
 {
     OT_UNUSED_VARIABLE(aInstance);
-    return
-#if OPENTHREAD_POSIX_CONFIG_MAX_POWER_TABLE_ENABLE
-        sMaxPowerTable.GetAllowedChannelMask() &
-#endif
-        sRadioSpinel.GetRadioChannelMask(false);
+    return sRadioSpinel.GetRadioChannelMask(false);
 }
 
 uint32_t otPlatRadioGetPreferredChannelMask(otInstance *aInstance)
 {
     OT_UNUSED_VARIABLE(aInstance);
-    return
-#if OPENTHREAD_POSIX_CONFIG_MAX_POWER_TABLE_ENABLE
-        sMaxPowerTable.GetAllowedChannelMask() &
-#endif
-        sRadioSpinel.GetRadioChannelMask(true);
+    return sRadioSpinel.GetRadioChannelMask(true);
 }
 
 otRadioState otPlatRadioGetState(otInstance *aInstance)
@@ -507,4 +533,16 @@ uint64_t otPlatRadioGetNow(otInstance *aInstance)
 {
     OT_UNUSED_VARIABLE(aInstance);
     return sRadioSpinel.GetNow();
+}
+
+uint32_t otPlatRadioGetBusSpeed(otInstance *aInstance)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    return sRadioSpinel.GetBusSpeed();
+}
+
+otError otPlatRadioSetChannelMaxTransmitPower(otInstance *aInstance, uint8_t aChannel, int8_t aMaxPower)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    return sRadioSpinel.SetChannelMaxTransmitPower(aChannel, aMaxPower);
 }

@@ -40,6 +40,7 @@
 #include "coap/coap_message.hpp"
 #include "common/locator.hpp"
 #include "common/message.hpp"
+#include "common/non_copyable.hpp"
 #include "common/notifier.hpp"
 #include "common/timer.hpp"
 #include "mac/mac_types.hpp"
@@ -51,8 +52,10 @@ namespace ot {
 
 namespace MeshCoP {
 
-class JoinerRouter : public InstanceLocator, public Notifier::Receiver
+class JoinerRouter : public InstanceLocator, private NonCopyable
 {
+    friend class ot::Notifier;
+
 public:
     /**
      * This constructor initializes the Joiner Router object.
@@ -86,7 +89,7 @@ private:
 
     struct JoinerEntrustMetadata
     {
-        otError AppendTo(Message &aMessage) { return aMessage.Append(this, sizeof(*this)); }
+        otError AppendTo(Message &aMessage) const { return aMessage.Append(*this); }
         void    ReadFrom(const Message &aMessage);
 
         Ip6::MessageInfo mMessageInfo; // Message info of the message to send.
@@ -94,8 +97,7 @@ private:
         Kek              mKek;         // KEK used by MAC layer to encode this message.
     };
 
-    static void HandleNotifierEvents(Notifier::Receiver &aReceiver, Events aEvents);
-    void        HandleNotifierEvents(Events aEvents);
+    void HandleNotifierEvents(Events aEvents);
 
     static void HandleUdpReceive(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
     void        HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo);

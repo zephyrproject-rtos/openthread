@@ -79,16 +79,12 @@ void Otns::EmitStatus(const char *aFmt, ...)
     va_start(ap, aFmt);
 
     n = vsnprintf(statusStr, sizeof(statusStr), aFmt, ap);
+    OT_UNUSED_VARIABLE(n);
     OT_ASSERT(n >= 0);
 
     va_end(ap);
 
     otPlatOtnsStatus(statusStr);
-}
-
-void Otns::HandleNotifierEvents(Notifier::Receiver &aReceiver, Events aEvents)
-{
-    static_cast<Otns &>(aReceiver).HandleNotifierEvents(aEvents);
 }
 
 void Otns::HandleNotifierEvents(Events aEvents)
@@ -111,7 +107,7 @@ void Otns::HandleNotifierEvents(Events aEvents)
 #endif
 }
 
-void Otns::EmitNeighborChange(otNeighborTableEvent aEvent, Neighbor &aNeighbor)
+void Otns::EmitNeighborChange(NeighborTable::Event aEvent, const Neighbor &aNeighbor)
 {
     switch (aEvent)
     {
@@ -155,8 +151,57 @@ void Otns::EmitTransmit(const Mac::TxFrame &aFrame)
 
 void Otns::EmitDeviceMode(Mle::DeviceMode aMode)
 {
-    EmitStatus("mode=%s%s%s%s", aMode.IsRxOnWhenIdle() ? "r" : "", aMode.IsSecureDataRequest() ? "s" : "",
-               aMode.IsFullThreadDevice() ? "d" : "", aMode.IsFullNetworkData() ? "n" : "");
+    EmitStatus("mode=%s%s%s", aMode.IsRxOnWhenIdle() ? "r" : "", aMode.IsFullThreadDevice() ? "d" : "",
+               aMode.IsFullNetworkData() ? "n" : "");
+}
+
+void Otns::EmitCoapSend(const Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
+{
+    char    uriPath[Coap::Message::kMaxReceivedUriPath + 1];
+    otError error;
+
+    SuccessOrExit(error = aMessage.ReadUriPathOptions(uriPath));
+
+    EmitStatus("coap=send,%d,%d,%d,%s,%s,%d", aMessage.GetMessageId(), aMessage.GetType(), aMessage.GetCode(), uriPath,
+               aMessageInfo.GetPeerAddr().ToString().AsCString(), aMessageInfo.GetPeerPort());
+exit:
+    if (error != OT_ERROR_NONE)
+    {
+        otLogWarnCore("Otns::EmitCoapSend failed: %s", otThreadErrorToString(error));
+    }
+}
+
+void Otns::EmitCoapReceive(const Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
+{
+    char    uriPath[Coap::Message::kMaxReceivedUriPath + 1];
+    otError error = OT_ERROR_NONE;
+
+    SuccessOrExit(error = aMessage.ReadUriPathOptions(uriPath));
+
+    EmitStatus("coap=recv,%d,%d,%d,%s,%s,%d", aMessage.GetMessageId(), aMessage.GetType(), aMessage.GetCode(), uriPath,
+               aMessageInfo.GetPeerAddr().ToString().AsCString(), aMessageInfo.GetPeerPort());
+exit:
+    if (error != OT_ERROR_NONE)
+    {
+        otLogWarnCore("Otns::EmitCoapReceive failed: %s", otThreadErrorToString(error));
+    }
+}
+
+void Otns::EmitCoapSendFailure(otError aError, Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
+{
+    char    uriPath[Coap::Message::kMaxReceivedUriPath + 1];
+    otError error = OT_ERROR_NONE;
+
+    SuccessOrExit(error = aMessage.ReadUriPathOptions(uriPath));
+
+    EmitStatus("coap=send_error,%d,%d,%d,%s,%s,%d,%s", aMessage.GetMessageId(), aMessage.GetType(), aMessage.GetCode(),
+               uriPath, aMessageInfo.GetPeerAddr().ToString().AsCString(), aMessageInfo.GetPeerPort(),
+               otThreadErrorToString(aError));
+exit:
+    if (error != OT_ERROR_NONE)
+    {
+        otLogWarnCore("Otns::EmitCoapSendFailure failed: %s", otThreadErrorToString(error));
+    }
 }
 
 } // namespace Utils

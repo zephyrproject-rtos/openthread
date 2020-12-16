@@ -45,6 +45,7 @@
 #include "common/locator.hpp"
 #include "common/message.hpp"
 #include "common/non_copyable.hpp"
+#include "common/time_ticker.hpp"
 #include "common/timer.hpp"
 #include "net/icmp6.hpp"
 #include "net/ip6_address.hpp"
@@ -102,17 +103,32 @@ using ot::Encoding::BigEndian::HostSwap32;
 class Ip6 : public InstanceLocator, private NonCopyable
 {
     friend class ot::Instance;
+    friend class ot::TimeTicker;
+    friend class Mpl;
 
 public:
-    enum
+    enum : uint16_t
     {
-        kDefaultHopLimit            = OPENTHREAD_CONFIG_IP6_HOP_LIMIT_DEFAULT,
-        kMaxDatagramLength          = OPENTHREAD_CONFIG_IP6_MAX_DATAGRAM_LENGTH,
+        /**
+         * The max datagram length (in bytes) of an IPv6 message.
+         *
+         */
+        kMaxDatagramLength = OPENTHREAD_CONFIG_IP6_MAX_DATAGRAM_LENGTH,
+
+        /**
+         * The max datagram length (in bytes) of an unfragmented IPv6 message.
+         *
+         */
         kMaxAssembledDatagramLength = OPENTHREAD_CONFIG_IP6_MAX_ASSEMBLED_DATAGRAM,
-        kIp6ReassemblyTimeout       = OPENTHREAD_CONFIG_IP6_REASSEMBLY_TIMEOUT,
-        kMinimalMtu                 = 1280,
-        kStateUpdatePeriod          = 1000,
     };
+
+    /**
+     * This constructor initializes the object.
+     *
+     * @param[in]  aInstance   A reference to the otInstance object.
+     *
+     */
+    explicit Ip6(Instance &aInstance);
 
     /**
      * This method allocates a new message buffer from the buffer pool.
@@ -153,16 +169,6 @@ public:
     Message *NewMessage(const uint8_t *aData, uint16_t aDataLength);
 
     /**
-     * This method converts the message priority level to IPv6 DSCP value.
-     *
-     * @param[in]  aPriority  The message priority level.
-     *
-     * @returns The IPv6 DSCP value.
-     *
-     */
-    static uint8_t PriorityToDscp(Message::Priority aPriority);
-
-    /**
      * This method converts the IPv6 DSCP value to message priority level.
      *
      * @param[in]  aDscp  The IPv6 DSCP value.
@@ -171,14 +177,6 @@ public:
      *
      */
     static Message::Priority DscpToPriority(uint8_t aDscp);
-
-    /**
-     * This constructor initializes the object.
-     *
-     * @param[in]  aInstance   A reference to the otInstance object.
-     *
-     */
-    explicit Ip6(Instance &aInstance);
 
     /**
      * This method sends an IPv6 datagram.
@@ -226,40 +224,6 @@ public:
      *
      */
     otError HandleDatagram(Message &aMessage, Netif *aNetif, const void *aLinkMessageInfo, bool aFromNcpHost);
-
-    /**
-     * This methods adds a full IPv6 packet to the transmit queue.
-     *
-     * @param aMessage A reference to the message.
-     */
-    void EnqueueDatagram(Message &aMessage);
-
-    /**
-     * This static method updates a checksum.
-     *
-     * @param[in]  aChecksum  The checksum value to update.
-     * @param[in]  aAddress   A reference to an IPv6 address.
-     *
-     * @returns The updated checksum.
-     *
-     */
-    static uint16_t UpdateChecksum(uint16_t aChecksum, const Address &aAddress);
-
-    /**
-     * This static method computes the pseudoheader checksum.
-     *
-     * @param[in]  aSource       A reference to the IPv6 source address.
-     * @param[in]  aDestination  A reference to the IPv6 destination address.
-     * @param[in]  aLength       The IPv6 Payload Length value.
-     * @param[in]  aProto        The IPv6 Next Header value.
-     *
-     * @returns The pseudoheader checksum.
-     *
-     */
-    static uint16_t ComputePseudoheaderChecksum(const Address &aSource,
-                                                const Address &aDestination,
-                                                uint16_t       aLength,
-                                                uint8_t        aProto);
 
     /**
      * This method registers a callback to provide received raw IPv6 datagrams.
@@ -344,44 +308,60 @@ public:
     static const char *IpProtoToString(uint8_t aIpProto);
 
 private:
-    enum
+    enum : uint8_t
     {
-        kDefaultIp6MessagePriority = Message::kPriorityNormal,
+        kDefaultHopLimit      = OPENTHREAD_CONFIG_IP6_HOP_LIMIT_DEFAULT,
+        kIp6ReassemblyTimeout = OPENTHREAD_CONFIG_IP6_REASSEMBLY_TIMEOUT,
+    };
+
+    enum : uint16_t
+    {
+        kMinimalMtu = 1280,
+    };
+
+    enum : uint32_t
+    {
+        kStateUpdatePeriod = 1000,
     };
 
     static void HandleSendQueue(Tasklet &aTasklet);
     void        HandleSendQueue(void);
 
+    static uint8_t PriorityToDscp(Message::Priority aPriority);
     static otError GetDatagramPriority(const uint8_t *aData, uint16_t aDataLen, Message::Priority &aPriority);
 
-    otError ProcessReceiveCallback(const Message &    aMessage,
+    void    EnqueueDatagram(Message &aMessage);
+    otError ProcessReceiveCallback(Message &          aMessage,
                                    const MessageInfo &aMessageInfo,
                                    uint8_t            aIpProto,
-                                   bool               aFromNcpHost);
+                                   bool               aFromNcpHost,
+                                   Message::Ownership aMessageOwnership);
     otError HandleExtensionHeaders(Message &    aMessage,
                                    Netif *      aNetif,
                                    MessageInfo &aMessageInfo,
                                    Header &     aHeader,
                                    uint8_t &    aNextHeader,
-                                   bool         aForward,
+                                   bool         aIsOutbound,
                                    bool         aFromNcpHost,
-                                   bool         aReceive);
+                                   bool &       aReceive);
     otError FragmentDatagram(Message &aMessage, uint8_t aIpProto);
     otError HandleFragment(Message &aMessage, Netif *aNetif, MessageInfo &aMessageInfo, bool aFromNcpHost);
 #if OPENTHREAD_CONFIG_IP6_FRAGMENTATION_ENABLE
-    void        CleanupFragmentationBuffer(void);
-    void        HandleUpdateTimer(void);
-    void        UpdateReassemblyList(void);
-    void        SendIcmpError(Message &aMessage, Icmp::Header::Type aIcmpType, Icmp::Header::Code aIcmpCode);
-    static void HandleTimer(Timer &aTimer);
+    void CleanupFragmentationBuffer(void);
+    void HandleTimeTick(void);
+    void UpdateReassemblyList(void);
+    void SendIcmpError(Message &aMessage, Icmp::Header::Type aIcmpType, Icmp::Header::Code aIcmpCode);
 #endif
     otError AddMplOption(Message &aMessage, Header &aHeader);
     otError AddTunneledMplOption(Message &aMessage, Header &aHeader, MessageInfo &aMessageInfo);
     otError InsertMplOption(Message &aMessage, Header &aHeader, MessageInfo &aMessageInfo);
     otError RemoveMplOption(Message &aMessage);
-    otError HandleOptions(Message &aMessage, Header &aHeader, bool &aForward);
-    otError HandlePayload(Message &aMessage, MessageInfo &aMessageInfo, uint8_t aIpProto);
-    bool    ShouldForwardToThread(const MessageInfo &aMessageInfo) const;
+    otError HandleOptions(Message &aMessage, Header &aHeader, bool aIsOutbound, bool &aReceive);
+    otError HandlePayload(Message &          aMessage,
+                          MessageInfo &      aMessageInfo,
+                          uint8_t            aIpProto,
+                          Message::Ownership aMessageOwnership);
+    bool    ShouldForwardToThread(const MessageInfo &aMessageInfo, bool aFromNcpHost) const;
     bool    IsOnLink(const Address &aAddress) const;
 
     bool                 mForwardingEnabled;
@@ -397,7 +377,6 @@ private:
     Mpl  mMpl;
 
 #if OPENTHREAD_CONFIG_IP6_FRAGMENTATION_ENABLE
-    TimerMilli   mTimer;
     MessageQueue mReassemblyList;
 #endif
 };

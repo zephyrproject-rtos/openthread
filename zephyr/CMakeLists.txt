@@ -7,6 +7,7 @@ set(OT_BUILD_EXECUTABLES OFF CACHE BOOL "Disable OpenThread samples")
 set(OT_BUILTIN_MBEDTLS_MANAGEMENT OFF CACHE BOOL "Use Zephyr's mbedTLS heap")
 set(OT_PLATFORM "zephyr" CACHE STRING "Zephyr as a target platform")
 set(OT_THREAD_VERSION ${CONFIG_OPENTHREAD_THREAD_VERSION} CACHE STRING "User selected Thread stack version")
+set(OT_CLI_TRANSPORT "CONSOLE" CACHE STRING "Set CLI to use console interpreter")
 
 string(REPLACE " " ";" OT_MBEDTLS_LIB_LIST " ${CONFIG_OPENTHREAD_MBEDTLS_LIB_NAME}")
 
@@ -61,6 +62,14 @@ if(CONFIG_OPENTHREAD_CSL_RECEIVER)
   set(OT_CSL_RECEIVER ON CACHE BOOL "Enable CSL receiver feature for Thread 1.2")
 endif()
 
+if(CONFIG_OPENTHREAD_CSL_DEBUG)
+  set(OT_CSL_DEBUG ON CACHE BOOL "Enable CSL debug")
+endif()
+
+if(CONFIG_OPENTHREAD_DATSET_UPDATER)
+  set(OT_DATASET_UPDATER ON CACHE BOOL "Enable Dataset updater")
+endif()
+
 if(CONFIG_OPENTHREAD_DHCP6_CLIENT)
   set(OT_DHCP6_CLIENT ON CACHE BOOL "Enable DHCPv6 Client")
 endif()
@@ -107,6 +116,10 @@ endif()
 
 if(CONFIG_OPENTHREAD_LEGACY)
   set(OT_LEGACY ON CACHE BOOL "Enable legacy network support")
+endif()
+
+if(CONFIG_OPENTHREAD_LINK_METRICS)
+  set(OT_LINK_METRICS ON CACHE BOOL "Enable Link Metrics feature for Thread 1.2")
 endif()
 
 if(CONFIG_OPENTHREAD_LOG_LEVEL_DYNAMIC)

@@ -35,6 +35,7 @@
 
 #include "common/encoding.hpp"
 #include "common/locator.hpp"
+#include "common/non_copyable.hpp"
 #include "mac/mac_types.hpp"
 #include "thread/mle_types.hpp"
 #include "thread/thread_tlvs.hpp"
@@ -42,8 +43,9 @@
 
 namespace ot {
 
-class RouterTable : public InstanceLocator
+class RouterTable : public InstanceLocator, private NonCopyable
 {
+    friend class NeighborTable;
     class IteratorBuilder;
 
 public:
@@ -272,6 +274,16 @@ public:
     Router *GetNeighbor(const Mac::ExtAddress &aExtAddress);
 
     /**
+     * This method returns the neighbor for a given MAC address.
+     *
+     * @param[in]  aMacAddress  A MAC address
+     *
+     * @returns A pointer to the router or nullptr if the router could not be found.
+     *
+     */
+    Router *GetNeighbor(const Mac::Address &aMacAddress);
+
+    /**
      * This method returns the router for a given router id.
      *
      * @param[in]  aRouterId  The router id.
@@ -331,7 +343,7 @@ public:
      * @retval OT_ERROR_NOT_FOUND     No router entry with the given id.
      *
      */
-    otError GetRouterInfo(uint16_t aRouterId, otRouterInfo &aRouterInfo);
+    otError GetRouterInfo(uint16_t aRouterId, Router::Info &aRouterInfo);
 
     /**
      * This method returns the Router ID Sequence.
@@ -387,7 +399,7 @@ public:
      * This method updates the router table and must be called with a one second period.
      *
      */
-    void ProcessTimerTick(void);
+    void HandleTimeTick(void);
 
     /**
      * This method enables range-based `for` loop iteration over all Router entries in the Router table.
@@ -405,7 +417,7 @@ private:
     class IteratorBuilder : public InstanceLocator
     {
     public:
-        IteratorBuilder(Instance &aInstance)
+        explicit IteratorBuilder(Instance &aInstance)
             : InstanceLocator(aInstance)
         {
         }
@@ -421,6 +433,12 @@ private:
     Router *GetNextEntry(Router *aRouter)
     {
         return const_cast<Router *>(const_cast<const RouterTable *>(this)->GetNextEntry(aRouter));
+    }
+
+    const Router *FindRouter(const Router::AddressMatcher &aMatcher) const;
+    Router *      FindRouter(const Router::AddressMatcher &aMatcher)
+    {
+        return const_cast<Router *>(const_cast<const RouterTable *>(this)->FindRouter(aMatcher));
     }
 
     Router           mRouters[Mle::kMaxRouters];

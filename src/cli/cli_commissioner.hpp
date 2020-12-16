@@ -38,6 +38,8 @@
 
 #include <openthread/commissioner.h>
 
+#include "utils/lookup_table.hpp"
+
 #if OPENTHREAD_CONFIG_COMMISSIONER_ENABLE && OPENTHREAD_FTD
 
 namespace ot {
@@ -46,7 +48,7 @@ namespace Cli {
 class Interpreter;
 
 /**
- * This class implements the CLI CoAP Secure server and client.
+ * This class implements the Commissioner CLI interpreter.
  *
  */
 class Commissioner
@@ -81,7 +83,7 @@ private:
     struct Command
     {
         const char *mName;
-        otError (Commissioner::*mCommand)(uint8_t aArgsLength, char *aArgs[]);
+        otError (Commissioner::*mHandler)(uint8_t aArgsLength, char *aArgs[]);
     };
 
     otError ProcessHelp(uint8_t aArgsLength, char *aArgs[]);
@@ -94,16 +96,17 @@ private:
     otError ProcessProvisioningUrl(uint8_t aArgsLength, char *aArgs[]);
     otError ProcessSessionId(uint8_t aArgsLength, char *aArgs[]);
     otError ProcessStart(uint8_t aArgsLength, char *aArgs[]);
+    otError ProcessState(uint8_t aArgsLength, char *aArgs[]);
     otError ProcessStop(uint8_t aArgsLength, char *aArgs[]);
 
     static void HandleStateChanged(otCommissionerState aState, void *aContext);
     void        HandleStateChanged(otCommissionerState aState);
 
-    static void HandleJoinerEvent(otCommissionerJoinerEvent aJoinerEvent,
+    static void HandleJoinerEvent(otCommissionerJoinerEvent aEvent,
                                   const otJoinerInfo *      aJoinerInfo,
                                   const otExtAddress *      aJoinerId,
                                   void *                    aContext);
-    void        HandleJoinerEvent(otCommissionerJoinerEvent aJoinerEvent,
+    void        HandleJoinerEvent(otCommissionerJoinerEvent aEvent,
                                   const otJoinerInfo *      aJoinerInfo,
                                   const otExtAddress *      aJoinerId);
 
@@ -116,8 +119,20 @@ private:
     static void HandlePanIdConflict(uint16_t aPanId, uint32_t aChannelMask, void *aContext);
     void        HandlePanIdConflict(uint16_t aPanId, uint32_t aChannelMask);
 
-    static const Command sCommands[];
-    Interpreter &        mInterpreter;
+    static const char *StateToString(otCommissionerState aState);
+
+    static constexpr Command sCommands[] = {
+        {"announce", &Commissioner::ProcessAnnounce},   {"energy", &Commissioner::ProcessEnergy},
+        {"help", &Commissioner::ProcessHelp},           {"joiner", &Commissioner::ProcessJoiner},
+        {"mgmtget", &Commissioner::ProcessMgmtGet},     {"mgmtset", &Commissioner::ProcessMgmtSet},
+        {"panid", &Commissioner::ProcessPanId},         {"provisioningurl", &Commissioner::ProcessProvisioningUrl},
+        {"sessionid", &Commissioner::ProcessSessionId}, {"start", &Commissioner::ProcessStart},
+        {"state", &Commissioner::ProcessState},         {"stop", &Commissioner::ProcessStop},
+    };
+
+    static_assert(Utils::LookupTable::IsSorted(sCommands), "Command Table is not sorted");
+
+    Interpreter &mInterpreter;
 };
 
 } // namespace Cli

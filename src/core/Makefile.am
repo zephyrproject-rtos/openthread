@@ -143,6 +143,8 @@ SOURCES_COMMON                                  = \
     api/random_noncrypto_api.cpp                  \
     api/server_api.cpp                            \
     api/sntp_api.cpp                              \
+    api/srp_client_api.cpp                        \
+    api/srp_server_api.cpp                        \
     api/tasklet_api.cpp                           \
     api/thread_api.cpp                            \
     api/thread_ftd_api.cpp                        \
@@ -153,6 +155,9 @@ SOURCES_COMMON                                  = \
     backbone_router/bbr_manager.cpp               \
     backbone_router/multicast_listeners_table.cpp \
     backbone_router/ndproxy_table.cpp             \
+    border_router/infra_if_platform.cpp           \
+    border_router/router_advertisement.cpp        \
+    border_router/routing_manager.cpp             \
     coap/coap.cpp                                 \
     coap/coap_message.cpp                         \
     coap/coap_secure.cpp                          \
@@ -218,6 +223,8 @@ SOURCES_COMMON                                  = \
     net/ip6_mpl.cpp                               \
     net/netif.cpp                                 \
     net/sntp_client.cpp                           \
+    net/srp_client.cpp                            \
+    net/srp_server.cpp                            \
     net/udp6.cpp                                  \
     radio/radio.cpp                               \
     radio/radio_callbacks.cpp                     \
@@ -346,6 +353,8 @@ HEADERS_COMMON                                  = \
     backbone_router/bbr_manager.hpp               \
     backbone_router/multicast_listeners_table.hpp \
     backbone_router/ndproxy_table.hpp             \
+    border_router/router_advertisement.hpp        \
+    border_router/routing_manager.hpp             \
     coap/coap.hpp                                 \
     coap/coap_message.hpp                         \
     coap/coap_secure.hpp                          \
@@ -359,6 +368,7 @@ HEADERS_COMMON                                  = \
     common/equatable.hpp                          \
     common/extension.hpp                          \
     common/instance.hpp                           \
+    common/iterator_utils.hpp                     \
     common/linked_list.hpp                        \
     common/locator.hpp                            \
     common/locator-getters.hpp                    \
@@ -406,6 +416,8 @@ HEADERS_COMMON                                  = \
     config/platform.h                             \
     config/radio_link.h                           \
     config/sntp_client.h                          \
+    config/srp_client.h                           \
+    config/srp_server.h                           \
     config/time_sync.h                            \
     config/tmf.h                                  \
     crypto/aes_ccm.hpp                            \
@@ -457,6 +469,8 @@ HEADERS_COMMON                                  = \
     net/netif.hpp                                 \
     net/sntp_client.hpp                           \
     net/socket.hpp                                \
+    net/srp_client.hpp                            \
+    net/srp_server.hpp                            \
     net/tcp.hpp                                   \
     net/udp6.hpp                                  \
     radio/radio.hpp                               \

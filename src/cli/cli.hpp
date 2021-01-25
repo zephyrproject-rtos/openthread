@@ -50,6 +50,8 @@
 #include "cli/cli_dataset.hpp"
 #include "cli/cli_joiner.hpp"
 #include "cli/cli_network_data.hpp"
+#include "cli/cli_srp_client.hpp"
+#include "cli/cli_srp_server.hpp"
 #include "cli/cli_udp.hpp"
 #if OPENTHREAD_CONFIG_COAP_API_ENABLE
 #include "cli/cli_coap.hpp"
@@ -86,6 +88,8 @@ class Interpreter
     friend class Dataset;
     friend class Joiner;
     friend class NetworkData;
+    friend class SrpClient;
+    friend class SrpServer;
     friend class UdpExample;
 
 public:
@@ -146,7 +150,7 @@ public:
      * @param[in]  aLength  @p aBytes length.
      *
      */
-    void OutputBytes(const uint8_t *aBytes, uint8_t aLength);
+    void OutputBytes(const uint8_t *aBytes, uint16_t aLength);
 
     /**
      * This method writes a number of bytes to the CLI console as a hex string.
@@ -294,6 +298,9 @@ private:
     otError ProcessCcaThreshold(uint8_t aArgsLength, char *aArgs[]);
     otError ProcessBufferInfo(uint8_t aArgsLength, char *aArgs[]);
     otError ProcessChannel(uint8_t aArgsLength, char *aArgs[]);
+#if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
+    otError ProcessBorderRouting(uint8_t aArgsLength, char *aArgs[]);
+#endif
 #if (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
     otError ProcessBackboneRouter(uint8_t aArgsLength, char *aArgs[]);
 
@@ -467,6 +474,7 @@ private:
     otError ProcessPskc(uint8_t aArgsLength, char *aArgs[]);
 #endif
     otError ProcessRcp(uint8_t aArgsLength, char *aArgs[]);
+    otError ProcessRegion(uint8_t aArgsLength, char *aArgs[]);
 #if OPENTHREAD_FTD
     otError ProcessReleaseRouterId(uint8_t aArgsLength, char *aArgs[]);
 #endif
@@ -489,6 +497,9 @@ private:
     otError ProcessSingleton(uint8_t aArgsLength, char *aArgs[]);
 #if OPENTHREAD_CONFIG_SNTP_CLIENT_ENABLE
     otError ProcessSntp(uint8_t aArgsLength, char *aArgs[]);
+#endif
+#if OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE || OPENTHREAD_CONFIG_SRP_SERVER_ENABLE
+    otError ProcessSrp(uint8_t aArgsLength, char *aArgs[]);
 #endif
     otError ProcessState(uint8_t aArgsLength, char *aArgs[]);
     otError ProcessThread(uint8_t aArgsLength, char *aArgs[]);
@@ -596,6 +607,9 @@ private:
     static constexpr Command sCommands[] = {
 #if (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
         {"bbr", &Interpreter::ProcessBackboneRouter},
+#endif
+#if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
+        {"br", &Interpreter::ProcessBorderRouting},
 #endif
         {"bufferinfo", &Interpreter::ProcessBufferInfo},
         {"ccathreshold", &Interpreter::ProcessCcaThreshold},
@@ -724,6 +738,7 @@ private:
         {"pskc", &Interpreter::ProcessPskc},
 #endif
         {"rcp", &Interpreter::ProcessRcp},
+        {"region", &Interpreter::ProcessRegion},
 #if OPENTHREAD_FTD
         {"releaserouterid", &Interpreter::ProcessReleaseRouterId},
 #endif
@@ -746,6 +761,9 @@ private:
         {"singleton", &Interpreter::ProcessSingleton},
 #if OPENTHREAD_CONFIG_SNTP_CLIENT_ENABLE
         {"sntp", &Interpreter::ProcessSntp},
+#endif
+#if OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE || OPENTHREAD_CONFIG_SRP_SERVER_ENABLE
+        {"srp", &Interpreter::ProcessSrp},
 #endif
         {"state", &Interpreter::ProcessState},
         {"thread", &Interpreter::ProcessThread},
@@ -796,6 +814,14 @@ private:
 
 #if OPENTHREAD_CONFIG_JOINER_ENABLE
     Joiner mJoiner;
+#endif
+
+#if OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE
+    SrpClient mSrpClient;
+#endif
+
+#if OPENTHREAD_CONFIG_SRP_SERVER_ENABLE
+    SrpServer mSrpServer;
 #endif
 
     Instance *mInstance;

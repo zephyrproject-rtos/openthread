@@ -74,6 +74,8 @@ openthread_headers                      = \
     openthread/random_noncrypto.h         \
     openthread/server.h                   \
     openthread/sntp.h                     \
+    openthread/srp_client.h               \
+    openthread/srp_server.h               \
     openthread/tasklet.h                  \
     openthread/thread.h                   \
     openthread/thread_ftd.h               \
@@ -89,6 +91,7 @@ ot_platform_headers                     = \
     openthread/platform/diag.h            \
     openthread/platform/flash.h           \
     openthread/platform/entropy.h         \
+    openthread/platform/infra_if.h        \
     openthread/platform/memory.h          \
     openthread/platform/misc.h            \
     openthread/platform/logging.h         \

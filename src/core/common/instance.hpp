@@ -95,6 +95,10 @@
 
 #endif // (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
 
+#if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
+#include "border_router/routing_manager.hpp"
+#endif
+
 #endif // OPENTHREAD_FTD || OPENTHREAD_MTD
 #if OPENTHREAD_ENABLE_VENDOR_EXTENSION
 #include "common/extension.hpp"
@@ -389,6 +393,10 @@ private:
 
 #if OPENTHREAD_CONFIG_OTNS_ENABLE
     Utils::Otns mOtns;
+#endif
+
+#if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
+    BorderRouter::RoutingManager mRoutingManager;
 #endif
 
 #endif // OPENTHREAD_MTD || OPENTHREAD_FTD
@@ -688,6 +696,13 @@ template <> inline Dns::Client &Instance::Get(void)
 }
 #endif
 
+#if OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE
+template <> inline Srp::Client &Instance::Get(void)
+{
+    return mThreadNetif.mSrpClient;
+}
+#endif
+
 #if OPENTHREAD_FTD || OPENTHREAD_CONFIG_TMF_NETWORK_DIAG_MTD_ENABLE
 template <> inline NetworkDiagnostic::NetworkDiagnostic &Instance::Get(void)
 {
@@ -844,6 +859,20 @@ template <> inline LinkMetrics &Instance::Get(void)
 template <> inline Utils::Otns &Instance::Get(void)
 {
     return mOtns;
+}
+#endif
+
+#if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
+template <> inline BorderRouter::RoutingManager &Instance::Get(void)
+{
+    return mRoutingManager;
+}
+#endif
+
+#if OPENTHREAD_CONFIG_SRP_SERVER_ENABLE
+template <> inline Srp::Server &Instance::Get(void)
+{
+    return mThreadNetif.mSrpServer;
 }
 #endif
 

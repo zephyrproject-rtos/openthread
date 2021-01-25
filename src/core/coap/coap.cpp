@@ -654,7 +654,8 @@ void CoapBase::ProcessReceivedResponse(Message &aMessage, const Ip6::MessageInfo
     case kTypeConfirmable:
         // Send empty ACK if it is a CON message.
         IgnoreError(SendAck(aMessage, aMessageInfo));
-        // Fall through
+
+        OT_FALL_THROUGH;
         // Handling of RFC7641 and multicast is below.
     case kTypeNonConfirmable:
         // Separate response or observation notification.  If the request was to a multicast
@@ -707,7 +708,7 @@ void CoapBase::ProcessReceivedRequest(Message &aMessage, const Ip6::MessageInfo 
         cachedResponse->Finish();
         error = Send(*cachedResponse, aMessageInfo);
 
-        // fall through
+        OT_FALL_THROUGH;
 
     case OT_ERROR_NO_BUFS:
         ExitNow();
@@ -950,8 +951,8 @@ bool TxParameters::IsValid(void) const
         // Calulate exchange lifetime step by step and verify no overflow.
         uint32_t tmp = Multiply(mAckTimeout, (1U << (mMaxRetransmit + 1)) - 1);
 
-        tmp /= mAckRandomFactorDenominator;
         tmp = Multiply(tmp, mAckRandomFactorNumerator);
+        tmp /= mAckRandomFactorDenominator;
 
         rval = (tmp != 0 && (tmp + mAckTimeout + 2 * kDefaultMaxLatency) > tmp);
     }

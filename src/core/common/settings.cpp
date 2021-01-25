@@ -81,6 +81,12 @@ void SettingsBase::LogDadInfo(const char *aAction, const DadInfo &aDadInfo) cons
     otLogInfoCore("Non-volatile: %s DadInfo {DadCounter:%2d}", aAction, aDadInfo.GetDadCounter());
 }
 #endif
+#if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
+void SettingsBase::LogPrefix(const char *aAction, const char *aPrefixName, const Ip6::Prefix &aOmrPrefix) const
+{
+    otLogInfoCore("Non-volatile: %s %s %s", aAction, aPrefixName, aOmrPrefix.ToString().AsCString());
+}
+#endif
 
 #endif // #if (OPENTHREAD_CONFIG_LOG_LEVEL >= OT_LOG_LEVEL_INFO)
 
@@ -439,6 +445,118 @@ exit:
     return error;
 }
 #endif // OPENTHREAD_CONFIG_DUA_ENABLE
+
+#if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
+otError Settings::SaveOmrPrefix(const Ip6::Prefix &aOmrPrefix)
+{
+    otError     error = OT_ERROR_NONE;
+    Ip6::Prefix prevOmrPrefix;
+    uint16_t    length = sizeof(prevOmrPrefix);
+
+    if ((Read(kKeyOmrPrefix, &prevOmrPrefix, length) == OT_ERROR_NONE) && (length == sizeof(prevOmrPrefix)) &&
+        (prevOmrPrefix == aOmrPrefix))
+    {
+        LogPrefix("Re-saved", "OMR prefix", aOmrPrefix);
+        ExitNow();
+    }
+
+    SuccessOrExit(error = Save(kKeyOmrPrefix, &aOmrPrefix, sizeof(aOmrPrefix)));
+    LogPrefix("Saved", "OMR prefix", aOmrPrefix);
+
+exit:
+    LogFailure(error, "saving OMR prefix", false);
+    return error;
+}
+
+otError Settings::ReadOmrPrefix(Ip6::Prefix &aOmrPrefix) const
+{
+    otError  error;
+    uint16_t length = sizeof(aOmrPrefix);
+
+    aOmrPrefix.Clear();
+    SuccessOrExit(error = Read(kKeyOmrPrefix, &aOmrPrefix, length));
+    LogPrefix("Read", "OMR prefix", aOmrPrefix);
+
+exit:
+    return error;
+}
+
+otError Settings::SaveOnLinkPrefix(const Ip6::Prefix &aOnLinkPrefix)
+{
+    otError     error = OT_ERROR_NONE;
+    Ip6::Prefix prevOnLinkPrefix;
+    uint16_t    length = sizeof(prevOnLinkPrefix);
+
+    if ((Read(kKeyOnLinkPrefix, &prevOnLinkPrefix, length) == OT_ERROR_NONE) && (length == sizeof(prevOnLinkPrefix)) &&
+        (prevOnLinkPrefix == aOnLinkPrefix))
+    {
+        LogPrefix("Re-saved", "on-link prefix", aOnLinkPrefix);
+        ExitNow();
+    }
+
+    SuccessOrExit(error = Save(kKeyOnLinkPrefix, &aOnLinkPrefix, sizeof(aOnLinkPrefix)));
+    LogPrefix("Saved", "on-link prefix", aOnLinkPrefix);
+
+exit:
+    LogFailure(error, "saving on-link prefix", false);
+    return error;
+}
+
+otError Settings::ReadOnLinkPrefix(Ip6::Prefix &aOnLinkPrefix) const
+{
+    otError  error;
+    uint16_t length = sizeof(aOnLinkPrefix);
+
+    aOnLinkPrefix.Clear();
+    SuccessOrExit(error = Read(kKeyOnLinkPrefix, &aOnLinkPrefix, length));
+    LogPrefix("Read", "on-link prefix", aOnLinkPrefix);
+
+exit:
+    return error;
+}
+#endif // OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
+
+#if OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE
+
+otError Settings::SaveSrpKey(const Crypto::Ecdsa::P256::KeyPair &aKeyPair)
+{
+    otError error = OT_ERROR_NONE;
+
+    SuccessOrExit(error = Save(kKeySrpEcdsaKey, aKeyPair.GetDerBytes(), aKeyPair.GetDerLength()));
+    otLogInfoCore("Non-volatile: Saved SRP key");
+
+exit:
+    LogFailure(error, "saving SRP key", false);
+    return error;
+}
+
+otError Settings::ReadSrpKey(Crypto::Ecdsa::P256::KeyPair &aKeyPair) const
+{
+    otError  error;
+    uint16_t length = Crypto::Ecdsa::P256::KeyPair::kMaxDerSize;
+
+    SuccessOrExit(error = Read(kKeySrpEcdsaKey, aKeyPair.GetDerBytes(), length));
+    VerifyOrExit(length <= Crypto::Ecdsa::P256::KeyPair::kMaxDerSize, error = OT_ERROR_NOT_FOUND);
+    aKeyPair.SetDerLength(static_cast<uint8_t>(length));
+    otLogInfoCore("Non-volatile: Read SRP key");
+
+exit:
+    return error;
+}
+
+otError Settings::DeleteSrpKey(void)
+{
+    otError error;
+
+    SuccessOrExit(error = Delete(kKeySrpEcdsaKey));
+    otLogInfoCore("Non-volatile: Deleted SRP key");
+
+exit:
+    LogFailure(error, "deleting SRP key", true);
+    return error;
+}
+
+#endif // OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE
 
 otError Settings::Read(Key aKey, void *aBuffer, uint16_t &aSize) const
 {

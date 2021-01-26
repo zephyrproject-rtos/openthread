@@ -35,6 +35,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <openthread/diag.h>
 #include <openthread/icmp6.h>
@@ -140,6 +141,12 @@ Interpreter::Interpreter(Instance *aInstance)
 #if OPENTHREAD_CONFIG_JOINER_ENABLE
     , mJoiner(*this)
 #endif
+#if OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE
+    , mSrpClient(*this)
+#endif
+#if OPENTHREAD_CONFIG_SRP_SERVER_ENABLE
+    , mSrpServer(*this)
+#endif
     , mInstance(aInstance)
 {
 #if OPENTHREAD_FTD || OPENTHREAD_CONFIG_TMF_NETWORK_DIAG_MTD_ENABLE
@@ -174,9 +181,9 @@ void Interpreter::OutputResult(otError aError)
     }
 }
 
-void Interpreter::OutputBytes(const uint8_t *aBytes, uint8_t aLength)
+void Interpreter::OutputBytes(const uint8_t *aBytes, uint16_t aLength)
 {
-    for (int i = 0; i < aLength; i++)
+    for (uint16_t i = 0; i < aLength; i++)
     {
         OutputFormat("%02x", aBytes[i]);
     }
@@ -269,6 +276,34 @@ otError Interpreter::ProcessHelp(uint8_t aArgsLength, char *aArgs[])
 
     return OT_ERROR_NONE;
 }
+
+#if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
+otError Interpreter::ProcessBorderRouting(uint8_t aArgsLength, char *aArgs[])
+{
+    otError error  = OT_ERROR_NONE;
+    bool    enable = false;
+
+    VerifyOrExit(aArgsLength == 1, error = OT_ERROR_INVALID_ARGS);
+
+    if (strcmp(aArgs[0], "enable") == 0)
+    {
+        enable = true;
+    }
+    else if (strcmp(aArgs[0], "disable") == 0)
+    {
+        enable = false;
+    }
+    else
+    {
+        ExitNow(error = OT_ERROR_INVALID_COMMAND);
+    }
+
+    SuccessOrExit(error = otBorderRoutingSetEnabled(mInstance, enable));
+
+exit:
+    return error;
+}
+#endif
 
 #if (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
 otError Interpreter::ProcessBackboneRouter(uint8_t aArgsLength, char *aArgs[])
@@ -3316,6 +3351,29 @@ exit:
     return error;
 }
 
+otError Interpreter::ProcessRegion(uint8_t aArgsLength, char *aArgs[])
+{
+    otError  error = OT_ERROR_NONE;
+    uint16_t regionCode;
+
+    if (aArgsLength == 0)
+    {
+        SuccessOrExit(error = otPlatRadioGetRegion(mInstance, &regionCode));
+        OutputLine("%c%c", regionCode >> 8, regionCode & 0xff);
+    }
+    else
+    {
+        VerifyOrExit(strlen(aArgs[0]) == 2, error = OT_ERROR_INVALID_ARGS);
+
+        regionCode =
+            static_cast<uint16_t>(static_cast<uint16_t>(aArgs[0][0]) << 8) + static_cast<uint16_t>(aArgs[0][1]);
+        error = otPlatRadioSetRegion(mInstance, regionCode);
+    }
+
+exit:
+    return error;
+}
+
 #if OPENTHREAD_FTD
 otError Interpreter::ProcessReleaseRouterId(uint8_t aArgsLength, char *aArgs[])
 {
@@ -3468,8 +3526,8 @@ otError Interpreter::ProcessRouter(uint8_t aArgsLength, char *aArgs[])
 
         if (isTable)
         {
-            OutputLine("| ID | RLOC16 | Next Hop | Path Cost | LQ In | LQ Out | Age | Extended MAC     |");
-            OutputLine("+----+--------+----------+-----------+-------+--------+-----+------------------+");
+            OutputLine("| ID | RLOC16 | Next Hop | Path Cost | LQ In | LQ Out | Age | Extended MAC     | Link |");
+            OutputLine("+----+--------+----------+-----------+-------+--------+-----+------------------+------+");
         }
 
         maxRouterId = otThreadGetMaxRouterId(mInstance);
@@ -3492,7 +3550,7 @@ otError Interpreter::ProcessRouter(uint8_t aArgsLength, char *aArgs[])
                 OutputFormat("| %3d ", routerInfo.mAge);
                 OutputFormat("| ");
                 OutputExtAddress(routerInfo.mExtAddress);
-                OutputLine(" |");
+                OutputLine(" | %4d |", routerInfo.mLinkEstablished);
             }
             else
             {
@@ -3816,6 +3874,42 @@ void Interpreter::HandleSntpResponse(uint64_t aTime, otError aResult)
     OutputResult(OT_ERROR_NONE);
 }
 #endif // OPENTHREAD_CONFIG_SNTP_CLIENT_ENABLE
+
+#if OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE || OPENTHREAD_CONFIG_SRP_SERVER_ENABLE
+otError Interpreter::ProcessSrp(uint8_t aArgsLength, char *aArgs[])
+{
+    otError error = OT_ERROR_NONE;
+
+    if (aArgsLength == 0)
+    {
+#if OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE
+        OutputLine("client");
+#endif
+#if OPENTHREAD_CONFIG_SRP_SERVER_ENABLE
+        OutputLine("server");
+#endif
+        ExitNow();
+    }
+
+#if OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE
+    if (strcmp(aArgs[0], "client") == 0)
+    {
+        ExitNow(error = mSrpClient.Process(aArgsLength - 1, aArgs + 1));
+    }
+#endif
+#if OPENTHREAD_CONFIG_SRP_SERVER_ENABLE
+    if (strcmp(aArgs[0], "server") == 0)
+    {
+        ExitNow(error = mSrpServer.Process(aArgsLength - 1, aArgs + 1));
+    }
+#endif
+
+    error = OT_ERROR_INVALID_COMMAND;
+
+exit:
+    return error;
+}
+#endif // OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE || OPENTHREAD_CONFIG_SRP_SERVER_ENABLE
 
 otError Interpreter::ProcessState(uint8_t aArgsLength, char *aArgs[])
 {

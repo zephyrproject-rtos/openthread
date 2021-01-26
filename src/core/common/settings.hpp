@@ -47,6 +47,9 @@
 #if OPENTHREAD_CONFIG_IP6_SLAAC_ENABLE
 #include "utils/slaac_address.hpp"
 #endif
+#if OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE
+#include "crypto/ecdsa.hpp"
+#endif
 
 namespace ot {
 
@@ -589,6 +592,9 @@ public:
         kKeyReserved          = 0x0006, ///< Reserved (previously auto-start)
         kKeySlaacIidSecretKey = 0x0007, ///< Secret key used by SLAAC module for generating semantically opaque IID
         kKeyDadInfo           = 0x0008, ///< Duplicate Address Detection (DAD) information.
+        kKeyOmrPrefix         = 0x0009, ///< Off-mesh routable (OMR) prefix.
+        kKeyOnLinkPrefix      = 0x000a, ///< On-link prefix for infrastructure link.
+        kKeySrpEcdsaKey       = 0x000b, ///< SRP client ECDSA public/private key pair.
     };
 
 protected:
@@ -604,12 +610,18 @@ protected:
 #if OPENTHREAD_CONFIG_DUA_ENABLE
     void LogDadInfo(const char *aAction, const DadInfo &aDadInfo) const;
 #endif
+#if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
+    void LogPrefix(const char *aAction, const char *aPrefixName, const Ip6::Prefix &aOmrPrefix) const;
+#endif
 #else // (OPENTHREAD_CONFIG_LOG_LEVEL >= OT_LOG_LEVEL_INFO) && (OPENTHREAD_CONFIG_LOG_UTIL != 0)
     void LogNetworkInfo(const char *, const NetworkInfo &) const {}
     void LogParentInfo(const char *, const ParentInfo &) const {}
     void LogChildInfo(const char *, const ChildInfo &) const {}
 #if OPENTHREAD_CONFIG_DUA_ENABLE
     void LogDadInfo(const char *, const DadInfo &) const {}
+#endif
+#if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
+    void LogPrefix(const char *, const char *, const Ip6::Prefix &) const {}
 #endif
 #endif // (OPENTHREAD_CONFIG_LOG_LEVEL >= OT_LOG_LEVEL_INFO) && (OPENTHREAD_CONFIG_LOG_UTIL != 0)
 
@@ -999,6 +1011,88 @@ public:
     otError DeleteDadInfo(void);
 
 #endif // OPENTHREAD_CONFIG_DUA_ENABLE
+
+#if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
+    /**
+     * This method saves OMR prefix.
+     *
+     * @param[in]  aOmrPrefix  An OMR prefix to be saved.
+     *
+     * @retval OT_ERROR_NONE              Successfully saved the OMR prefix in settings.
+     * @retval OT_ERROR_NOT_IMPLEMENTED   The platform does not implement settings functionality.
+     *
+     */
+    otError SaveOmrPrefix(const Ip6::Prefix &aOmrPrefix);
+
+    /**
+     * This method reads OMR prefix.
+     *
+     * @param[out]  aOmrPrefix  A reference to a `Ip6::Prefix` structure to output the OMR prefix.
+     *
+     * @retval OT_ERROR_NONE             Successfully read the OMR prefix.
+     * @retval OT_ERROR_NOT_FOUND        No corresponding value in the setting store.
+     * @retval OT_ERROR_NOT_IMPLEMENTED  The platform does not implement settings functionality.
+     *
+     */
+    otError ReadOmrPrefix(Ip6::Prefix &aOmrPrefix) const;
+
+    /**
+     * This method saves on-link prefix.
+     *
+     * @param[in]  aOnLinkPrefix  An on-link prefix to be saved.
+     *
+     * @retval OT_ERROR_NONE              Successfully saved the on-link prefix in settings.
+     * @retval OT_ERROR_NOT_IMPLEMENTED   The platform does not implement settings functionality.
+     *
+     */
+    otError SaveOnLinkPrefix(const Ip6::Prefix &aOnLinkPrefix);
+
+    /**
+     * This method reads on-link prefix.
+     *
+     * @param[out]  aOnLinkPrefix  A reference to a `Ip6::Prefix` structure to output the on-link prefix.
+     *
+     * @retval OT_ERROR_NONE             Successfully read the on-link prefix.
+     * @retval OT_ERROR_NOT_FOUND        No corresponding value in the setting store.
+     * @retval OT_ERROR_NOT_IMPLEMENTED  The platform does not implement settings functionality.
+     *
+     */
+    otError ReadOnLinkPrefix(Ip6::Prefix &aOnLinkPrefix) const;
+#endif // OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
+
+#if OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE
+    /**
+     * This method saves SRP client ECDSA key pair.
+     *
+     * @param[in]   aKeyPair              A reference to an SRP ECDSA key-pair to save.
+     *
+     * @retval OT_ERROR_NONE              Successfully saved key-pair information in settings.
+     * @retval OT_ERROR_NOT_IMPLEMENTED   The platform does not implement settings functionality.
+     *
+     */
+    otError SaveSrpKey(const Crypto::Ecdsa::P256::KeyPair &aKeyPair);
+
+    /**
+     * This method reads SRP client ECDSA key pair.
+     *
+     * @param[out]   aKeyPair             A reference to a ECDA `KeyPair` to output the read content.
+     *
+     * @retval OT_ERROR_NONE              Successfully read key-pair information.
+     * @retval OT_ERROR_NOT_FOUND         No corresponding value in the setting store.
+     * @retval OT_ERROR_NOT_IMPLEMENTED   The platform does not implement settings functionality.
+     *
+     */
+    otError ReadSrpKey(Crypto::Ecdsa::P256::KeyPair &aKeyPair) const;
+
+    /**
+     * This method deletes SRP client ECDSA key pair from settings.
+     *
+     * @retval OT_ERROR_NONE             Successfully deleted the value.
+     * @retval OT_ERROR_NOT_IMPLEMENTED  The platform does not implement settings functionality.
+     *
+     */
+    otError DeleteSrpKey(void);
+#endif // OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE
 
 private:
     class ChildInfoIteratorBuilder : public InstanceLocator

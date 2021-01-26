@@ -174,6 +174,14 @@ if(CONFIG_OPENTHREAD_SNTP_CLIENT)
   set(OT_SNTP_CLIENT ON CACHE BOOL "Enable SNTP Client support")
 endif()
 
+if(CONFIG_OPENTHREAD_SRP_CLIENT)
+  set(OT_SRP_CLIENT ON CACHE BOOL "Enable SRP Client support")
+endif()
+
+if(CONFIG_OPENTHREAD_SRP_SERVER)
+  set(OT_SRP_SERVER ON CACHE BOOL "Enable SRP Server support")
+endif()
+
 if(CONFIG_OPENTHREAD_TIME_SYNC)
   set(OT_TIME_SYNC ON CACHE BOOL "Enable the time synchronization service feature")
 endif()

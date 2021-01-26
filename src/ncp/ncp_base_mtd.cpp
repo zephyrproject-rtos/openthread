@@ -125,7 +125,8 @@ static uint8_t ExternalRoutePreferenceToFlagByte(int aPreference)
         break;
 
     case OT_ROUTE_PREFERENCE_MED:
-        // fall through
+
+        OT_FALL_THROUGH;
 
     default:
         flags = SPINEL_ROUTE_PREFERENCE_MEDIUM;
@@ -2749,7 +2750,7 @@ template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_MAC_DENYLIST>(void)
         SuccessOrExit(error = mDecoder.ReadEui64(extAddress));
         SuccessOrExit(error = mDecoder.CloseStruct());
 
-        otLinkFilterRemoveAddress(mInstance, extAddress);
+        SuccessOrExit(error = otLinkFilterAddAddress(mInstance, extAddress));
     }
 
 exit:

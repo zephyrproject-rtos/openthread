@@ -66,6 +66,8 @@ set(COMMON_SOURCES
     api/random_noncrypto_api.cpp
     api/server_api.cpp
     api/sntp_api.cpp
+    api/srp_client_api.cpp
+    api/srp_server_api.cpp
     api/tasklet_api.cpp
     api/thread_api.cpp
     api/thread_ftd_api.cpp
@@ -76,6 +78,9 @@ set(COMMON_SOURCES
     backbone_router/bbr_manager.cpp
     backbone_router/multicast_listeners_table.cpp
     backbone_router/ndproxy_table.cpp
+    border_router/infra_if_platform.cpp
+    border_router/router_advertisement.cpp
+    border_router/routing_manager.cpp
     coap/coap.cpp
     coap/coap_message.cpp
     coap/coap_secure.cpp
@@ -141,6 +146,8 @@ set(COMMON_SOURCES
     net/ip6_mpl.cpp
     net/netif.cpp
     net/sntp_client.cpp
+    net/srp_client.cpp
+    net/srp_server.cpp
     net/udp6.cpp
     radio/radio.cpp
     radio/radio_callbacks.cpp

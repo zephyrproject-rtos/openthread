@@ -49,6 +49,8 @@ jobs:
       VIRTUAL_TIME: 1
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: true
     - name: Bootstrap
       run: |
         sudo rm /etc/apt/sources.list.d/* && sudo apt-get update
@@ -75,6 +77,8 @@ jobs:
       MAX_NETWORK_SIZE: 999
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: true
     - uses: actions/setup-go@v1
       with:
         go-version: '1.14'
@@ -121,6 +125,8 @@ jobs:
       PACKET_VERIFICATION: 1
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: true
     - name: Bootstrap
       run: |
         sudo rm /etc/apt/sources.list.d/* && sudo apt-get update
@@ -164,6 +170,8 @@ jobs:
       VIRTUAL_TIME: 1
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: true
     - name: Bootstrap
       run: |
         sudo rm /etc/apt/sources.list.d/* && sudo apt-get update
@@ -205,6 +213,8 @@ jobs:
       MESSAGE_USE_HEAP: ${{ matrix.message_use_heap }}
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: true
     - name: Bootstrap
       run: |
         sudo rm /etc/apt/sources.list.d/* && sudo apt-get update
@@ -242,6 +252,8 @@ jobs:
       VIRTUAL_TIME: 1
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: true
     - name: Bootstrap
       run: |
         sudo rm /etc/apt/sources.list.d/* && sudo apt-get update
@@ -274,26 +286,28 @@ jobs:
       CXXFLAGS: -DCLI_COAP_SECURE_USE_COAP_DEFAULT_HANDLER=1 -DOPENTHREAD_CONFIG_MLE_MAX_CHILDREN=15
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: true
     - name: Bootstrap
       run: |
-        OT_OPTIONS=-DOT_READLINE=OFF sudo apt-get --no-install-recommends install -y expect ninja-build lcov socat
+        sudo apt-get --no-install-recommends install -y expect ninja-build lcov socat
     - name: Run
       run: |
         ulimit -c unlimited
         ./script/test prepare_coredump_upload
-        OT_OPTIONS=-DOT_TIME_SYNC=ON VIRTUAL_TIME=0 ./script/test build expect
-    - name: Copy Shared Libraries
+        OT_OPTIONS='-DOT_TIME_SYNC=ON -DOT_FULL_LOGS=ON -DOT_LOG_OUTPUT=PLATFORM_DEFINED' VIRTUAL_TIME=0 ./script/test build expect
+    - name: Check Crash
       if: ${{ failure() }}
       run: |
-          ./script/test copy_so_lib
+          CRASHED=$(./script/test check_crash | tail -1)
+          [[ $CRASHED -eq "1" ]] && echo "Crashed!" || echo "Not crashed."
+          echo "CRASHED_CLI=$CRASHED" >> $GITHUB_ENV
     - uses: actions/upload-artifact@v2
-      if: ${{ failure() }}
+      if: ${{ failure() && env.CRASHED_CLI == '1' }}
       with:
         name: core-expect-cli
         path: |
-          ./build/openthread-simulation-1.1/examples/apps/cli/ot-cli-ftd
           ./ot-core-dump/*
-          ./so-lib/*
     - name: Generate Coverage
       run: |
         ./script/test generate_coverage gcc
@@ -305,20 +319,19 @@ jobs:
       run: |
         ulimit -c unlimited
         ./script/test prepare_coredump_upload
-        OT_OPTIONS=-DOT_READLINE=OFF VIRTUAL_TIME=0 OT_NODE_TYPE=rcp ./script/test clean build expect
-    - name: Copy Shared Libraries
+        OT_OPTIONS='-DOT_READLINE=OFF -DOT_FULL_LOGS=ON -DOT_LOG_OUTPUT=PLATFORM_DEFINED' VIRTUAL_TIME=0 OT_NODE_TYPE=rcp ./script/test clean build expect
+    - name: Check Crash
       if: ${{ failure() }}
       run: |
-          ./script/test copy_so_lib
+          CRASHED=$(./script/test check_crash | tail -1)
+          [[ $CRASHED -eq "1" ]] && echo "Crashed!" || echo "Not crashed."
+          echo "CRASHED_RCP=$CRASHED" >> $GITHUB_ENV
     - uses: actions/upload-artifact@v2
-      if: ${{ failure() }}
+      if: ${{ failure() && env.CRASHED_RCP == '1' }}
       with:
         name: core-expect-rcp
         path: |
-          ./build/openthread-simulation-1.1/examples/apps/ncp/ot-rcp
-          ./build/openthread-posix-1.1/src/posix/ot-cli
           ./ot-core-dump/*
-          ./so-lib/*
     - name: Generate Coverage
       run: |
         ./script/test generate_coverage gcc
@@ -338,20 +351,24 @@ jobs:
         host ipv6.google.com ::1
         ulimit -c unlimited
         ./script/test prepare_coredump_upload
-        OT_OPTIONS=-DOT_READLINE=OFF OT_NATIVE_IP=1 VIRTUAL_TIME=0 OT_NODE_TYPE=rcp ./script/test clean build expect
-    - name: Copy Shared Libraries
+        OT_OPTIONS='-DOT_READLINE=OFF -DOT_FULL_LOGS=ON -DOT_LOG_OUTPUT=PLATFORM_DEFINED' OT_NATIVE_IP=1 VIRTUAL_TIME=0 OT_NODE_TYPE=rcp ./script/test clean build expect
+    - name: Check Crash
       if: ${{ failure() }}
       run: |
-          ./script/test copy_so_lib
+          CRASHED=$(./script/test check_crash | tail -1)
+          [[ $CRASHED -eq "1" ]] && echo "Crashed!" || echo "Not crashed."
+          echo "CRASHED_TUN=$CRASHED" >> $GITHUB_ENV
+    - uses: actions/upload-artifact@v2
+      if: ${{ failure() && env.CRASHED_TUN == '1' }}
+      with:
+        name: core-expect-posix
+        path: |
+          ./ot-core-dump/*
     - uses: actions/upload-artifact@v2
       if: ${{ failure() }}
       with:
-        name: core-expect-tun
-        path: |
-          ./build/openthread-simulation-1.1/examples/apps/ncp/ot-rcp
-          ./build/openthread-posix-1.1/src/posix/ot-cli
-          ./ot-core-dump/*
-          ./so-lib/*
+        name: syslog-expect-posix
+        path: /var/log/syslog
     - name: Generate Coverage
       run: |
         ./script/test generate_coverage gcc
@@ -364,6 +381,8 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: true
     - name: Bootstrap
       env:
         GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
@@ -408,6 +427,8 @@ jobs:
       VIRTUAL_TIME: 1
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: true
     - name: Bootstrap
       run: |
         sudo apt-get --no-install-recommends install -y python3-setuptools python3-wheel lcov
@@ -445,6 +466,8 @@ jobs:
       VIRTUAL_TIME: 1
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: true
     - name: Bootstrap
       run: |
         sudo rm /etc/apt/sources.list.d/* && sudo apt-get update
@@ -483,6 +506,8 @@ jobs:
       CXX: clang++
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: true
     - name: Bootstrap
       run: |
         sudo rm /etc/apt/sources.list.d/* && sudo apt-get update
@@ -524,6 +549,8 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: true
     - name: Bootstrap
       run: |
         sudo apt-get --no-install-recommends install -y lcov

@@ -33,6 +33,7 @@
 
 #include "notifier.hpp"
 
+#include "border_router/routing_manager.hpp"
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
 #include "common/locator-getters.hpp"
@@ -178,6 +179,15 @@ void Notifier::EmitEvents(void)
 #endif
 #if OPENTHREAD_ENABLE_VENDOR_EXTENSION
     Get<Extension::ExtensionBase>().HandleNotifierEvents(events);
+#endif
+#if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
+    Get<BorderRouter::RoutingManager>().HandleNotifierEvents(events);
+#endif
+#if OPENTHREAD_CONFIG_SRP_SERVER_ENABLE
+    Get<Srp::Server>().HandleNotifierEvents(events);
+#endif
+#if OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE
+    Get<Srp::Client>().HandleNotifierEvents(events);
 #endif
 
     for (ExternalCallback &callback : mExternalCallbacks)

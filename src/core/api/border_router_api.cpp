@@ -37,10 +37,27 @@
 
 #include <openthread/border_router.h>
 
+#include "border_router/routing_manager.hpp"
 #include "common/debug.hpp"
 #include "common/instance.hpp"
 
 using namespace ot;
+
+#if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
+otError otBorderRoutingInit(otInstance *aInstance, uint32_t aInfraIfIndex)
+{
+    Instance &instance = *static_cast<Instance *>(aInstance);
+
+    return instance.Get<BorderRouter::RoutingManager>().Init(aInfraIfIndex);
+}
+
+otError otBorderRoutingSetEnabled(otInstance *aInstance, bool aEnabled)
+{
+    Instance &instance = *static_cast<Instance *>(aInstance);
+
+    return instance.Get<BorderRouter::RoutingManager>().SetEnabled(aEnabled);
+}
+#endif
 
 otError otBorderRouterGetNetData(otInstance *aInstance, bool aStable, uint8_t *aData, uint8_t *aDataLength)
 {

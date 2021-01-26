@@ -691,6 +691,27 @@ otLinkMetrics otPlatRadioGetEnhAckProbingMetrics(otInstance *aInstance, const ot
 {
     OT_UNUSED_VARIABLE(aInstance);
     OT_UNUSED_VARIABLE(aShortAddress);
+
+    otLinkMetrics metrics;
+
+    memset(&metrics, 0, sizeof(metrics));
+
+    return metrics;
+}
+#endif
+
+#if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
+otError otPlatInfraIfSendIcmp6Nd(uint32_t            aInfraIfIndex,
+                                 const otIp6Address *aDestAddress,
+                                 const uint8_t *     aBuffer,
+                                 uint16_t            aBufferLength)
+{
+    OT_UNUSED_VARIABLE(aInfraIfIndex);
+    OT_UNUSED_VARIABLE(aDestAddress);
+    OT_UNUSED_VARIABLE(aBuffer);
+    OT_UNUSED_VARIABLE(aBufferLength);
+
+    return OT_ERROR_FAILED;
 }
 #endif
 

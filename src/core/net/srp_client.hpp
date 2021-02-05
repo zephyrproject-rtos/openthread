@@ -93,54 +93,6 @@ public:
     typedef otSrpClientCallback Callback;
 
     /**
-     * This type represents a TXT record entry representing a key/value pair (RFC 6763 - section 6.3).
-     *
-     */
-    class TxtEntry : public otSrpTxtEntry
-    {
-    public:
-        /**
-         * This method encodes and appends the `TxtEntry` to a message.
-         *
-         * @param[in] aMessage  The message to append to.
-         *
-         * @retval OT_ERROR_NONE           Entry was appended successfully to @p aMessage.
-         * @retval OT_ERROR_INVALID_ARGS   The `TxEntry` info is not valid.
-         * @retval OT_ERROR_NO_BUFS        Insufficient available buffers to grow the message.
-         *
-         */
-        otError AppendTo(Message &aMessage) const;
-
-        /**
-         * This static method appends an array of `TxtEntry` items to a message.
-         *
-         * @param[in] aEntries     A pointer to array of `TxtEntry` items.
-         * @param[in] aNumEntries  The number of entries in @p aEntries array.
-         * @param[in] aMessage     The message to append to.
-         *
-         *
-         * @retval OT_ERROR_NONE           Entries appended successfully to @p aMessage.
-         * @retval OT_ERROR_INVALID_ARGS   The `TxEntry` info is not valid.
-         * @retval OT_ERROR_NO_BUFS        Insufficient available buffers to grow the message.
-         *
-         */
-        static otError AppendEntries(const TxtEntry *aEntries, uint8_t aNumEntries, Message &aMessage);
-
-    private:
-        enum : char
-        {
-            kKeyValueSeparator = '=',
-        };
-
-        enum : uint8_t
-        {
-            kMinKeyLength           = 1,
-            kMaxKeyLength           = 9,
-            kMaxKeyValueEncodedSize = 255,
-        };
-    };
-
-    /**
      * This type represents an SRP client host info.
      *
      */
@@ -268,7 +220,7 @@ public:
          * @returns A pointer to an array of service TXT entries.
          *
          */
-        const TxtEntry *GetTxtEntries(void) const { return static_cast<const TxtEntry *>(mTxtEntries); }
+        const Dns::TxtEntry *GetTxtEntries(void) const { return static_cast<const Dns::TxtEntry *>(mTxtEntries); }
 
         /**
          * This method gets the number of entries in the service TXT entry array.
@@ -317,16 +269,14 @@ public:
      * single SRP Update is sent containing all the info).
      *
      * @param[in] aServerSockAddr  The socket address (IPv6 address and port number) of the SRP server.
-     * @param[in] aCallback        The callback to notify of events and changes. Can be nullptr if not needed.
-     * @param[in] aContext         An arbitrary context used with @p aCallback.
      *
      * @retval OT_ERROR_NONE     SRP client operation started successfully or it is already running with same server
      *                           socket address and callback.
-     * @retval OT_ERROR_BUSY     SRP client is busy running with a different socket address and/or callback.
+     * @retval OT_ERROR_BUSY     SRP client is busy running with a different socket address.
      * @retval OT_ERROR_FAILED   Failed to open/connect the client's UDP socket.
      *
      */
-    otError Start(const Ip6::SockAddr &aServerSockAddr, Callback aCallback, void *aContext);
+    otError Start(const Ip6::SockAddr &aServerSockAddr);
 
     /**
      * This method stops the SRP client operation.
@@ -336,6 +286,37 @@ public:
      *
      */
     void Stop(void);
+
+    /**
+     * This method indicates whether the SRP client is running or not.
+     *
+     * @returns TRUE if the SRP client is running, FALSE otherwise.
+     *
+     */
+    bool IsRunning(void) const { return (mState != kStateStopped); }
+
+    /**
+     * This method gets the socket address (IPv6 address and port number) of the SRP server which is being used by SRP
+     * client.
+     *
+     * If the client is not running, the address is unspecified (all zero) with zero port number.
+     *
+     * @returns The SRP server's socket address.
+     *
+     */
+    const Ip6::SockAddr &GetServerAddress(void) const { return mSocket.GetPeerName(); }
+
+    /**
+     * This method sets the callback used to notify caller of events/changes.
+     *
+     * The SRP client allows a single callback to be registered. So consecutive calls to this method will overwrite any
+     * previously set callback functions.
+     *
+     * @param[in] aCallback        The callback to notify of events and changes. Can be nullptr if not needed.
+     * @param[in] aContext         An arbitrary context used with @p aCallback.
+     *
+     */
+    void SetCallback(Callback aCallback, void *aContext);
 
     /**
      * This method gets the lease interval used in SRP update requests.

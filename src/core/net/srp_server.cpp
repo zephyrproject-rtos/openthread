@@ -40,8 +40,7 @@
 #include "common/logging.hpp"
 #include "common/new.hpp"
 #include "net/dns_headers.hpp"
-#include "thread/network_data_local.hpp"
-#include "thread/network_data_notifier.hpp"
+#include "thread/network_data_service.hpp"
 #include "thread/thread_netif.hpp"
 #include "utils/heap.hpp"
 
@@ -86,8 +85,8 @@ Server::Server(Instance &aInstance)
     , mMaxLease(kDefaultMaxLease)
     , mMinKeyLease(kDefaultMinKeyLease)
     , mMaxKeyLease(kDefaultMaxKeyLease)
-    , mLeaseTimer(aInstance, HandleLeaseTimer, this)
-    , mOutstandingUpdatesTimer(aInstance, HandleOutstandingUpdatesTimer, this)
+    , mLeaseTimer(aInstance, HandleLeaseTimer)
+    , mOutstandingUpdatesTimer(aInstance, HandleOutstandingUpdatesTimer)
     , mEnabled(false)
 {
     IgnoreError(SetDomain(kDefaultDomain));
@@ -223,11 +222,11 @@ void Server::RemoveAndFreeHost(Host *aHost)
     aHost->Free();
 }
 
-Server::Service *Server::FindService(const char *aFullName)
+const Server::Service *Server::FindService(const char *aFullName) const
 {
-    Service *service = nullptr;
+    const Service *service = nullptr;
 
-    for (Host *host = mHosts.GetHead(); host != nullptr; host = host->GetNext())
+    for (const Host *host = mHosts.GetHead(); host != nullptr; host = host->GetNext())
     {
         service = host->FindService(aFullName);
         if (service != nullptr)
@@ -239,11 +238,11 @@ Server::Service *Server::FindService(const char *aFullName)
     return service;
 }
 
-bool Server::HasNameConflictsWith(Host &aHost)
+bool Server::HasNameConflictsWith(Host &aHost) const
 {
     bool           hasConflicts = false;
     const Service *service      = nullptr;
-    Host *         existingHost = mHosts.FindMatching(aHost.GetFullName());
+    const Host *   existingHost = mHosts.FindMatching(aHost.GetFullName());
 
     if (existingHost != nullptr && *aHost.GetKey() != *existingHost->GetKey())
     {
@@ -253,7 +252,7 @@ bool Server::HasNameConflictsWith(Host &aHost)
     // Check not only services of this host but all hosts.
     while ((service = aHost.GetNextService(service)) != nullptr)
     {
-        Service *existingService = FindService(service->mFullName);
+        const Service *existingService = FindService(service->mFullName);
         if (existingService != nullptr && *service->GetHost().GetKey() != *existingService->GetHost().GetKey())
         {
             ExitNow(hasConflicts = true);
@@ -468,33 +467,19 @@ exit:
 
 otError Server::PublishServerData(void)
 {
-    otError       error;
-    const uint8_t serviceData[] = {kThreadServiceTypeSrpServer};
-    uint8_t       serverData[sizeof(uint16_t)];
+    NetworkData::Service::SrpServer::ServerData serverData;
 
     OT_ASSERT(mSocket.IsBound());
 
-    Encoding::BigEndian::WriteUint16(mSocket.GetSockName().mPort, serverData);
+    serverData.SetPort(mSocket.GetSockName().GetPort());
 
-    SuccessOrExit(error = Get<NetworkData::Local>().AddService(
-                      NetworkData::ServiceTlv::kThreadEnterpriseNumber, serviceData, sizeof(serviceData),
-                      /* aServerStable */ true, serverData, sizeof(serverData)));
-    Get<NetworkData::Notifier>().HandleServerDataUpdated();
-
-exit:
-    return error;
+    return Get<NetworkData::Service::Manager>().Add<NetworkData::Service::SrpServer>(serverData);
 }
 
 void Server::UnpublishServerData(void)
 {
-    otError       error;
-    const uint8_t serviceData[] = {kThreadServiceTypeSrpServer};
+    otError error = Get<NetworkData::Service::Manager>().Remove<NetworkData::Service::SrpServer>();
 
-    SuccessOrExit(error = Get<NetworkData::Local>().RemoveService(NetworkData::ServiceTlv::kThreadEnterpriseNumber,
-                                                                  serviceData, sizeof(serviceData)));
-    Get<NetworkData::Notifier>().HandleServerDataUpdated();
-
-exit:
     if (error != OT_ERROR_NONE)
     {
         otLogWarnSrp("[server] failed to unpublish SRP service: %s", otThreadErrorToString(error));
@@ -569,14 +554,17 @@ exit:
 otError Server::ProcessZoneSection(const Message &          aMessage,
                                    const Dns::UpdateHeader &aDnsHeader,
                                    uint16_t &               aOffset,
-                                   Dns::Zone &              aZone)
+                                   Dns::Zone &              aZone) const
 {
     otError   error = OT_ERROR_NONE;
+    char      name[Dns::Name::kMaxLength + 1];
     Dns::Zone zone;
 
     VerifyOrExit(aDnsHeader.GetZoneRecordCount() == 1, error = OT_ERROR_PARSE);
 
-    SuccessOrExit(error = Dns::Name::ParseName(aMessage, aOffset));
+    SuccessOrExit(error = Dns::Name::ReadName(aMessage, aOffset, name, sizeof(name)));
+    // TODO: return `Dns::kResponseNotAuth` for not authorized zone names.
+    VerifyOrExit(strcmp(name, GetDomain()) == 0, error = OT_ERROR_SECURITY);
     SuccessOrExit(error = aMessage.Read(aOffset, zone));
     aOffset += sizeof(zone);
 
@@ -591,7 +579,7 @@ otError Server::ProcessUpdateSection(Host &                   aHost,
                                      const Message &          aMessage,
                                      const Dns::UpdateHeader &aDnsHeader,
                                      const Dns::Zone &        aZone,
-                                     uint16_t &               aOffset)
+                                     uint16_t &               aOffset) const
 {
     otError error = OT_ERROR_NONE;
 
@@ -623,7 +611,7 @@ otError Server::ProcessHostDescriptionInstruction(Host &                   aHost
                                                   const Message &          aMessage,
                                                   const Dns::UpdateHeader &aDnsHeader,
                                                   const Dns::Zone &        aZone,
-                                                  uint16_t                 aOffset)
+                                                  uint16_t                 aOffset) const
 {
     otError error;
 
@@ -635,6 +623,8 @@ otError Server::ProcessHostDescriptionInstruction(Host &                   aHost
         Dns::ResourceRecord record;
 
         SuccessOrExit(error = Dns::Name::ReadName(aMessage, aOffset, name, sizeof(name)));
+        // TODO: return `Dns::kResponseNotZone` for names not in the zone.
+        VerifyOrExit(Dns::Name::IsSubDomainOf(name, GetDomain()), error = OT_ERROR_SECURITY);
         SuccessOrExit(error = aMessage.Read(aOffset, record));
 
         if (record.GetClass() == Dns::ResourceRecord::kClassAny)
@@ -728,7 +718,7 @@ otError Server::ProcessServiceDiscoveryInstructions(Host &                   aHo
                                                     const Message &          aMessage,
                                                     const Dns::UpdateHeader &aDnsHeader,
                                                     const Dns::Zone &        aZone,
-                                                    uint16_t                 aOffset)
+                                                    uint16_t                 aOffset) const
 {
     otError error = OT_ERROR_NONE;
 
@@ -740,6 +730,7 @@ otError Server::ProcessServiceDiscoveryInstructions(Host &                   aHo
         Service *           service;
 
         SuccessOrExit(error = Dns::Name::ReadName(aMessage, aOffset, name, sizeof(name)));
+        VerifyOrExit(Dns::Name::IsSubDomainOf(name, GetDomain()), error = OT_ERROR_SECURITY);
         SuccessOrExit(error = aMessage.Read(aOffset, record));
 
         aOffset += sizeof(record);
@@ -747,6 +738,7 @@ otError Server::ProcessServiceDiscoveryInstructions(Host &                   aHo
         if (record.GetType() == Dns::ResourceRecord::kTypePtr)
         {
             SuccessOrExit(error = Dns::Name::ReadName(aMessage, aOffset, serviceName, sizeof(serviceName)));
+            VerifyOrExit(Dns::Name::IsSubDomainOf(name, GetDomain()), error = OT_ERROR_SECURITY);
         }
         else
         {
@@ -776,7 +768,7 @@ otError Server::ProcessServiceDescriptionInstructions(Host &                   a
                                                       const Message &          aMessage,
                                                       const Dns::UpdateHeader &aDnsHeader,
                                                       const Dns::Zone &        aZone,
-                                                      uint16_t &               aOffset)
+                                                      uint16_t &               aOffset) const
 {
     Service *service;
     otError  error = OT_ERROR_NONE;
@@ -787,6 +779,7 @@ otError Server::ProcessServiceDescriptionInstructions(Host &                   a
         Dns::ResourceRecord record;
 
         SuccessOrExit(error = Dns::Name::ReadName(aMessage, aOffset, name, sizeof(name)));
+        VerifyOrExit(Dns::Name::IsSubDomainOf(name, GetDomain()), error = OT_ERROR_SECURITY);
         SuccessOrExit(error = aMessage.Read(aOffset, record));
 
         if (record.GetClass() == Dns::ResourceRecord::kClassAny)
@@ -814,6 +807,7 @@ otError Server::ProcessServiceDescriptionInstructions(Host &                   a
             aOffset += sizeof(srvRecord);
 
             SuccessOrExit(error = Dns::Name::ReadName(aMessage, aOffset, hostName, hostNameLength));
+            VerifyOrExit(Dns::Name::IsSubDomainOf(name, GetDomain()), error = OT_ERROR_SECURITY);
             VerifyOrExit(aHost.Matches(hostName), error = OT_ERROR_FAILED);
 
             service = aHost.FindService(name);
@@ -862,7 +856,7 @@ bool Server::IsValidDeleteAllRecord(const Dns::ResourceRecord &aRecord)
 otError Server::ProcessAdditionalSection(Host *                   aHost,
                                          const Message &          aMessage,
                                          const Dns::UpdateHeader &aDnsHeader,
-                                         uint16_t &               aOffset)
+                                         uint16_t &               aOffset) const
 {
     otError          error = OT_ERROR_NONE;
     Dns::OptRecord   optRecord;
@@ -927,7 +921,7 @@ otError Server::VerifySignature(const Dns::Ecdsa256KeyRecord &aKey,
                                 uint16_t                      aSigOffset,
                                 uint16_t                      aSigRdataOffset,
                                 uint16_t                      aSigRdataLength,
-                                const char *                  aSignerName)
+                                const char *                  aSignerName) const
 {
     otError                        error;
     uint16_t                       offset = aMessage.GetOffset();
@@ -1136,7 +1130,7 @@ exit:
 
 void Server::HandleLeaseTimer(Timer &aTimer)
 {
-    aTimer.GetOwner<Server>().HandleLeaseTimer();
+    aTimer.Get<Server>().HandleLeaseTimer();
 }
 
 void Server::HandleLeaseTimer(void)
@@ -1256,7 +1250,7 @@ void Server::HandleLeaseTimer(void)
 
 void Server::HandleOutstandingUpdatesTimer(Timer &aTimer)
 {
-    aTimer.GetOwner<Server>().HandleOutstandingUpdatesTimer();
+    aTimer.Get<Server>().HandleOutstandingUpdatesTimer();
 }
 
 void Server::HandleOutstandingUpdatesTimer(void)
@@ -1324,6 +1318,11 @@ exit:
     return error;
 }
 
+otError Server::Service::GetNextTxtEntry(Dns::TxtRecord::TxtIterator &aIterator, Dns::TxtEntry &aTxtEntry) const
+{
+    return Dns::TxtRecord::GetNextTxtEntry(mTxtData, mTxtLength, aIterator, aTxtEntry);
+}
+
 TimeMilli Server::Service::GetExpireTime(void) const
 {
     OT_ASSERT(!mIsDeleted);
@@ -1366,6 +1365,7 @@ otError Server::Service::SetTxtDataFromMessage(const Message &aMessage, uint16_t
     txtData = static_cast<uint8_t *>(GetInstance().HeapCAlloc(1, aLength));
     VerifyOrExit(txtData != nullptr, error = OT_ERROR_NO_BUFS);
     VerifyOrExit(aMessage.ReadBytes(aOffset, txtData, aLength) == aLength, error = OT_ERROR_PARSE);
+    VerifyOrExit(Dns::TxtRecord::VerifyTxtData(txtData, aLength), error = OT_ERROR_PARSE);
 
     GetInstance().HeapFree(mTxtData);
     mTxtData   = txtData;
@@ -1563,6 +1563,11 @@ void Server::Host::CopyResourcesFrom(const Host &aHost)
 Server::Service *Server::Host::FindService(const char *aFullName)
 {
     return mServices.FindMatching(aFullName);
+}
+
+const Server::Service *Server::Host::FindService(const char *aFullName) const
+{
+    return const_cast<Host *>(this)->FindService(aFullName);
 }
 
 otError Server::Host::AddIp6Address(const Ip6::Address &aIp6Address)

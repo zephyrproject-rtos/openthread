@@ -38,6 +38,10 @@ if(CONFIG_OPENTHREAD_COAPS)
   set(OT_COAPS ON CACHE BOOL "Enable secure CoAP API support")
 endif()
 
+if(CONFIG_OPENTHREAD_COAP_BLOCK)
+  set(OT_COAP_BLOCK ON CACHE BOOL "Enable CoAP Block-wise option support")
+endif()
+
 if(CONFIG_OPENTHREAD_COAP_OBSERVE)
   set(OT_COAP_OBSERVE ON CACHE BOOL "Enable CoAP Observe option support")
 endif()

@@ -151,18 +151,17 @@ public:
         uint16_t GetPriority(void) const { return mPriority; }
 
         /**
-         * This method returns the TXT data of the service instance.
+         * This method returns the next TXT entry of the service instance.
          *
-         * @param[out]  aTxtLength  A pointer to the output of the TXT data length.
+         * @param[inout]  aIterator  A pointer to the TXT iterator context. To get the first
+         *                           TXT entry, it should be set to OT_DNS_TXT_ITERATOR_INIT.
+         * @param[out]    aTxtEntry  A pointer to where the TXT entry will be placed.
          *
-         * @returns  A pointer to the standard TXT data with format described by RFC 6763.
+         * @retval OT_ERROR_NONE       Successfully found the next TXT entry.
+         * @retval OT_ERROR_NOT_FOUND  No subsequent TXT entry exists in the service.
          *
          */
-        const uint8_t *GetTxtData(uint16_t &aTxtLength) const
-        {
-            aTxtLength = mTxtLength;
-            return mTxtData;
-        }
+        otError GetNextTxtEntry(Dns::TxtRecord::TxtIterator &aIterator, Dns::TxtEntry &aTxtEntry) const;
 
         /**
          * This method returns the host which the service instance reside on.
@@ -362,7 +361,8 @@ public:
         void     DeleteResourcesButRetainName(void);
         void     CopyResourcesFrom(const Host &aHost);
         Service *FindService(const char *aFullName);
-        otError  AddIp6Address(const Ip6::Address &aIp6Address);
+        const Service *FindService(const char *aFullName) const;
+        otError        AddIp6Address(const Ip6::Address &aIp6Address);
 
         char *       mFullName;
         Ip6::Address mAddresses[kMaxAddressesNum];
@@ -480,11 +480,6 @@ public:
     void HandleAdvertisingResult(const Host *aHost, otError aError);
 
 private:
-    enum : uint8_t
-    {
-        kThreadServiceTypeSrpServer = OPENTHREAD_CONFIG_SRP_SERVER_SERVICE_TYPE,
-    };
-
     enum : uint16_t
     {
         kUdpPayloadSize = Ip6::Ip6::kMaxDatagramLength - sizeof(Ip6::Udp::Header), // Max UDP payload size
@@ -553,45 +548,45 @@ private:
                                  const Message &          aMessage,
                                  const Dns::UpdateHeader &aDnsHeader,
                                  const Dns::Zone &        aZone,
-                                 uint16_t &               aOffset);
+                                 uint16_t &               aOffset) const;
     otError ProcessAdditionalSection(Host *                   aHost,
                                      const Message &          aMessage,
                                      const Dns::UpdateHeader &aDnsHeader,
-                                     uint16_t &               aOffset);
+                                     uint16_t &               aOffset) const;
     otError VerifySignature(const Dns::Ecdsa256KeyRecord &aKey,
                             const Message &               aMessage,
                             Dns::UpdateHeader             aDnsHeader,
                             uint16_t                      aSigOffset,
                             uint16_t                      aSigRdataOffset,
                             uint16_t                      aSigRdataLength,
-                            const char *                  aSignerName);
+                            const char *                  aSignerName) const;
+    otError ProcessZoneSection(const Message &          aMessage,
+                               const Dns::UpdateHeader &aDnsHeader,
+                               uint16_t &               aOffset,
+                               Dns::Zone &              aZone) const;
+    otError ProcessHostDescriptionInstruction(Host &                   aHost,
+                                              const Message &          aMessage,
+                                              const Dns::UpdateHeader &aDnsHeader,
+                                              const Dns::Zone &        aZone,
+                                              uint16_t                 aOffset) const;
+    otError ProcessServiceDiscoveryInstructions(Host &                   aHost,
+                                                const Message &          aMessage,
+                                                const Dns::UpdateHeader &aDnsHeader,
+                                                const Dns::Zone &        aZone,
+                                                uint16_t                 aOffset) const;
+    otError ProcessServiceDescriptionInstructions(Host &                   aHost,
+                                                  const Message &          aMessage,
+                                                  const Dns::UpdateHeader &aDnsHeader,
+                                                  const Dns::Zone &        aZone,
+                                                  uint16_t &               aOffset) const;
 
-    static otError ProcessZoneSection(const Message &          aMessage,
-                                      const Dns::UpdateHeader &aDnsHeader,
-                                      uint16_t &               aOffset,
-                                      Dns::Zone &              aZone);
-    static otError ProcessHostDescriptionInstruction(Host &                   aHost,
-                                                     const Message &          aMessage,
-                                                     const Dns::UpdateHeader &aDnsHeader,
-                                                     const Dns::Zone &        aZone,
-                                                     uint16_t                 aOffset);
-    static otError ProcessServiceDiscoveryInstructions(Host &                   aHost,
-                                                       const Message &          aMessage,
-                                                       const Dns::UpdateHeader &aDnsHeader,
-                                                       const Dns::Zone &        aZone,
-                                                       uint16_t                 aOffset);
-    static otError ProcessServiceDescriptionInstructions(Host &                   aHost,
-                                                         const Message &          aMessage,
-                                                         const Dns::UpdateHeader &aDnsHeader,
-                                                         const Dns::Zone &        aZone,
-                                                         uint16_t &               aOffset);
     static bool    IsValidDeleteAllRecord(const Dns::ResourceRecord &aRecord);
+    const Service *FindService(const char *aFullName) const;
 
     void        HandleUpdate(const Dns::UpdateHeader &aDnsHeader, Host *aHost, const Ip6::MessageInfo &aMessageInfo);
     void        AddHost(Host *aHost);
     void        RemoveAndFreeHost(Host *aHost);
-    Service *   FindService(const char *aFullName);
-    bool        HasNameConflictsWith(Host &aHost);
+    bool        HasNameConflictsWith(Host &aHost) const;
     void        SendResponse(const Dns::UpdateHeader &   aHeader,
                              Dns::UpdateHeader::Response aResponseCode,
                              const Ip6::MessageInfo &    aMessageInfo);

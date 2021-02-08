@@ -596,7 +596,7 @@ private:
     const char *LinkMetricsStatusToStr(uint8_t aStatus);
 #endif // OPENTHREAD_CONFIG_MLE_LINK_METRICS_ENABLE
 
-    static Interpreter &GetOwner(OwnerLocator &aOwnerLocator);
+    static Interpreter &GetOwner(InstanceLocator &aInstanceLocator);
 
     static void HandleDiscoveryRequest(const otThreadDiscoveryRequestInfo *aInfo, void *aContext)
     {
@@ -775,6 +775,7 @@ private:
 
     static_assert(Utils::LookupTable::IsSorted(sCommands), "Command Table is not sorted");
 
+    Instance *          mInstance;
     const otCliCommand *mUserCommands;
     uint8_t             mUserCommandsLength;
     void *              mUserCommandsContext;
@@ -823,8 +824,6 @@ private:
 #if OPENTHREAD_CONFIG_SRP_SERVER_ENABLE
     SrpServer mSrpServer;
 #endif
-
-    Instance *mInstance;
 };
 
 } // namespace Cli

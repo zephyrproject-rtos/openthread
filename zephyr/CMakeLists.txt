@@ -90,6 +90,10 @@ if(CONFIG_OPENTHREAD_DNS_CLIENT)
   set(OT_DNS_CLIENT ON CACHE BOOL "Enable DNS client support")
 endif()
 
+if(CONFIG_OPENTHREAD_DNSSD_SERVER)
+  set(OT_DNSSD_SERVER ON CACHE BOOL "Enable DNS-SD server support")
+endif()
+
 if(CONFIG_OPENTHREAD_DUA)
   set(OT_DUA ON CACHE BOOL "Enable Domain Unicast Address feature for Thread 1.2")
 endif()

@@ -110,6 +110,7 @@ libopenthread_mtd_a_CPPFLAGS               = \
 SOURCES_COMMON                                  = \
     api/backbone_router_api.cpp                   \
     api/backbone_router_ftd_api.cpp               \
+    api/border_agent_api.cpp                      \
     api/border_router_api.cpp                     \
     api/channel_manager_api.cpp                   \
     api/channel_monitor_api.cpp                   \
@@ -214,7 +215,7 @@ SOURCES_COMMON                                  = \
     net/dhcp6_client.cpp                          \
     net/dhcp6_server.cpp                          \
     net/dns_client.cpp                            \
-    net/dns_headers.cpp                           \
+    net/dns_types.cpp                             \
     net/dnssd_server.cpp                          \
     net/icmp6.cpp                                 \
     net/ip6.cpp                                   \
@@ -430,7 +431,7 @@ HEADERS_COMMON                                  = \
     crypto/hkdf_sha256.hpp                        \
     crypto/hmac_sha256.hpp                        \
     crypto/mbedtls.hpp                            \
-    crypto/pbkdf2_cmac.h                          \
+    crypto/pbkdf2_cmac.hpp                        \
     crypto/sha256.hpp                             \
     diags/factory_diags.hpp                       \
     mac/channel_mask.hpp                          \
@@ -463,7 +464,7 @@ HEADERS_COMMON                                  = \
     net/dhcp6_client.hpp                          \
     net/dhcp6_server.hpp                          \
     net/dns_client.hpp                            \
-    net/dns_headers.hpp                           \
+    net/dns_types.hpp                             \
     net/dnssd_server.hpp                          \
     net/icmp6.hpp                                 \
     net/ip6.hpp                                   \

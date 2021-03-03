@@ -1051,6 +1051,91 @@ class TxtEntry : public otDnsTxtEntry
     friend class TxtRecord;
 
 public:
+    enum : uint8_t
+    {
+        kMinKeyLength = OT_DNS_TXT_KEY_MIN_LENGTH, ///< Minimum length of key string (RFC 6763 - section 6.4).
+        kMaxKeyLength = OT_DNS_TXT_KEY_MAX_LENGTH, ///< Recommended max length of key string (RFC 6763 - section 6.4).
+    };
+
+    /**
+     * This class represents an iterator for TXT record entires (key/value pairs).
+     *
+     */
+    class Iterator : public otDnsTxtEntryIterator
+    {
+        friend class TxtEntry;
+
+    public:
+        /**
+         * This method initializes a TXT record iterator.
+         *
+         * The buffer pointer @p aTxtData and its content MUST persist and remain unchanged while the iterator object
+         * is being used.
+         *
+         * @param[in] aTxtData        A pointer to buffer containing the encoded TXT data.
+         * @param[in] aTxtDataLength  The length (number of bytes) of @p aTxtData.
+         *
+         */
+        void Init(const uint8_t *aTxtData, uint16_t aTxtDataLength);
+
+        /**
+         * This method parses the TXT data from the `Iterator` and gets the next TXT record entry (key/value pair).
+         *
+         * The `Iterator` instance MUST be initialized using `Init()` before calling this method and the TXT data
+         * buffer used to initialize the iterator MUST persist and remain unchanged.
+         *
+         * If the parsed key string length is smaller than or equal to `kMaxKeyLength` (recommended max key length)
+         * the key string is returned in `mKey` in @p aEntry. But if the key is longer, then `mKey` is set to NULL and
+         * the entire encoded TXT entry is returned in `mValue` and `mValueLength`.
+         *
+         * @param[out] aEntry          A reference to a `TxtEntry` to output the parsed/read entry.
+         *
+         * @retval OT_ERROR_NONE       The next entry was parsed successfully. @p aEntry is updated.
+         * @retval OT_ERROR_NOT_FOUND  No more entries in TXT data.
+         * @retval OT_ERROR_PARSE      The TXT data from `Iterator` is not well-formed.
+         *
+         */
+        otError GetNextEntry(TxtEntry &aEntry);
+
+    private:
+        enum : uint8_t
+        {
+            kIndexTxtLength   = 0,
+            kIndexTxtPosition = 1,
+        };
+
+        const char *GetTxtData(void) const { return reinterpret_cast<const char *>(mPtr); }
+        void        SetTxtData(const uint8_t *aTxtData) { mPtr = aTxtData; }
+        uint16_t    GetTxtDataLength(void) const { return mData[kIndexTxtLength]; }
+        void        SetTxtDataLength(uint16_t aLength) { mData[kIndexTxtLength] = aLength; }
+        uint16_t    GetTxtDataPosition(void) const { return mData[kIndexTxtPosition]; }
+        void        SetTxtDataPosition(uint16_t aValue) { mData[kIndexTxtPosition] = aValue; }
+        void        IncreaseTxtDataPosition(uint16_t aIncrement) { mData[kIndexTxtPosition] += aIncrement; }
+        char *      GetKeyBuffer(void) { return mChar; }
+        const char *GetTxtDataEnd(void) const { return GetTxtData() + GetTxtDataLength(); }
+    };
+
+    /**
+     * This is the default constructor for a `TxtEntry` object.
+     *
+     */
+    TxtEntry(void) = default;
+
+    /**
+     * This constructor initializes a `TxtEntry` object.
+     *
+     * @param[in] aKey           A pointer to the key string.
+     * @param[in] aValue         A pointer to a buffer containing the value.
+     * @param[in] aValueLength   Number of bytes in @p aValue buffer.
+     *
+     */
+    TxtEntry(const char *aKey, const uint8_t *aValue, uint8_t aValueLength)
+    {
+        mKey         = aKey;
+        mValue       = aValue;
+        mValueLength = aValueLength;
+    }
+
     /**
      * This method encodes and appends the `TxtEntry` to a message.
      *
@@ -1070,7 +1155,6 @@ public:
      * @param[in] aNumEntries  The number of entries in @p aEntries array.
      * @param[in] aMessage     The message to append to.
      *
-     *
      * @retval OT_ERROR_NONE           Entries appended successfully to @p aMessage.
      * @retval OT_ERROR_INVALID_ARGS   The `TxTEntry` info is not valid.
      * @retval OT_ERROR_NO_BUFS        Insufficient available buffers to grow the message.
@@ -1079,16 +1163,15 @@ public:
     static otError AppendEntries(const TxtEntry *aEntries, uint8_t aNumEntries, Message &aMessage);
 
 private:
+    enum : uint8_t
+    {
+        kMaxKeyValueEncodedSize = 255,
+    };
+
     enum : char
     {
         kKeyValueSeparator = '=',
-    };
-
-    enum : uint8_t
-    {
-        kMinKeyLength           = 1,
-        kMaxKeyLength           = 9,
-        kMaxKeyValueEncodedSize = 255,
+        kNullChar          = '\0',
     };
 };
 
@@ -1553,8 +1636,6 @@ public:
         kType = kTypeTxt, ///< The TXT record type.
     };
 
-    typedef otDnsTxtIterator TxtIterator;
-
     /**
      * This method initializes the TXT Resource Record by setting its type and class.
      *
@@ -1599,26 +1680,6 @@ public:
      *
      */
     static bool VerifyTxtData(const uint8_t *aTxtData, uint16_t aTxtLength);
-
-    /**
-     * This static method returns the next TXT entry in the encoded TXT data buffer.
-     *
-     * This method assumes that @p aTxtData has already been verified by `VerifyTxtData()`.
-     *
-     * @param[in]     aTxtData    The encoded TXT data buffer.
-     * @param[in]     aTxtLength  The length of the encoded TXT data.
-     * @param[inout]  aIterator   A reference to the TXT iterator context. To get the first
-     *                            TXT entry, it should be set to OT_DNS_TXT_ITERATOR_INIT.
-     * @param[out]    aTxtEntry   A reference to where the TXT entry will be placed.
-     *
-     * @retval OT_ERROR_NONE       Successfully found the next TXT entry.
-     * @retval OT_ERROR_NOT_FOUND  No subsequent TXT entry exists in the service.
-     *
-     */
-    static otError GetNextTxtEntry(const uint8_t *aTxtData,
-                                   uint16_t       aTxtLength,
-                                   TxtIterator &  aIterator,
-                                   TxtEntry &     aTxtEntry);
 
 } OT_TOOL_PACKED_END;
 
@@ -2218,7 +2279,7 @@ private:
 } OT_TOOL_PACKED_END;
 
 /**
- * This class implements DNS OPT Pseudo Resource Record header for EDNS(0) (RFC 6981 - Section 6.1).
+ * This class implements DNS OPT Pseudo Resource Record header for EDNS(0) (RFC 6891 - Section 6.1).
  *
  */
 OT_TOOL_PACKED_BEGIN
@@ -2271,10 +2332,7 @@ public:
      * @return The upper 8-bit of the extended 12-bit Response Code.
      *
      */
-    uint8_t GetExtendedResponseCode(void) const
-    {
-        return static_cast<uint8_t>((mTtl & kExtRCodeMask) >> kExtRCodeffset);
-    }
+    uint8_t GetExtendedResponseCode(void) const { return GetTtlByteAt(kExtRCodeByteIndex); }
 
     /**
      * This method sets the upper 8-bit of the extended 12-bit Response Code.
@@ -2284,11 +2342,7 @@ public:
      * @param[in] aExtendedResponse The upper 8-bit of the extended 12-bit Response Code.
      *
      */
-    void SetExtnededResponseCode(uint8_t aExtendedResponse)
-    {
-        mTtl &= ~kExtRCodeffset;
-        mTtl |= (static_cast<uint32_t>(aExtendedResponse) << kExtRCodeffset);
-    }
+    void SetExtnededResponseCode(uint8_t aExtendedResponse) { GetTtlByteAt(kExtRCodeByteIndex) = aExtendedResponse; }
 
     /**
      * This method gets the Version field.
@@ -2296,7 +2350,7 @@ public:
      * @returns The version.
      *
      */
-    uint8_t GetVersion(void) const { return static_cast<uint8_t>((mTtl & kVersionMask) >> kVersionOffset); }
+    uint8_t GetVersion(void) const { return GetTtlByteAt(kVersionByteIndex); }
 
     /**
      * This method set the Version field.
@@ -2304,11 +2358,7 @@ public:
      * @param[in] aVersion  The version.
      *
      */
-    void SetVersion(uint8_t aVersion)
-    {
-        mTtl &= ~kVersionMask;
-        mTtl |= (static_cast<uint32_t>(aVersion) << kVersionOffset);
-    }
+    void SetVersion(uint8_t aVersion) { GetTtlByteAt(kVersionByteIndex) = aVersion; }
 
     /**
      * This method indicates whether the DNSSEC OK flag is set or not.
@@ -2316,19 +2366,19 @@ public:
      * @returns True if DNSSEC OK flag is set in the header, false otherwise.
      *
      */
-    bool IsDnsSecurityFlagSet(void) const { return (mTtl & kDnsSecFlag) != 0; }
+    bool IsDnsSecurityFlagSet(void) const { return (GetTtlByteAt(kFlagByteIndex) & kDnsSecFlag) != 0; }
 
     /**
      * This method clears the DNSSEC OK bit flag.
      *
      */
-    void ClearDnsSecurityFlag(void) { mTtl &= ~kDnsSecFlag; }
+    void ClearDnsSecurityFlag(void) { GetTtlByteAt(kFlagByteIndex) &= ~kDnsSecFlag; }
 
     /**
      * This method sets the DNSSEC OK bit flag.
      *
      */
-    void SetDnsSecurityFlag(void) { mTtl |= kDnsSecFlag; }
+    void SetDnsSecurityFlag(void) { GetTtlByteAt(kFlagByteIndex) |= kDnsSecFlag; }
 
 private:
     // The OPT RR re-purposes the existing CLASS and TTL fields in the
@@ -2340,19 +2390,21 @@ private:
     //  +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
     //  |         EXTENDED-RCODE        |            VERSION            |
     //  +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
-    //  | DO|                           Z                               |
+    //  | DO|                Z          |             Z                 |
     //  +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
     //
     // The variable data part of OPT RR can contain zero of more `Option`.
 
-    enum : uint32_t
+    enum : uint8_t
     {
-        kExtRCodeffset = 24,                    // Extended RCODE field offset.
-        kExtRCodeMask  = 0xf << kExtRCodeffset, // Extended RCODE field mask.
-        kVersionOffset = 16,                    // Version field offset.
-        kVersionMask   = 0xf << kVersionOffset, // Version field mask.
-        kDnsSecFlag    = 1 << 15,               // DnsSec bit flag.
+        kExtRCodeByteIndex = 0,      // Byte index of Extended RCODE within the TTL field.
+        kVersionByteIndex  = 1,      // Byte index of Version within the TTL field.
+        kFlagByteIndex     = 2,      // Byte index of flag byte within the TTL field.
+        kDnsSecFlag        = 1 << 7, // DNSSec OK bit flag.
     };
+
+    uint8_t  GetTtlByteAt(uint8_t aIndex) const { return reinterpret_cast<const uint8_t *>(&mTtl)[aIndex]; }
+    uint8_t &GetTtlByteAt(uint8_t aIndex) { return reinterpret_cast<uint8_t *>(&mTtl)[aIndex]; }
 
 } OT_TOOL_PACKED_END;
 

@@ -345,8 +345,13 @@ class OtCli:
         # Default command if no match below, will be overridden if below conditions are met.
         cmd = './ot-cli-%s' % (mode)
 
+        # For Thread 1.2 MTD node, use ot-cli-mtd build regardless of OT_CLI_PATH
+        if self.version == '1.2' and mode == 'mtd' and 'top_builddir' in os.environ:
+            srcdir = os.environ['top_builddir']
+            cmd = '%s/examples/apps/cli/ot-cli-%s %d' % (srcdir, mode, nodeid)
+
         # If Thread version of node matches the testing environment version.
-        if self.version == self.env_version:
+        elif self.version == self.env_version:
             # Load Thread 1.2 BBR device when testing Thread 1.2 scenarios
             # which requires device with Backbone functionality.
             if self.version == '1.2' and self.is_bbr:
@@ -367,6 +372,7 @@ class OtCli:
             if 'RADIO_DEVICE' in os.environ:
                 cmd += ' --real-time-signal=+1 -v spinel+hdlc+uart://%s?forkpty-arg=%d' % (os.environ['RADIO_DEVICE'],
                                                                                            nodeid)
+                self.is_posix = True
             else:
                 cmd += ' %d' % nodeid
 
@@ -382,6 +388,7 @@ class OtCli:
             if 'RADIO_DEVICE_1_1' in os.environ:
                 cmd += ' --real-time-signal=+1 -v spinel+hdlc+uart://%s?forkpty-arg=%d' % (
                     os.environ['RADIO_DEVICE_1_1'], nodeid)
+                self.is_posix = True
             else:
                 cmd += ' %d' % nodeid
 
@@ -410,6 +417,7 @@ class OtCli:
             if 'RADIO_DEVICE' in os.environ:
                 args = ' --real-time-signal=+1 spinel+hdlc+uart://%s?forkpty-arg=%d' % (os.environ['RADIO_DEVICE'],
                                                                                         nodeid)
+                self.is_posix = True
             else:
                 args = ''
 
@@ -449,6 +457,7 @@ class OtCli:
             if 'RADIO_DEVICE_1_1' in os.environ:
                 args = ' --real-time-signal=+1 spinel+hdlc+uart://%s?forkpty-arg=%d' % (os.environ['RADIO_DEVICE_1_1'],
                                                                                         nodeid)
+                self.is_posix = True
             else:
                 args = ''
 
@@ -502,6 +511,7 @@ class NodeImpl:
     def __init__(self, nodeid, name=None, simulator=None, **kwargs):
         self.nodeid = nodeid
         self.name = name or ('Node%d' % nodeid)
+        self.is_posix = False
 
         self.simulator = simulator
         if self.simulator:
@@ -917,6 +927,34 @@ class NodeImpl:
     def srp_client_stop(self):
         self.send_command(f'srp client stop')
         self._expect_done()
+
+    def srp_client_get_state(self):
+        cmd = 'srp client state'
+        self.send_command(cmd)
+        return self._expect_command_output(cmd)[0]
+
+    def srp_client_get_auto_start_mode(self):
+        cmd = 'srp client autostart'
+        self.send_command(cmd)
+        return self._expect_command_output(cmd)[0]
+
+    def srp_client_enable_auto_start_mode(self):
+        self.send_command(f'srp client autostart enable')
+        self._expect_done()
+
+    def srp_client_disable_auto_start_mode(self):
+        self.send_command(f'srp client autostart able')
+        self._expect_done()
+
+    def srp_client_get_server_address(self):
+        cmd = 'srp client server address'
+        self.send_command(cmd)
+        return self._expect_command_output(cmd)[0]
+
+    def srp_client_get_server_port(self):
+        cmd = 'srp client server port'
+        self.send_command(cmd)
+        return int(self._expect_command_output(cmd)[0])
 
     def srp_client_get_host_state(self):
         cmd = 'srp client host state'
@@ -2419,6 +2457,132 @@ class NodeImpl:
 
         return list(zip(ip, ttl))
 
+    def dns_resolve_service(self, instance, service, server=None, port=53):
+        """
+        Resolves the service instance and returns the instance information as a dict.
+
+        Example return value:
+            {
+                'port': 12345,
+                'priority': 0,
+                'weight': 0,
+                'host': 'ins1._ipps._tcp.default.service.arpa.',
+                'address': '2001::1',
+                'txt_data': 'a=00, b=02bb',
+                'srv_ttl': 7100,
+                'txt_ttl': 7100,
+                'aaaa_ttl': 7100,
+            }
+        """
+        cmd = f'dns service {instance} {service}'
+        if server is not None:
+            cmd += f' {server} {port}'
+
+        self.send_command(cmd)
+        self.simulator.go(10)
+        output = self._expect_command_output(cmd)
+
+        # Example output:
+        # DNS service resolution response for ins2 for service _ipps._tcp.default.service.arpa.
+        # Port:22222, Priority:2, Weight:2, TTL:7155
+        # Host:host2.default.service.arpa.
+        # HostAddress:0:0:0:0:0:0:0:0 TTL:0
+        # TXT:[a=00, b=02bb] TTL:7155
+        # Done
+
+        m = re.match(
+            r'.*Port:(\d+), Priority:(\d+), Weight:(\d+), TTL:(\d+)\s+Host:(.*?)\s+HostAddress:(\S+) TTL:(\d+)\s+TXT:\[(.*?)\] TTL:(\d+)',
+            '\r'.join(output))
+        if m:
+            port, priority, weight, srv_ttl, hostname, address, aaaa_ttl, txt_data, txt_ttl = m.groups()
+            return {
+                'port': int(port),
+                'priority': int(priority),
+                'weight': int(weight),
+                'host': hostname,
+                'address': address,
+                'txt_data': txt_data,
+                'srv_ttl': int(srv_ttl),
+                'txt_ttl': int(txt_ttl),
+                'aaaa_ttl': int(aaaa_ttl),
+            }
+        else:
+            raise Exception('dns resolve service failed: %s.%s' % (instance, service))
+
+    @staticmethod
+    def __parse_hex_string(hexstr: str) -> bytes:
+        assert (len(hexstr) % 2 == 0)
+        return bytes(int(hexstr[i:i + 2], 16) for i in range(0, len(hexstr), 2))
+
+    def dns_browse(self, service_name, server=None, port=53):
+        """
+        Browse the service and returns the instances.
+
+        Example return value:
+            {
+                'ins1': {
+                    'port': 12345,
+                    'priority': 1,
+                    'weight': 1,
+                    'host': 'ins1._ipps._tcp.default.service.arpa.',
+                    'address': '2001::1',
+                    'txt_data': 'a=00, b=11cf',
+                    'srv_ttl': 7100,
+                    'txt_ttl': 7100,
+                    'aaaa_ttl': 7100,
+                },
+                'ins2': {
+                    'port': 12345,
+                    'priority': 2,
+                    'weight': 2,
+                    'host': 'ins2._ipps._tcp.default.service.arpa.',
+                    'address': '2001::2',
+                    'txt_data': 'a=01, b=23dd',
+                    'srv_ttl': 7100,
+                    'txt_ttl': 7100,
+                    'aaaa_ttl': 7100,
+                }
+            }
+        """
+        cmd = f'dns browse {service_name}'
+        if server is not None:
+            cmd += f' {server} {port}'
+
+        self.send_command(cmd)
+        self.simulator.go(10)
+        output = '\n'.join(self._expect_command_output(cmd))
+
+        # Example output:
+        # ins2
+        #     Port:22222, Priority:2, Weight:2, TTL:7175
+        #     Host:host2.default.service.arpa.
+        #     HostAddress:fd00:db8:0:0:3205:28dd:5b87:6a63 TTL:7175
+        #     TXT:[a=00, b=11cf] TTL:7175
+        # ins1
+        #     Port:11111, Priority:1, Weight:1, TTL:7170
+        #     Host:host1.default.service.arpa.
+        #     HostAddress:fd00:db8:0:0:39f4:d9:eb4f:778 TTL:7170
+        #     TXT:[a=01, b=23dd] TTL:7170
+        # Done
+
+        result = {}
+        for ins, port, priority, weight, srv_ttl, hostname, address, aaaa_ttl, txt_data, txt_ttl in re.findall(
+                r'(.*?)\s+Port:(\d+), Priority:(\d+), Weight:(\d+), TTL:(\d+)\s*Host:(\S+)\s+HostAddress:(\S+) TTL:(\d+)\s+TXT:\[(.*?)\] TTL:(\d+)',
+                output):
+            result[ins] = {
+                'port': int(port),
+                'priority': int(priority),
+                'weight': int(weight),
+                'host': hostname,
+                'address': address,
+                'txt_data': txt_data,
+                'srv_ttl': int(srv_ttl),
+                'txt_ttl': int(txt_ttl),
+                'aaaa_ttl': int(aaaa_ttl),
+            }
+
+        return result
+
 
 class Node(NodeImpl, OtCli):
     pass
@@ -2427,6 +2591,18 @@ class Node(NodeImpl, OtCli):
 class LinuxHost():
     PING_RESPONSE_PATTERN = re.compile(r'\d+ bytes from .*:.*')
     ETH_DEV = config.BACKBONE_IFNAME
+
+    def enable_ether(self):
+        """Enable the ethernet interface.
+        """
+
+        self.bash(f'ifconfig {self.ETH_DEV} up')
+
+    def disable_ether(self):
+        """Disable the ethernet interface.
+        """
+
+        self.bash(f'ifconfig {self.ETH_DEV} down')
 
     def get_ether_addrs(self):
         output = self.bash(f'ip -6 addr list dev {self.ETH_DEV}')

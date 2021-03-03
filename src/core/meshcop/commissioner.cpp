@@ -41,7 +41,6 @@
 #include "common/locator-getters.hpp"
 #include "common/logging.hpp"
 #include "common/string.hpp"
-#include "crypto/pbkdf2_cmac.h"
 #include "meshcop/joiner.hpp"
 #include "meshcop/joiner_router.hpp"
 #include "meshcop/meshcop.hpp"
@@ -1222,22 +1221,17 @@ exit:
 
 const char *Commissioner::StateToString(State aState)
 {
-    const char *str = "Unknown";
+    static const char *const kStateStrings[] = {
+        "disabled", // (0) kStateDisabled
+        "petition", // (1) kStatePetition
+        "active",   // (2) kStateActive
+    };
 
-    switch (aState)
-    {
-    case kStateDisabled:
-        str = "disabled";
-        break;
-    case kStatePetition:
-        str = "petition";
-        break;
-    case kStateActive:
-        str = "active";
-        break;
-    }
+    static_assert(kStateDisabled == 0, "kStateDisabled value is incorrect");
+    static_assert(kStatePetition == 1, "kStatePetition value is incorrect");
+    static_assert(kStateActive == 2, "kStateActive value is incorrect");
 
-    return str;
+    return kStateStrings[aState];
 }
 
 void Commissioner::LogJoinerEntry(const char *aAction, const Joiner &aJoiner) const

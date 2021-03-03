@@ -56,7 +56,7 @@
 #include "common/notifier.hpp"
 #include "common/timer.hpp"
 #include "crypto/ecdsa.hpp"
-#include "net/dns_headers.hpp"
+#include "net/dns_types.hpp"
 #include "net/ip6.hpp"
 #include "net/ip6_address.hpp"
 #include "net/udp6.hpp"
@@ -150,17 +150,20 @@ public:
         uint16_t GetPriority(void) const { return mPriority; }
 
         /**
-         * This method returns the next TXT entry of the service instance.
+         * This method returns the TXT record data of the service instance.
          *
-         * @param[inout]  aIterator  A pointer to the TXT iterator context. To get the first
-         *                           TXT entry, it should be set to OT_DNS_TXT_ITERATOR_INIT.
-         * @param[out]    aTxtEntry  A pointer to where the TXT entry will be placed.
-         *
-         * @retval OT_ERROR_NONE       Successfully found the next TXT entry.
-         * @retval OT_ERROR_NOT_FOUND  No subsequent TXT entry exists in the service.
+         * @returns A pointer to the buffer containing the TXT record data.
          *
          */
-        otError GetNextTxtEntry(Dns::TxtRecord::TxtIterator &aIterator, Dns::TxtEntry &aTxtEntry) const;
+        const uint8_t *GetTxtData(void) const { return mTxtData; }
+
+        /**
+         * This method returns the TXT recored data length of the service instance.
+         *
+         * @return The TXT record data length (number of bytes in buffer returned from `GetTxtData()`).
+         *
+         */
+        uint16_t GetTxtDataLength(void) const { return mTxtLength; }
 
         /**
          * This method returns the host which the service instance reside on.
@@ -399,10 +402,10 @@ public:
      * @param[in]  aServiceHandler         A service events handler.
      * @param[in]  aServiceHandlerContext  A pointer to arbitrary context information.
      *
-     * @note  The handler SHOULD call HandleAdvertisingResult to report the result of its processing.
+     * @note  The handler SHOULD call HandleServiceUpdateResult to report the result of its processing.
      *        Otherwise, a SRP update will be considered failed.
      *
-     * @sa  HandleAdvertisingResult
+     * @sa  HandleServiceUpdateResult
      *
      */
     void SetServiceHandler(otSrpServerServiceUpdateHandler aServiceHandler, void *aServiceHandlerContext);
@@ -479,13 +482,14 @@ public:
     const Host *GetNextHost(const Host *aHost);
 
     /**
-     * This method receives the service advertising result.
+     * This method receives the service update result from service handler set by
+     * SetServiceHandler.
      *
      * @param[in]  aHost   A pointer to the Host object which contains the SRP service updates.
-     * @param[in]  aError  The service advertising result.
+     * @param[in]  aError  The service update result.
      *
      */
-    void HandleAdvertisingResult(const Host *aHost, otError aError);
+    void HandleServiceUpdateResult(const Host *aHost, otError aError);
 
 private:
     enum : uint16_t
@@ -544,10 +548,10 @@ private:
     uint32_t GrantLease(uint32_t aLease) const;
     uint32_t GrantKeyLease(uint32_t aKeyLease) const;
 
-    void    HandleSrpUpdateResult(otError                  aError,
-                                  const Dns::UpdateHeader &aDnsHeader,
-                                  Host &                   aHost,
-                                  const Ip6::MessageInfo & aMessageInfo);
+    void    CommitSrpUpdate(otError                  aError,
+                            const Dns::UpdateHeader &aDnsHeader,
+                            Host &                   aHost,
+                            const Ip6::MessageInfo & aMessageInfo);
     void    HandleDnsUpdate(Message &                aMessage,
                             const Ip6::MessageInfo & aMessageInfo,
                             const Dns::UpdateHeader &aDnsHeader,
@@ -609,12 +613,12 @@ private:
     static void HandleOutstandingUpdatesTimer(Timer &aTimer);
     void        HandleOutstandingUpdatesTimer(void);
 
-    void                  HandleAdvertisingResult(UpdateMetadata *aUpdate, otError aError);
+    void                  HandleServiceUpdateResult(UpdateMetadata *aUpdate, otError aError);
     const UpdateMetadata *FindOutstandingUpdate(const Ip6::MessageInfo &aMessageInfo, uint16_t aDnsMessageId);
 
     Ip6::Udp::Socket                mSocket;
-    otSrpServerServiceUpdateHandler mAdvertisingHandler;
-    void *                          mAdvertisingHandlerContext;
+    otSrpServerServiceUpdateHandler mServiceUpdateHandler;
+    void *                          mServiceUpdateHandlerContext;
 
     char *mDomain;
 

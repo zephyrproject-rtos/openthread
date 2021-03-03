@@ -154,7 +154,8 @@ exit:
 
 void MeshForwarder::PrepareEmptyFrame(Mac::TxFrame &aFrame, const Mac::Address &aMacDest, bool aAckRequest)
 {
-    uint16_t fcf = 0;
+    uint16_t fcf       = 0;
+    bool     iePresent = CalcIePresent(nullptr);
 
     Mac::Address macSource;
     macSource.SetShort(Get<Mac::Mac>().GetShortAddress());
@@ -166,6 +167,13 @@ void MeshForwarder::PrepareEmptyFrame(Mac::TxFrame &aFrame, const Mac::Address &
 
     fcf = Mac::Frame::kFcfFrameData | Mac::Frame::kFcfPanidCompression | Mac::Frame::kFcfSecurityEnabled;
 
+    if (iePresent)
+    {
+        fcf |= Mac::Frame::kFcfIePresent;
+    }
+
+    fcf |= CalcFrameVersion(Get<NeighborTable>().FindNeighbor(aMacDest), iePresent);
+
     if (aAckRequest)
     {
         fcf |= Mac::Frame::kFcfAckRequest;
@@ -173,7 +181,6 @@ void MeshForwarder::PrepareEmptyFrame(Mac::TxFrame &aFrame, const Mac::Address &
 
     fcf |= (aMacDest.IsShort()) ? Mac::Frame::kFcfDstAddrShort : Mac::Frame::kFcfDstAddrExt;
     fcf |= (macSource.IsShort()) ? Mac::Frame::kFcfSrcAddrShort : Mac::Frame::kFcfSrcAddrExt;
-    Get<Mac::Mac>().UpdateFrameControlField(Get<NeighborTable>().FindNeighbor(aMacDest), false, fcf);
 
     aFrame.InitMacHeader(fcf, Mac::Frame::kKeyIdMode1 | Mac::Frame::kSecEncMic32);
 
@@ -187,7 +194,10 @@ void MeshForwarder::PrepareEmptyFrame(Mac::TxFrame &aFrame, const Mac::Address &
     aFrame.SetSrcAddr(macSource);
     aFrame.SetFramePending(false);
 #if OPENTHREAD_CONFIG_MAC_HEADER_IE_SUPPORT
-    IgnoreError(Get<Mac::Mac>().AppendHeaderIe(false, aFrame));
+    if (iePresent)
+    {
+        AppendHeaderIe(nullptr, aFrame);
+    }
 #endif
     aFrame.SetPayloadLength(0);
 }
@@ -585,16 +595,22 @@ uint16_t MeshForwarder::PrepareDataFrame(Mac::TxFrame &      aFrame,
     uint16_t dstpan;
     uint8_t  secCtl;
     uint16_t nextOffset;
+    bool     iePresent = CalcIePresent(&aMessage);
 
 start:
 
     // Initialize MAC header
     fcf = Mac::Frame::kFcfFrameData;
 
-    Get<Mac::Mac>().UpdateFrameControlField(Get<NeighborTable>().FindNeighbor(aMacDest), aMessage.IsTimeSync(), fcf);
-
     fcf |= (aMacDest.IsShort()) ? Mac::Frame::kFcfDstAddrShort : Mac::Frame::kFcfDstAddrExt;
     fcf |= (aMacSource.IsShort()) ? Mac::Frame::kFcfSrcAddrShort : Mac::Frame::kFcfSrcAddrExt;
+
+    if (iePresent)
+    {
+        fcf |= Mac::Frame::kFcfIePresent;
+    }
+
+    fcf |= CalcFrameVersion(Get<NeighborTable>().FindNeighbor(aMacDest), iePresent);
 
     // All unicast frames request ACK
     if (aMacDest.IsExtended() || !aMacDest.IsBroadcast())
@@ -663,7 +679,10 @@ start:
     aFrame.SetSrcAddr(aMacSource);
 
 #if OPENTHREAD_CONFIG_MAC_HEADER_IE_SUPPORT
-    IgnoreError(Get<Mac::Mac>().AppendHeaderIe(aMessage.IsTimeSync(), aFrame));
+    if (iePresent)
+    {
+        AppendHeaderIe(&aMessage, aFrame);
+    }
 #endif
 
     payload          = aFrame.GetPayload();
@@ -955,6 +974,8 @@ exit:
 
 void MeshForwarder::UpdateSendMessage(otError aFrameTxError, Mac::Address &aMacDest, Neighbor *aNeighbor)
 {
+    otError txError = aFrameTxError;
+
     VerifyOrExit(mSendMessage != nullptr);
 
     OT_ASSERT(mSendMessage->GetDirectTransmission());
@@ -979,57 +1000,58 @@ void MeshForwarder::UpdateSendMessage(otError aFrameTxError, Mac::Address &aMacD
     if (mMessageNextOffset < mSendMessage->GetLength())
     {
         mSendMessage->SetOffset(mMessageNextOffset);
+        ExitNow();
     }
-    else
+
+    txError = aFrameTxError;
+
+    mSendMessage->ClearDirectTransmission();
+    mSendMessage->SetOffset(0);
+
+    if (aNeighbor != nullptr)
     {
-        otError txError = aFrameTxError;
-
-        mSendMessage->ClearDirectTransmission();
-        mSendMessage->SetOffset(0);
-
-        if (aNeighbor != nullptr)
-        {
-            aNeighbor->GetLinkInfo().AddMessageTxStatus(mSendMessage->GetTxSuccess());
-        }
+        aNeighbor->GetLinkInfo().AddMessageTxStatus(mSendMessage->GetTxSuccess());
+    }
 
 #if !OPENTHREAD_CONFIG_DROP_MESSAGE_ON_FRAGMENT_TX_FAILURE
 
-        // When `CONFIG_DROP_MESSAGE_ON_FRAGMENT_TX_FAILURE` is
-        // disabled, all fragment frames of a larger message are
-        // sent even if the transmission of an earlier fragment fail.
-        // Note that `GetTxSuccess() tracks the tx success of the
-        // entire message, while `aFrameTxError` represents the error
-        // status of the last fragment frame transmission.
+    // When `CONFIG_DROP_MESSAGE_ON_FRAGMENT_TX_FAILURE` is
+    // disabled, all fragment frames of a larger message are
+    // sent even if the transmission of an earlier fragment fail.
+    // Note that `GetTxSuccess() tracks the tx success of the
+    // entire message, while `aFrameTxError` represents the error
+    // status of the last fragment frame transmission.
 
-        if (!mSendMessage->GetTxSuccess() && (txError == OT_ERROR_NONE))
-        {
-            txError = OT_ERROR_FAILED;
-        }
+    if (!mSendMessage->GetTxSuccess() && (txError == OT_ERROR_NONE))
+    {
+        txError = OT_ERROR_FAILED;
+    }
 #endif
 
-        LogMessage(kMessageTransmit, *mSendMessage, &aMacDest, txError);
+    LogMessage(kMessageTransmit, *mSendMessage, &aMacDest, txError);
 
-        if (mSendMessage->GetType() == Message::kTypeIp6)
+    if (mSendMessage->GetType() == Message::kTypeIp6)
+    {
+        if (mSendMessage->GetTxSuccess())
         {
-            if (mSendMessage->GetTxSuccess())
-            {
-                mIpCounters.mTxSuccess++;
-            }
-            else
-            {
-                mIpCounters.mTxFailure++;
-            }
+            mIpCounters.mTxSuccess++;
+        }
+        else
+        {
+            mIpCounters.mTxFailure++;
         }
     }
 
-    if (mSendMessage->GetSubType() == Message::kSubTypeMleDiscoverRequest)
+    switch (mSendMessage->GetSubType())
     {
+    case Message::kSubTypeMleDiscoverRequest:
+        // Note that `HandleDiscoveryRequestFrameTxDone()` may update
+        // `mSendMessage` and mark it again for direct transmission.
         Get<Mle::DiscoverScanner>().HandleDiscoveryRequestFrameTxDone(*mSendMessage);
-    }
+        break;
 
-    if (!mSendMessage->GetDirectTransmission() && !mSendMessage->IsChildPending())
-    {
-        if (mSendMessage->GetSubType() == Message::kSubTypeMleChildIdRequest && mSendMessage->IsLinkSecurityEnabled())
+    case Message::kSubTypeMleChildIdRequest:
+        if (mSendMessage->IsLinkSecurityEnabled())
         {
             // If the Child ID Request requires fragmentation and therefore
             // link layer security, the frame transmission will be aborted.
@@ -1041,14 +1063,33 @@ void MeshForwarder::UpdateSendMessage(otError aFrameTxError, Mac::Address &aMacD
             Get<Mle::Mle>().RequestShorterChildIdRequest();
         }
 
-        mSendQueue.Dequeue(*mSendMessage);
-        mSendMessage->Free();
+        break;
+
+    default:
+        break;
+    }
+
+    RemoveMessageIfNoPendingTx(*mSendMessage);
+
+exit:
+    mScheduleTransmissionTask.Post();
+}
+
+void MeshForwarder::RemoveMessageIfNoPendingTx(Message &aMessage)
+{
+    VerifyOrExit(!aMessage.GetDirectTransmission() && !aMessage.IsChildPending());
+
+    if (mSendMessage == &aMessage)
+    {
         mSendMessage       = nullptr;
         mMessageNextOffset = 0;
     }
 
+    mSendQueue.Dequeue(aMessage);
+    aMessage.Free();
+
 exit:
-    mScheduleTransmissionTask.Post();
+    return;
 }
 
 void MeshForwarder::HandleReceivedFrame(Mac::RxFrame &aFrame)
@@ -1491,6 +1532,79 @@ exit:
 }
 #endif // OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
 
+bool MeshForwarder::CalcIePresent(const Message *aMessage)
+{
+    bool iePresent = false;
+
+    OT_UNUSED_VARIABLE(aMessage);
+
+#if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
+    iePresent |= (aMessage != nullptr && aMessage->IsTimeSync());
+#endif
+#if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
+    iePresent |= Get<Mac::Mac>().IsCslEnabled();
+#endif
+
+    return iePresent;
+}
+
+#if OPENTHREAD_CONFIG_MAC_HEADER_IE_SUPPORT
+void MeshForwarder::AppendHeaderIe(const Message *aMessage, Mac::Frame &aFrame)
+{
+    uint8_t index     = 0;
+    bool    iePresent = false;
+    bool    payloadPresent =
+        (aFrame.GetType() == Mac::Frame::kFcfFrameMacCmd) || (aMessage != nullptr && aMessage->GetLength() != 0);
+
+#if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
+    if (aMessage != nullptr && aMessage->IsTimeSync())
+    {
+        IgnoreError(aFrame.AppendHeaderIeAt<Mac::TimeIe>(index));
+        iePresent = true;
+    }
+#endif
+#if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
+    if (Get<Mac::Mac>().IsCslEnabled())
+    {
+        IgnoreError(aFrame.AppendHeaderIeAt<Mac::CslIe>(index));
+        iePresent = true;
+    }
+#endif
+
+    if (iePresent && payloadPresent)
+    {
+        // Assume no Payload IE in current implementation
+        IgnoreError(aFrame.AppendHeaderIeAt<Mac::Termination2Ie>(index));
+    }
+}
+#endif
+
+uint16_t MeshForwarder::CalcFrameVersion(const Neighbor *aNeighbor, bool aIePresent)
+{
+    uint16_t version = Mac::Frame::kFcfFrameVersion2006;
+    OT_UNUSED_VARIABLE(aNeighbor);
+
+    if (aIePresent)
+    {
+        version = Mac::Frame::kFcfFrameVersion2015;
+    }
+#if OPENTHREAD_FTD && OPENTHREAD_CONFIG_MAC_CSL_TRANSMITTER_ENABLE
+    else if (aNeighbor != nullptr && !Mle::MleRouter::IsActiveRouter(aNeighbor->GetRloc16()) &&
+             static_cast<const Child *>(aNeighbor)->IsCslSynchronized())
+    {
+        version = Mac::Frame::kFcfFrameVersion2015;
+    }
+#endif
+#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_ENABLE
+    else if (aNeighbor != nullptr && aNeighbor->IsEnhAckProbingActive())
+    {
+        version = Mac::Frame::kFcfFrameVersion2015; ///< Set version to 2015 to fetch Link Metrics data in Enh-ACK.
+    }
+#endif
+
+    return version;
+}
+
 // LCOV_EXCL_START
 
 #if (OPENTHREAD_CONFIG_LOG_LEVEL >= OT_LOG_LEVEL_NOTE) && (OPENTHREAD_CONFIG_LOG_MAC == 1)
@@ -1543,62 +1657,28 @@ exit:
 
 const char *MeshForwarder::MessageActionToString(MessageAction aAction, otError aError)
 {
-    const char *actionText = "";
+    static const char *const kMessageActionStrings[] = {
+        "Received",                    // (0) kMessageReceive
+        "Sent",                        // (1) kMessageTransmit
+        "Prepping indir tx",           // (2) kMessagePrepareIndirect
+        "Dropping",                    // (3) kMessageDrop
+        "Dropping (reassembly queue)", // (4) kMessageReassemblyDrop
+        "Evicting",                    // (5) kMessageEvict
+    };
 
-    switch (aAction)
-    {
-    case kMessageReceive:
-        actionText = "Received";
-        break;
+    static_assert(kMessageReceive == 0, "kMessageReceive value is incorrect");
+    static_assert(kMessageTransmit == 1, "kMessageTransmit value is incorrect");
+    static_assert(kMessagePrepareIndirect == 2, "kMessagePrepareIndirect value is incorrect");
+    static_assert(kMessageDrop == 3, "kMessageDrop value is incorrect");
+    static_assert(kMessageReassemblyDrop == 4, "kMessageReassemblyDrop value is incorrect");
+    static_assert(kMessageEvict == 5, "kMessageEvict value is incorrect");
 
-    case kMessageTransmit:
-        actionText = (aError == OT_ERROR_NONE) ? "Sent" : "Failed to send";
-        break;
-
-    case kMessagePrepareIndirect:
-        actionText = "Prepping indir tx";
-        break;
-
-    case kMessageDrop:
-        actionText = "Dropping";
-        break;
-
-    case kMessageReassemblyDrop:
-        actionText = "Dropping (reassembly queue)";
-        break;
-
-    case kMessageEvict:
-        actionText = "Evicting";
-        break;
-    }
-
-    return actionText;
+    return (aError == OT_ERROR_NONE) ? kMessageActionStrings[aAction] : "Failed to send";
 }
 
 const char *MeshForwarder::MessagePriorityToString(const Message &aMessage)
 {
-    const char *priorityText = "unknown";
-
-    switch (aMessage.GetPriority())
-    {
-    case Message::kPriorityNet:
-        priorityText = "net";
-        break;
-
-    case Message::kPriorityHigh:
-        priorityText = "high";
-        break;
-
-    case Message::kPriorityNormal:
-        priorityText = "normal";
-        break;
-
-    case Message::kPriorityLow:
-        priorityText = "low";
-        break;
-    }
-
-    return priorityText;
+    return Message::PriorityToString(aMessage.GetPriority());
 }
 
 #if OPENTHREAD_CONFIG_LOG_SRC_DST_IP_ADDRESSES

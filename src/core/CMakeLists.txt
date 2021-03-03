@@ -33,6 +33,7 @@ set(COMMON_INCLUDES
 set(COMMON_SOURCES
     api/backbone_router_api.cpp
     api/backbone_router_ftd_api.cpp
+    api/border_agent_api.cpp
     api/border_router_api.cpp
     api/channel_manager_api.cpp
     api/channel_monitor_api.cpp
@@ -137,7 +138,7 @@ set(COMMON_SOURCES
     net/dhcp6_client.cpp
     net/dhcp6_server.cpp
     net/dns_client.cpp
-    net/dns_headers.cpp
+    net/dns_types.cpp
     net/dnssd_server.cpp
     net/icmp6.cpp
     net/ip6.cpp

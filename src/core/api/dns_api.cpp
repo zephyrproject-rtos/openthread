@@ -38,22 +38,53 @@
 #include "common/instance.hpp"
 #include "common/locator-getters.hpp"
 #include "net/dns_client.hpp"
+#include "net/dns_types.hpp"
 
 using namespace ot;
 
+void otDnsInitTxtEntryIterator(otDnsTxtEntryIterator *aIterator, const uint8_t *aTxtData, uint16_t aTxtDataLength)
+{
+    static_cast<Dns::TxtEntry::Iterator *>(aIterator)->Init(aTxtData, aTxtDataLength);
+}
+
+otError otDnsGetNextTxtEntry(otDnsTxtEntryIterator *aIterator, otDnsTxtEntry *aEntry)
+{
+    return static_cast<Dns::TxtEntry::Iterator *>(aIterator)->GetNextEntry(*static_cast<Dns::TxtEntry *>(aEntry));
+}
+
 #if OPENTHREAD_CONFIG_DNS_CLIENT_ENABLE
 
-otError otDnsClientResolveAddress(otInstance *         aInstance,
-                                  const otSockAddr *   aServerSockAddr,
-                                  const char *         aHostName,
-                                  bool                 aNoRecursion,
-                                  otDnsAddressCallback aCallback,
-                                  void *               aContext)
+const otDnsQueryConfig *otDnsClientGetDefaultConfig(otInstance *aInstance)
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    return instance.Get<Dns::Client>().ResolveAddress(*static_cast<const Ip6::SockAddr *>(aServerSockAddr), aHostName,
-                                                      aNoRecursion, aCallback, aContext);
+    return &instance.Get<Dns::Client>().GetDefaultConfig();
+}
+
+void otDnsClientSetDefaultConfig(otInstance *aInstance, const otDnsQueryConfig *aConfig)
+{
+    Instance &instance = *static_cast<Instance *>(aInstance);
+
+    if (aConfig != nullptr)
+    {
+        instance.Get<Dns::Client>().SetDefaultConfig(*static_cast<const Dns::Client::QueryConfig *>(aConfig));
+    }
+    else
+    {
+        instance.Get<Dns::Client>().ResetDefaultConfig();
+    }
+}
+
+otError otDnsClientResolveAddress(otInstance *            aInstance,
+                                  const char *            aHostName,
+                                  otDnsAddressCallback    aCallback,
+                                  void *                  aContext,
+                                  const otDnsQueryConfig *aConfig)
+{
+    Instance &instance = *static_cast<Instance *>(aInstance);
+
+    return instance.Get<Dns::Client>().ResolveAddress(aHostName, aCallback, aContext,
+                                                      static_cast<const Dns::Client::QueryConfig *>(aConfig));
 }
 
 otError otDnsAddressResponseGetHostName(const otDnsAddressResponse *aResponse,
@@ -78,16 +109,16 @@ otError otDnsAddressResponseGetAddress(const otDnsAddressResponse *aResponse,
 
 #if OPENTHREAD_CONFIG_DNS_CLIENT_SERVICE_DISCOVERY_ENABLE
 
-otError otDnsClientBrowse(otInstance *        aInstance,
-                          const otSockAddr *  aServerSockAddr,
-                          const char *        aServiceName,
-                          otDnsBrowseCallback aCallback,
-                          void *              aContext)
+otError otDnsClientBrowse(otInstance *            aInstance,
+                          const char *            aServiceName,
+                          otDnsBrowseCallback     aCallback,
+                          void *                  aContext,
+                          const otDnsQueryConfig *aConfig)
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    return instance.Get<Dns::Client>().Browse(*static_cast<const Ip6::SockAddr *>(aServerSockAddr), aServiceName,
-                                              aCallback, aContext);
+    return instance.Get<Dns::Client>().Browse(aServiceName, aCallback, aContext,
+                                              static_cast<const Dns::Client::QueryConfig *>(aConfig));
 }
 
 otError otDnsBrowseResponseGetServiceName(const otDnsBrowseResponse *aResponse,
@@ -131,17 +162,17 @@ otError otDnsBrowseResponseGetHostAddress(const otDnsBrowseResponse *aResponse,
                                    aTtl != nullptr ? *aTtl : ttl);
 }
 
-otError otDnsClientResolveService(otInstance *         aInstance,
-                                  const otSockAddr *   aServerSockAddr,
-                                  const char *         aInstanceLabel,
-                                  const char *         aServiceName,
-                                  otDnsServiceCallback aCallback,
-                                  void *               aContext)
+otError otDnsClientResolveService(otInstance *            aInstance,
+                                  const char *            aInstanceLabel,
+                                  const char *            aServiceName,
+                                  otDnsServiceCallback    aCallback,
+                                  void *                  aContext,
+                                  const otDnsQueryConfig *aConfig)
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    return instance.Get<Dns::Client>().ResolveService(*static_cast<const Ip6::SockAddr *>(aServerSockAddr),
-                                                      aInstanceLabel, aServiceName, aCallback, aContext);
+    return instance.Get<Dns::Client>().ResolveService(aInstanceLabel, aServiceName, aCallback, aContext,
+                                                      static_cast<const Dns::Client::QueryConfig *>(aConfig));
 }
 
 otError otDnsServiceResponseGetServiceName(const otDnsServiceResponse *aResponse,

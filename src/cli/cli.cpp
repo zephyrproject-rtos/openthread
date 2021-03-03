@@ -38,6 +38,7 @@
 #include <string.h>
 
 #include <openthread/diag.h>
+#include <openthread/dns.h>
 #include <openthread/icmp6.h>
 #include <openthread/link.h>
 #include <openthread/logging.h>
@@ -146,9 +147,6 @@ Interpreter::Interpreter(Instance *aInstance)
     , mSrpServer(*this)
 #endif
 {
-#if OPENTHREAD_FTD || OPENTHREAD_CONFIG_TMF_NETWORK_DIAG_MTD_ENABLE
-    otThreadSetReceiveDiagnosticGetCallback(mInstance, &Interpreter::HandleDiagnosticGetResponse, this);
-#endif
 #if OPENTHREAD_FTD
     otThreadSetDiscoveryRequestCallback(mInstance, &Interpreter::HandleDiscoveryRequest, this);
 #endif
@@ -1334,39 +1332,83 @@ exit:
     return error;
 }
 
+void Interpreter::OutputDnsTxtData(const uint8_t *aTxtData, uint16_t aTxtDataLength)
+{
+    otDnsTxtEntry         entry;
+    otDnsTxtEntryIterator iterator;
+    bool                  isFirst = true;
+
+    otDnsInitTxtEntryIterator(&iterator, aTxtData, aTxtDataLength);
+
+    OutputFormat("[");
+
+    while (otDnsGetNextTxtEntry(&iterator, &entry) == OT_ERROR_NONE)
+    {
+        if (!isFirst)
+        {
+            OutputFormat(", ");
+        }
+
+        if (entry.mKey == nullptr)
+        {
+            // A null `mKey` indicates that the key in the entry is
+            // longer than the recommended max key length, so the entry
+            // could not be parsed. In this case, the whole entry is
+            // returned encoded in `mValue`.
+
+            OutputFormat("[");
+            OutputBytes(entry.mValue, entry.mValueLength);
+            OutputFormat("]");
+        }
+        else
+        {
+            OutputFormat("%s", entry.mKey);
+
+            if (entry.mValue != nullptr)
+            {
+                OutputFormat("=");
+                OutputBytes(entry.mValue, entry.mValueLength);
+            }
+        }
+
+        isFirst = false;
+    }
+
+    OutputFormat("]");
+}
+
 #if OPENTHREAD_CONFIG_DNS_CLIENT_ENABLE
 
-otError Interpreter::GetDnsServerAddress(uint8_t     aArgsLength,
-                                         char *      aArgs[],
-                                         otSockAddr &aAddress,
-                                         uint8_t     aStartArgsIndex)
+otError Interpreter::GetDnsConfig(uint8_t            aArgsLength,
+                                  char *             aArgs[],
+                                  otDnsQueryConfig *&aConfig,
+                                  uint8_t            aStartArgsIndex)
 {
-    // This method gets the optional server address from given `aArgs`
-    // after the `aStartArgsIndex`. The format `[server IPv6 address]
-    // [server port]`.
+    // This method gets the optional config from given `aArgs` after the
+    // `aStartArgsIndex`. The format: `[server IPv6 address] [server
+    // port] [timeout] [max tx attempt] [recursion desired]`.
 
     otError error = OT_ERROR_NONE;
+    bool    recursionDesired;
 
-    VerifyOrExit(aArgsLength >= aStartArgsIndex, error = OT_ERROR_INVALID_ARGS);
+    memset(aConfig, 0, sizeof(otDnsQueryConfig));
 
-    if (aArgsLength > aStartArgsIndex)
-    {
-        SuccessOrExit(error = ParseAsIp6Address(aArgs[aStartArgsIndex], aAddress.mAddress));
-    }
-    else
-    {
-        // Use IPv6 address of default DNS server.
-        SuccessOrExit(error = otIp6AddressFromString(OT_DNS_DEFAULT_SERVER_IP, &aAddress.mAddress));
-    }
+    VerifyOrExit(aArgsLength > aStartArgsIndex, aConfig = nullptr);
 
-    if (aArgsLength > aStartArgsIndex + 1)
-    {
-        SuccessOrExit(error = ParseAsUint16(aArgs[aStartArgsIndex + 1], aAddress.mPort));
-    }
-    else
-    {
-        aAddress.mPort = OT_DNS_DEFAULT_SERVER_PORT;
-    }
+    SuccessOrExit(error = ParseAsIp6Address(aArgs[aStartArgsIndex], aConfig->mServerSockAddr.mAddress));
+
+    VerifyOrExit(aArgsLength > aStartArgsIndex + 1);
+    SuccessOrExit(error = ParseAsUint16(aArgs[aStartArgsIndex + 1], aConfig->mServerSockAddr.mPort));
+
+    VerifyOrExit(aArgsLength > aStartArgsIndex + 2);
+    SuccessOrExit(error = ParseAsUint32(aArgs[aStartArgsIndex + 2], aConfig->mResponseTimeout));
+
+    VerifyOrExit(aArgsLength > aStartArgsIndex + 3);
+    SuccessOrExit(error = ParseAsUint8(aArgs[aStartArgsIndex + 3], aConfig->mMaxTxAttempts));
+
+    VerifyOrExit(aArgsLength > aStartArgsIndex + 4);
+    SuccessOrExit(error = ParseAsBool(aArgs[aStartArgsIndex + 4], recursionDesired));
+    aConfig->mRecursionFlag = recursionDesired ? OT_DNS_FLAG_RECURSION_DESIRED : OT_DNS_FLAG_NO_RECURSION;
 
 exit:
     return error;
@@ -1374,37 +1416,59 @@ exit:
 
 otError Interpreter::ProcessDns(uint8_t aArgsLength, char *aArgs[])
 {
-    otError    error = OT_ERROR_NONE;
-    otSockAddr serverSockAddr;
+    otError           error = OT_ERROR_NONE;
+    otDnsQueryConfig  queryConfig;
+    otDnsQueryConfig *config = &queryConfig;
 
     VerifyOrExit(aArgsLength > 0, error = OT_ERROR_INVALID_ARGS);
 
-    if (strcmp(aArgs[0], "resolve") == 0)
+    if (strcmp(aArgs[0], "config") == 0)
     {
-        SuccessOrExit(error = GetDnsServerAddress(aArgsLength, aArgs, serverSockAddr, 2));
-        SuccessOrExit(error = otDnsClientResolveAddress(mInstance, &serverSockAddr, aArgs[1], /* aNoRecursion */ false,
-                                                        &Interpreter::HandleDnsAddressResponse, this));
+        if (aArgsLength == 1)
+        {
+            const otDnsQueryConfig *defaultConfig = otDnsClientGetDefaultConfig(mInstance);
+
+            OutputFormat("Server: [");
+            OutputIp6Address(defaultConfig->mServerSockAddr.mAddress);
+            OutputLine("]:%d", defaultConfig->mServerSockAddr.mPort);
+            OutputLine("ResponseTimeout: %u ms", defaultConfig->mResponseTimeout);
+            OutputLine("MaxTxAttempts: %u", defaultConfig->mMaxTxAttempts);
+            OutputLine("RecursionDesired: %s",
+                       (defaultConfig->mRecursionFlag == OT_DNS_FLAG_RECURSION_DESIRED) ? "yes" : "no");
+        }
+        else
+        {
+            SuccessOrExit(error = GetDnsConfig(aArgsLength, aArgs, config, 1));
+            otDnsClientSetDefaultConfig(mInstance, config);
+        }
+    }
+    else if (strcmp(aArgs[0], "resolve") == 0)
+    {
+        SuccessOrExit(error = GetDnsConfig(aArgsLength, aArgs, config, 2));
+        SuccessOrExit(error = otDnsClientResolveAddress(mInstance, aArgs[1], &Interpreter::HandleDnsAddressResponse,
+                                                        this, config));
+        error = OT_ERROR_PENDING;
     }
 #if OPENTHREAD_CONFIG_DNS_CLIENT_SERVICE_DISCOVERY_ENABLE
     else if (strcmp(aArgs[0], "browse") == 0)
     {
-        SuccessOrExit(error = GetDnsServerAddress(aArgsLength, aArgs, serverSockAddr, 2));
-        SuccessOrExit(error = otDnsClientBrowse(mInstance, &serverSockAddr, aArgs[1],
-                                                &Interpreter::HandleDnsBrowseResponse, this));
+        SuccessOrExit(error = GetDnsConfig(aArgsLength, aArgs, config, 2));
+        SuccessOrExit(error =
+                          otDnsClientBrowse(mInstance, aArgs[1], &Interpreter::HandleDnsBrowseResponse, this, config));
+        error = OT_ERROR_PENDING;
     }
     else if (strcmp(aArgs[0], "service") == 0)
     {
-        SuccessOrExit(error = GetDnsServerAddress(aArgsLength, aArgs, serverSockAddr, 3));
-        SuccessOrExit(error = otDnsClientResolveService(mInstance, &serverSockAddr, aArgs[1], aArgs[2],
-                                                        &Interpreter::HandleDnsServiceResponse, this));
+        SuccessOrExit(error = GetDnsConfig(aArgsLength, aArgs, config, 3));
+        SuccessOrExit(error = otDnsClientResolveService(mInstance, aArgs[1], aArgs[2],
+                                                        &Interpreter::HandleDnsServiceResponse, this, config));
+        error = OT_ERROR_PENDING;
     }
 #endif // OPENTHREAD_CONFIG_DNS_CLIENT_SERVICE_DISCOVERY_ENABLE
     else
     {
         ExitNow(error = OT_ERROR_INVALID_COMMAND);
     }
-
-    error = OT_ERROR_PENDING;
 
 exit:
     return error;
@@ -1452,9 +1516,9 @@ void Interpreter::OutputDnsServiceInfo(uint8_t aIndentSize, const otDnsServiceIn
     OutputFormat(aIndentSize, "HostAddress:");
     OutputIp6Address(aServiceInfo.mHostAddress);
     OutputLine(" TTL:%u", aServiceInfo.mHostAddressTtl);
-    OutputFormat(aIndentSize, "TXT-Data:(len:%d) [", aServiceInfo.mTxtDataSize);
-    OutputBytes(aServiceInfo.mTxtData, aServiceInfo.mTxtDataSize);
-    OutputFormat("] TTL:%u", aServiceInfo.mTxtDataTtl);
+    OutputFormat(aIndentSize, "TXT:");
+    OutputDnsTxtData(aServiceInfo.mTxtData, aServiceInfo.mTxtDataSize);
+    OutputLine(" TTL:%u", aServiceInfo.mTxtDataTtl);
 }
 
 void Interpreter::HandleDnsBrowseResponse(otError aError, const otDnsBrowseResponse *aResponse, void *aContext)
@@ -2638,6 +2702,94 @@ otError Interpreter::ProcessMode(uint8_t aArgsLength, char *aArgs[])
 exit:
     return error;
 }
+
+otError Interpreter::ProcessMultiRadio(uint8_t aArgsLength, char *aArgs[])
+{
+    otError error = OT_ERROR_NONE;
+
+    OT_UNUSED_VARIABLE(aArgs);
+
+    if (aArgsLength == 0)
+    {
+        bool isFirst = true;
+
+        OutputFormat("[");
+#if OPENTHREAD_CONFIG_RADIO_LINK_IEEE_802_15_4_ENABLE
+        OutputFormat("15.4");
+        isFirst = false;
+#endif
+#if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
+        OutputFormat("%sTREL", isFirst ? "" : ", ");
+#endif
+        OutputLine("]");
+
+        OT_UNUSED_VARIABLE(isFirst);
+    }
+#if OPENTHREAD_CONFIG_MULTI_RADIO
+    else if (strcmp(aArgs[0], "neighbor") == 0)
+    {
+        otMultiRadioNeighborInfo multiRadioInfo;
+
+        VerifyOrExit(aArgsLength == 2, error = OT_ERROR_INVALID_ARGS);
+
+        if (strcmp(aArgs[1], "list") == 0)
+        {
+            otNeighborInfoIterator iterator = OT_NEIGHBOR_INFO_ITERATOR_INIT;
+            otNeighborInfo         neighInfo;
+
+            while (otThreadGetNextNeighborInfo(mInstance, &iterator, &neighInfo) == OT_ERROR_NONE)
+            {
+                if (otMultiRadioGetNeighborInfo(mInstance, &neighInfo.mExtAddress, &multiRadioInfo) != OT_ERROR_NONE)
+                {
+                    continue;
+                }
+
+                OutputFormat("ExtAddr:");
+                OutputExtAddress(neighInfo.mExtAddress);
+                OutputFormat(", RLOC16:0x%04x, Radios:", neighInfo.mRloc16);
+                OutputMultiRadioInfo(multiRadioInfo);
+            }
+        }
+        else
+        {
+            otExtAddress extAddress;
+
+            SuccessOrExit(error = ParseAsHexString(aArgs[1], extAddress.m8));
+            SuccessOrExit(error = otMultiRadioGetNeighborInfo(mInstance, &extAddress, &multiRadioInfo));
+            OutputMultiRadioInfo(multiRadioInfo);
+        }
+    }
+#endif // OPENTHREAD_CONFIG_MULTI_RADIO
+    else
+    {
+        ExitNow(error = OT_ERROR_INVALID_COMMAND);
+    }
+
+exit:
+    return error;
+}
+
+#if OPENTHREAD_CONFIG_MULTI_RADIO
+void Interpreter::OutputMultiRadioInfo(const otMultiRadioNeighborInfo &aMultiRadioInfo)
+{
+    bool isFirst = true;
+
+    OutputFormat("[");
+
+    if (aMultiRadioInfo.mSupportsIeee802154)
+    {
+        OutputFormat("15.4(%d)", aMultiRadioInfo.mIeee802154Info.mPreference);
+        isFirst = false;
+    }
+
+    if (aMultiRadioInfo.mSupportsTrelUdp6)
+    {
+        OutputFormat("%sTREL(%d)", isFirst ? "" : ", ", aMultiRadioInfo.mTrelUdp6Info.mPreference);
+    }
+
+    OutputLine("]");
+}
+#endif // OPENTHREAD_CONFIG_MULTI_RADIO
 
 #if OPENTHREAD_FTD
 otError Interpreter::ProcessNeighbor(uint8_t aArgsLength, char *aArgs[])
@@ -4695,7 +4847,8 @@ otError Interpreter::ProcessNetworkDiagnostic(uint8_t aArgsLength, char *aArgs[]
 
     if (strcmp(aArgs[0], "get") == 0)
     {
-        IgnoreError(otThreadSendDiagnosticGet(mInstance, &address, tlvTypes, count));
+        SuccessOrExit(error = otThreadSendDiagnosticGet(mInstance, &address, tlvTypes, count,
+                                                        &Interpreter::HandleDiagnosticGetResponse, this));
         ExitNow(error = OT_ERROR_PENDING);
     }
     else if (strcmp(aArgs[0], "reset") == 0)

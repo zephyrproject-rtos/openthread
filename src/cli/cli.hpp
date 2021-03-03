@@ -424,6 +424,10 @@ private:
                                    uint8_t             aFailedAddressNum);
 #endif
     otError ProcessMode(uint8_t aArgsLength, char *aArgs[]);
+    otError ProcessMultiRadio(uint8_t aArgsLength, char *aArgsp[]);
+#if OPENTHREAD_CONFIG_MULTI_RADIO
+    void OutputMultiRadioInfo(const otMultiRadioNeighborInfo &aMultiRadioInfo);
+#endif
 #if OPENTHREAD_FTD
     otError ProcessNeighbor(uint8_t aArgsLength, char *aArgs[]);
 #endif
@@ -553,8 +557,10 @@ private:
     void OutputChildTableEntry(uint8_t aIndentSize, const otNetworkDiagChildEntry &aChildEntry);
 #endif
 
+    void OutputDnsTxtData(const uint8_t *aTxtData, uint16_t aTxtDataLength);
+
 #if OPENTHREAD_CONFIG_DNS_CLIENT_ENABLE
-    otError     GetDnsServerAddress(uint8_t aArgsLength, char *aArgs[], otSockAddr &aAddress, uint8_t aStartArgsIndex);
+    otError     GetDnsConfig(uint8_t aArgsLength, char *aArgs[], otDnsQueryConfig *&aConfig, uint8_t aStartArgsIndex);
     static void HandleDnsAddressResponse(otError aError, const otDnsAddressResponse *aResponse, void *aContext);
     void        HandleDnsAddressResponse(otError aError, const otDnsAddressResponse *aResponse);
 #if OPENTHREAD_CONFIG_DNS_CLIENT_SERVICE_DISCOVERY_ENABLE
@@ -711,6 +717,7 @@ private:
         {"mlr", &Interpreter::ProcessMlr},
 #endif
         {"mode", &Interpreter::ProcessMode},
+        {"multiradio", &Interpreter::ProcessMultiRadio},
 #if OPENTHREAD_FTD
         {"neighbor", &Interpreter::ProcessNeighbor},
 #endif

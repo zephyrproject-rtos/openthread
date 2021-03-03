@@ -87,7 +87,7 @@ void otSrpServerHandleServiceUpdateResult(otInstance *aInstance, const otSrpServ
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    instance.Get<Srp::Server>().HandleAdvertisingResult(static_cast<const Srp::Server::Host *>(aHost), aError);
+    instance.Get<Srp::Server>().HandleServiceUpdateResult(static_cast<const Srp::Server::Host *>(aHost), aError);
 }
 
 const otSrpServerHost *otSrpServerGetNextHost(otInstance *aInstance, const otSrpServerHost *aHost)
@@ -147,12 +147,13 @@ uint16_t otSrpServerServiceGetPriority(const otSrpServerService *aService)
     return static_cast<const Srp::Server::Service *>(aService)->GetPriority();
 }
 
-otError otSrpServerServiceGetNextTxtEntry(const otSrpServerService *aService,
-                                          otDnsTxtIterator *        aIterator,
-                                          otDnsTxtEntry *           aTxtEntry)
+const uint8_t *otSrpServerServiceGetTxtData(const otSrpServerService *aService, uint16_t *aDataLength)
 {
-    return static_cast<const Srp::Server::Service *>(aService)->GetNextTxtEntry(
-        *aIterator, static_cast<Dns::TxtEntry &>(*aTxtEntry));
+    const Srp::Server::Service &service = *static_cast<const Srp::Server::Service *>(aService);
+
+    *aDataLength = service.GetTxtDataLength();
+
+    return service.GetTxtData();
 }
 
 const otSrpServerHost *otSrpServerServiceGetHost(const otSrpServerService *aService)

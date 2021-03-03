@@ -144,7 +144,6 @@ class VirtualTime(BaseSimulator):
 
     BLOCK_TIMEOUT = 10
 
-    RADIO_ONLY = os.getenv('RADIO_DEVICE') is not None
     NCP_SIM = os.getenv('NODE_TYPE', 'sim') == 'ncp-sim'
 
     _message_factory = None
@@ -152,8 +151,8 @@ class VirtualTime(BaseSimulator):
     def __init__(self, use_message_factory=True):
         super(VirtualTime, self).__init__()
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 10 * 1024 * 1024)
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 10 * 1024 * 1024)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 2 * 1024 * 1024)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 2 * 1024 * 1024)
 
         ip = '127.0.0.1'
         self.port = self.BASE_PORT + (self.PORT_OFFSET * (self.MAX_NODES + 1))
@@ -246,7 +245,7 @@ class VirtualTime(BaseSimulator):
         return (addr[0], addr[1] - self.BASE_PORT)
 
     def _core_addr_from(self, nodeid):
-        if self.RADIO_ONLY:
+        if self._nodes[nodeid].is_posix:
             return ('127.0.0.1', self.BASE_PORT + self.port + nodeid)
         else:
             return ('127.0.0.1', self.port + nodeid)

@@ -154,6 +154,14 @@ if(CONFIG_OPENTHREAD_MULTIPLE_INSTANCE)
   set(OT_MULTIPLE_INSTANCE ON CACHE BOOL "Enable multiple instances")
 endif()
 
+if(CONFIG_OPENTHREAD_NEIGHBOR_DISCOVERY_AGENT)
+  set(OT_NEIGHBOR_DISCOVERY_AGENT ON CACHE BOOL "Enable neighbor discovery agent support")
+endif()
+
+if(CONFIG_OPENTHREAD_PING_SENDER)
+  set(OT_PING_SENDER ON CACHE BOOL "Enable ping sender support")
+endif()
+
 if(CONFIG_OPENTHREAD_PLATFORM_NETIF)
   set(OT_PLATFORM_NETIF ON CACHE BOOL "Enable platform netif support")
 endif()
@@ -188,6 +196,10 @@ endif()
 
 if(CONFIG_OPENTHREAD_SRP_SERVER)
   set(OT_SRP_SERVER ON CACHE BOOL "Enable SRP Server support")
+endif()
+
+if(CONFIG_OPENTHREAD_TREL)
+  set(OT_TREL ON CACHE BOOL "Enable TREL radio link for Thread over Infrastructure feature")
 endif()
 
 if(CONFIG_OPENTHREAD_TIME_SYNC)

@@ -31,16 +31,16 @@
  *   This file implements a MeshCoP Leader.
  */
 
-#if OPENTHREAD_FTD
-
 #include "meshcop_leader.hpp"
+
+#if OPENTHREAD_FTD
 
 #include <stdio.h>
 
 #include "coap/coap_message.hpp"
 #include "common/code_utils.hpp"
 #include "common/instance.hpp"
-#include "common/locator-getters.hpp"
+#include "common/locator_getters.hpp"
 #include "common/logging.hpp"
 #include "common/random.hpp"
 #include "meshcop/meshcop.hpp"
@@ -60,8 +60,8 @@ Leader::Leader(Instance &aInstance)
     , mDelayTimerMinimal(DelayTimerTlv::kDelayTimerMinimal)
     , mSessionId(Random::NonCrypto::GetUint16())
 {
-    Get<Tmf::TmfAgent>().AddResource(mPetition);
-    Get<Tmf::TmfAgent>().AddResource(mKeepAlive);
+    Get<Tmf::Agent>().AddResource(mPetition);
+    Get<Tmf::Agent>().AddResource(mKeepAlive);
 }
 
 void Leader::HandlePetition(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
@@ -123,10 +123,10 @@ void Leader::SendPetitionResponse(const Coap::Message &   aRequest,
                                   const Ip6::MessageInfo &aMessageInfo,
                                   StateTlv::State         aState)
 {
-    otError        error = OT_ERROR_NONE;
+    Error          error = kErrorNone;
     Coap::Message *message;
 
-    VerifyOrExit((message = NewMeshCoPMessage(Get<Tmf::TmfAgent>())) != nullptr, error = OT_ERROR_NO_BUFS);
+    VerifyOrExit((message = NewMeshCoPMessage(Get<Tmf::Agent>())) != nullptr, error = kErrorNoBufs);
 
     SuccessOrExit(error = message->SetDefaultResponseHeader(aRequest));
     SuccessOrExit(error = message->SetPayloadMarker());
@@ -143,7 +143,7 @@ void Leader::SendPetitionResponse(const Coap::Message &   aRequest,
         SuccessOrExit(error = Tlv::Append<CommissionerSessionIdTlv>(*message, mSessionId));
     }
 
-    SuccessOrExit(error = Get<Tmf::TmfAgent>().SendMessage(*message, aMessageInfo));
+    SuccessOrExit(error = Get<Tmf::Agent>().SendMessage(*message, aMessageInfo));
 
     otLogInfoMeshCoP("sent petition response");
 
@@ -207,17 +207,17 @@ void Leader::SendKeepAliveResponse(const Coap::Message &   aRequest,
                                    const Ip6::MessageInfo &aMessageInfo,
                                    StateTlv::State         aState)
 {
-    otError        error = OT_ERROR_NONE;
+    Error          error = kErrorNone;
     Coap::Message *message;
 
-    VerifyOrExit((message = NewMeshCoPMessage(Get<Tmf::TmfAgent>())) != nullptr, error = OT_ERROR_NO_BUFS);
+    VerifyOrExit((message = NewMeshCoPMessage(Get<Tmf::Agent>())) != nullptr, error = kErrorNoBufs);
 
     SuccessOrExit(error = message->SetDefaultResponseHeader(aRequest));
     SuccessOrExit(error = message->SetPayloadMarker());
 
     SuccessOrExit(error = Tlv::Append<StateTlv>(*message, aState));
 
-    SuccessOrExit(error = Get<Tmf::TmfAgent>().SendMessage(*message, aMessageInfo));
+    SuccessOrExit(error = Get<Tmf::Agent>().SendMessage(*message, aMessageInfo));
 
     otLogInfoMeshCoP("sent keep alive response");
 
@@ -228,18 +228,18 @@ exit:
 
 void Leader::SendDatasetChanged(const Ip6::Address &aAddress)
 {
-    otError          error = OT_ERROR_NONE;
+    Error            error = kErrorNone;
     Ip6::MessageInfo messageInfo;
     Coap::Message *  message;
 
-    VerifyOrExit((message = NewMeshCoPMessage(Get<Tmf::TmfAgent>())) != nullptr, error = OT_ERROR_NO_BUFS);
+    VerifyOrExit((message = NewMeshCoPMessage(Get<Tmf::Agent>())) != nullptr, error = kErrorNoBufs);
 
     SuccessOrExit(error = message->InitAsConfirmablePost(UriPath::kDatasetChanged));
 
     messageInfo.SetSockAddr(Get<Mle::MleRouter>().GetMeshLocal16());
     messageInfo.SetPeerAddr(aAddress);
     messageInfo.SetPeerPort(Tmf::kUdpPort);
-    SuccessOrExit(error = Get<Tmf::TmfAgent>().SendMessage(*message, messageInfo));
+    SuccessOrExit(error = Get<Tmf::Agent>().SendMessage(*message, messageInfo));
 
     otLogInfoMeshCoP("sent dataset changed");
 
@@ -248,11 +248,11 @@ exit:
     LogError("send dataset changed", error);
 }
 
-otError Leader::SetDelayTimerMinimal(uint32_t aDelayTimerMinimal)
+Error Leader::SetDelayTimerMinimal(uint32_t aDelayTimerMinimal)
 {
-    otError error = OT_ERROR_NONE;
+    Error error = kErrorNone;
     VerifyOrExit((aDelayTimerMinimal != 0 && aDelayTimerMinimal < DelayTimerTlv::kDelayTimerDefault),
-                 error = OT_ERROR_INVALID_ARGS);
+                 error = kErrorInvalidArgs);
     mDelayTimerMinimal = aDelayTimerMinimal;
 
 exit:

@@ -36,6 +36,8 @@
 
 #include "openthread-core-config.h"
 
+#if OPENTHREAD_CONFIG_IP6_SLAAC_ENABLE
+
 #include "common/locator.hpp"
 #include "common/non_copyable.hpp"
 #include "common/notifier.hpp"
@@ -135,14 +137,14 @@ public:
      * @param[inout]  aDadCounter          A pointer to the DAD_Counter that is employed to resolve Duplicate
      *                                     Address Detection connflicts.
      *
-     * @retval OT_ERROR_NONE   If successfully generated the IID.
-     * @retval OT_ERROR_FAILED If no valid IID was generated.
+     * @retval kErrorNone    If successfully generated the IID.
+     * @retval kErrorFailed  If no valid IID was generated.
      *
      */
-    otError GenerateIid(Ip6::NetifUnicastAddress &aAddress,
-                        uint8_t *                 aNetworkId       = nullptr,
-                        uint8_t                   aNetworkIdLength = 0,
-                        uint8_t *                 aDadCounter      = nullptr) const;
+    Error GenerateIid(Ip6::NetifUnicastAddress &aAddress,
+                      uint8_t *                 aNetworkId       = nullptr,
+                      uint8_t                   aNetworkIdLength = 0,
+                      uint8_t *                 aDadCounter      = nullptr) const;
 
 private:
     enum
@@ -180,5 +182,7 @@ private:
 
 } // namespace Utils
 } // namespace ot
+
+#endif // OPENTHREAD_CONFIG_IP6_SLAAC_ENABLE
 
 #endif // SLAAC_ADDRESS_HPP_

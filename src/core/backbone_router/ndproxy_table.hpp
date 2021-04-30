@@ -140,30 +140,30 @@ public:
     }
 
     /**
-     * This method registers a given Ip6 address IID with related information to the NdProxy table.
+     * This method registers a given IPv6 address IID with related information to the NdProxy table.
      *
-     * @param[in] aAddressIid                The Ip6 address IID.
+     * @param[in] aAddressIid                The IPv6 address IID.
      * @param[in] aMeshLocalIid              The Mesh-Local IID.
      * @param[in] aRloc16                    The RLOC16.
      * @param[in] aTimeSinceLastTransaction  Time since last transaction (in seconds).
      *
-     * @retval OT_ERROR_NONE        If registered successfully.
-     * @retval OT_ERROR_DUPLICATED  If the Ip6 address IID is a duplicate.
-     * @retval OT_ERROR_NO_BUFS     Insufficient buffer space available to register.
+     * @retval kErrorNone        If registered successfully.
+     * @retval kErrorDuplicated  If the IPv6 address IID is a duplicate.
+     * @retval kErrorNoBufs      Insufficient buffer space available to register.
      *
      */
-    otError Register(const Ip6::InterfaceIdentifier &aAddressIid,
-                     const Ip6::InterfaceIdentifier &aMeshLocalIid,
-                     uint16_t                        aRloc16,
-                     const uint32_t *                aTimeSinceLastTransaction);
+    Error Register(const Ip6::InterfaceIdentifier &aAddressIid,
+                   const Ip6::InterfaceIdentifier &aMeshLocalIid,
+                   uint16_t                        aRloc16,
+                   const uint32_t *                aTimeSinceLastTransaction);
 
     /**
-     * This method checks if a given Ip6 address IID was registered.
+     * This method checks if a given IPv6 address IID was registered.
      *
-     * @param[in] aAddressIid  The Ip6 address IID.
+     * @param[in] aAddressIid  The IPv6 address IID.
      *
-     * @retval TRUE   If the Ip6 address IID was registered.
-     * @retval FALSE  If the Ip6 address IID was not registered.
+     * @retval TRUE   If the IPv6 address IID was registered.
+     * @retval FALSE  If the IPv6 address IID was not registered.
      *
      */
     bool IsRegistered(const Ip6::InterfaceIdentifier &aAddressIid) { return FindByAddressIid(aAddressIid) != nullptr; }
@@ -185,7 +185,7 @@ public:
     /**
      * This method gets the ND Proxy info for a given Domain Unicast Address.
      *
-     * @param[in] aDua  The Domain Unicaste Address.
+     * @param[in] aDua  The Domain Unicast Address.
      *
      * @returns The `NdProxy` instance matching the specified @p aDua, or nullptr if not found.
      *
@@ -224,11 +224,11 @@ public:
      * @param[in] aDua          The Domain Unicast Address to get info.
      * @param[in] aNdProxyInfo  A pointer to the ND Proxy info.
      *
-     * @retval OT_ERROR_NONE       Successfully retrieve the ND Proxy info.
-     * @retval OT_ERROR_NOT_FOUND  Failed to find the Domain Unicast Address in the ND Proxy table.
+     * @retval kErrorNone       Successfully retrieve the ND Proxy info.
+     * @retval kErrorNotFound   Failed to find the Domain Unicast Address in the ND Proxy table.
      *
      */
-    otError GetInfo(const Ip6::Address &aDua, otBackboneRouterNdProxyInfo &aNdProxyInfo);
+    Error GetInfo(const Ip6::Address &aDua, otBackboneRouterNdProxyInfo &aNdProxyInfo);
 
 private:
     enum

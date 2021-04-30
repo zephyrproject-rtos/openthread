@@ -59,16 +59,43 @@
 #include "common/debug.hpp"
 #include "lib/platform/exit_code.h"
 
-static char         sInfraIfName[IFNAMSIZ];
-static uint32_t     sInfraIfIndex       = 0;
-static int          sInfraIfIcmp6Socket = -1;
-static int          sNetLinkSocket      = -1;
-static otIp6Address sInfraIfLinkLocalAddr;
+static char     sInfraIfName[IFNAMSIZ];
+static uint32_t sInfraIfIndex       = 0;
+static int      sInfraIfIcmp6Socket = -1;
+static int      sNetLinkSocket      = -1;
 
 static int  CreateIcmp6Socket(void);
 static int  CreateNetLinkSocket(void);
 static void ReceiveNetLinkMessage(otInstance *aInstance);
 static void ReceiveIcmp6Message(otInstance *aInstance);
+
+bool otPlatInfraIfHasAddress(uint32_t aInfraIfIndex, const otIp6Address *aAddress)
+{
+    bool            ret     = false;
+    struct ifaddrs *ifAddrs = nullptr;
+
+    VerifyOrDie(getifaddrs(&ifAddrs) != -1, OT_EXIT_ERROR_ERRNO);
+
+    for (struct ifaddrs *addr = ifAddrs; addr != nullptr; addr = addr->ifa_next)
+    {
+        struct sockaddr_in6 *ip6Addr;
+
+        if (if_nametoindex(addr->ifa_name) != aInfraIfIndex || addr->ifa_addr->sa_family != AF_INET6)
+        {
+            continue;
+        }
+
+        ip6Addr = reinterpret_cast<sockaddr_in6 *>(addr->ifa_addr);
+        if (memcmp(&ip6Addr->sin6_addr, aAddress, sizeof(*aAddress)) == 0)
+        {
+            ExitNow(ret = true);
+        }
+    }
+
+exit:
+    freeifaddrs(ifAddrs);
+    return ret;
+}
 
 otError otPlatInfraIfSendIcmp6Nd(uint32_t            aInfraIfIndex,
                                  const otIp6Address *aDestAddress,
@@ -144,37 +171,6 @@ exit:
     return error;
 }
 
-const otIp6Address *platformInfraIfGetLinkLocalAddress(void)
-{
-    const otIp6Address *ret     = nullptr;
-    struct ifaddrs *    ifAddrs = nullptr;
-
-    VerifyOrDie(getifaddrs(&ifAddrs) != -1, OT_EXIT_ERROR_ERRNO);
-
-    for (struct ifaddrs *addr = ifAddrs; addr != nullptr; addr = addr->ifa_next)
-    {
-        struct sockaddr_in6 *ip6Addr;
-
-        if (strncmp(addr->ifa_name, sInfraIfName, sizeof(sInfraIfName)) != 0 || addr->ifa_addr->sa_family != AF_INET6)
-        {
-            continue;
-        }
-
-        ip6Addr = reinterpret_cast<sockaddr_in6 *>(addr->ifa_addr);
-        if (IN6_IS_ADDR_LINKLOCAL(&ip6Addr->sin6_addr))
-        {
-            memcpy(&sInfraIfLinkLocalAddr, &ip6Addr->sin6_addr, sizeof(sInfraIfLinkLocalAddr));
-            ExitNow(ret = &sInfraIfLinkLocalAddr);
-        }
-    }
-
-    otLogWarnPlat("cannot find IPv6 link-local address for interface %s", sInfraIfName);
-
-exit:
-    freeifaddrs(ifAddrs);
-    return ret;
-}
-
 bool platformInfraIfIsRunning(void)
 {
     int          sock;
@@ -182,7 +178,7 @@ bool platformInfraIfIsRunning(void)
 
     OT_ASSERT(sInfraIfIndex != 0);
 
-    sock = socket(AF_INET6, SOCK_DGRAM, IPPROTO_IP);
+    sock = SocketWithCloseExec(AF_INET6, SOCK_DGRAM, IPPROTO_IP, kSocketBlock);
     VerifyOrDie(sock != -1, OT_EXIT_ERROR_ERRNO);
 
     memset(&ifReq, 0, sizeof(ifReq));
@@ -204,7 +200,7 @@ static int CreateIcmp6Socket(void)
     const int           kHopLimit           = 255;
 
     // Initializes the ICMPv6 socket.
-    sock = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
+    sock = SocketWithCloseExec(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6, kSocketBlock);
     VerifyOrDie(sock != -1, OT_EXIT_ERROR_ERRNO);
 
     // Only accept router advertisements and solicitations.
@@ -314,7 +310,7 @@ static int CreateNetLinkSocket(void)
     int                rval;
     struct sockaddr_nl addr;
 
-    sock = socket(AF_NETLINK, SOCK_DGRAM, NETLINK_ROUTE);
+    sock = SocketWithCloseExec(AF_NETLINK, SOCK_DGRAM, NETLINK_ROUTE, kSocketBlock);
     VerifyOrDie(sock != -1, OT_EXIT_ERROR_ERRNO);
 
     memset(&addr, 0, sizeof(addr));
@@ -350,12 +346,14 @@ static void ReceiveNetLinkMessage(otInstance *aInstance)
     {
         switch (header->nlmsg_type)
         {
-        case RTM_NEWLINK:
-        case RTM_DELLINK:
+        // There are no effective netlink message types to get us notified
+        // of interface RUNNING state changes. But addresses events are
+        // usually associated with interface state changes.
         case RTM_NEWADDR:
         case RTM_DELADDR:
-            SuccessOrDie(otPlatInfraIfStateChanged(aInstance, sInfraIfIndex, platformInfraIfIsRunning(),
-                                                   platformInfraIfGetLinkLocalAddress()));
+        case RTM_NEWLINK:
+        case RTM_DELLINK:
+            SuccessOrDie(otPlatInfraIfStateChanged(aInstance, sInfraIfIndex, platformInfraIfIsRunning()));
             break;
         case NLMSG_ERROR:
         {

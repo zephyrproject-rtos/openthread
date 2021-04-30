@@ -82,6 +82,7 @@
 #include "net/dns_client.hpp"
 #include "net/dnssd_server.hpp"
 #include "net/ip6_filter.hpp"
+#include "net/nd_agent.hpp"
 #include "net/netif.hpp"
 #include "net/sntp_client.hpp"
 #include "net/srp_client.hpp"
@@ -102,6 +103,7 @@
 #include "thread/radio_selector.hpp"
 #include "thread/time_sync_service.hpp"
 #include "utils/child_supervision.hpp"
+#include "utils/srp_client_buffers.hpp"
 
 #if OPENTHREAD_CONFIG_IP6_SLAAC_ENABLE
 #include "utils/slaac_address.hpp"
@@ -161,10 +163,10 @@ public:
      *
      * @param[in]  aMessage  A reference to the message.
      *
-     * @retval OT_ERROR_NONE  Successfully submitted the message to the interface.
+     * @retval kErrorNone  Successfully submitted the message to the interface.
      *
      */
-    otError SendMessage(Message &aMessage) { return mMeshForwarder.SendMessage(aMessage); }
+    Error SendMessage(Message &aMessage) { return mMeshForwarder.SendMessage(aMessage); }
 
     /**
      * This method performs a route lookup.
@@ -173,11 +175,11 @@ public:
      * @param[in]   aDestination  A reference to the IPv6 destination address.
      * @param[out]  aPrefixMatch  A pointer where the number of prefix match bits for the chosen route is stored.
      *
-     * @retval OT_ERROR_NONE      Successfully found a route.
-     * @retval OT_ERROR_NO_ROUTE  Could not find a valid route.
+     * @retval kErrorNone      Successfully found a route.
+     * @retval kErrorNoRoute   Could not find a valid route.
      *
      */
-    otError RouteLookup(const Ip6::Address &aSource, const Ip6::Address &aDestination, uint8_t *aPrefixMatch);
+    Error RouteLookup(const Ip6::Address &aSource, const Ip6::Address &aDestination, uint8_t *aPrefixMatch);
 
     /**
      * This method indicates whether @p aAddress matches an on-mesh prefix.
@@ -191,13 +193,16 @@ public:
     bool IsOnMesh(const Ip6::Address &aAddress) const;
 
 private:
-    Tmf::TmfAgent mTmfAgent;
+    Tmf::Agent mTmfAgent;
 #if OPENTHREAD_CONFIG_DHCP6_CLIENT_ENABLE
     Dhcp6::Client mDhcp6Client;
-#endif // OPENTHREAD_CONFIG_DHCP6_CLIENT_ENABLE
+#endif
 #if OPENTHREAD_CONFIG_DHCP6_SERVER_ENABLE
     Dhcp6::Server mDhcp6Server;
-#endif // OPENTHREAD_CONFIG_DHCP6_SERVER_ENABLE
+#endif
+#if OPENTHREAD_CONFIG_NEIGHBOR_DISCOVERY_AGENT_ENABLE
+    NeighborDiscovery::Agent mNeighborDiscoveryAgent;
+#endif
 #if OPENTHREAD_CONFIG_IP6_SLAAC_ENABLE
     Utils::Slaac mSlaac;
 #endif
@@ -206,6 +211,9 @@ private:
 #endif
 #if OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE
     Srp::Client mSrpClient;
+#endif
+#if OPENTHREAD_CONFIG_SRP_CLIENT_BUFFERS_ENABLE
+    Utils::SrpClientBuffers mSrpClientBuffers;
 #endif
 #if OPENTHREAD_CONFIG_DNSSD_SERVER_ENABLE
     Dns::ServiceDiscovery::Server mDnssdServer;

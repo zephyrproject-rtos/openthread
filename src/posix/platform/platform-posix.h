@@ -526,14 +526,6 @@ void platformInfraIfDeinit(void);
 bool platformInfraIfIsRunning(void);
 
 /**
- * this function returns the IPv6 link-local address of the infrastructure interface.
- *
- * @returns  A pointer to the link-local address; NULL if no link-local address is present.
- *
- */
-const otIp6Address *platformInfraIfGetLinkLocalAddress(void);
-
-/**
  * This function updates the read fd set.
  *
  * @param[out]  aReadFdSet  The fd set to be updated.
@@ -550,6 +542,36 @@ void platformInfraIfUpdateFdSet(fd_set &aReadFdSet, int &aMaxFd);
  *
  */
 void platformInfraIfProcess(otInstance *aInstance, const fd_set &aReadFdSet);
+
+/**
+ * This function enables daemon.
+ *
+ * @param[in]       aInstance   The OpenThread instance structure.
+ *
+ */
+void platformDaemonEnable(otInstance *aInstance);
+
+/**
+ * This function disables daemon.
+ *
+ */
+void platformDaemonDisable(void);
+
+/**
+ * This function updates the file descriptor sets with file descriptors used by daemon.
+ *
+ * @param[inout]    aMainloop   A pointer to the mainloop context.
+ *
+ */
+void platformDaemonUpdate(otSysMainloopContext *aContext);
+
+/**
+ * This function performs daemon processing.
+ *
+ * @param[in]   aMainloop   A pointer to the mainloop context.
+ *
+ */
+void platformDaemonProcess(const otSysMainloopContext *aContext);
 
 #ifdef __cplusplus
 }

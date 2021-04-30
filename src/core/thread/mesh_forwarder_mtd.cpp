@@ -31,13 +31,13 @@
  *   This file implements MTD-specific mesh forwarding of IPv6/6LoWPAN messages.
  */
 
-#if OPENTHREAD_MTD
-
 #include "mesh_forwarder.hpp"
+
+#if OPENTHREAD_MTD
 
 namespace ot {
 
-otError MeshForwarder::SendMessage(Message &aMessage)
+Error MeshForwarder::SendMessage(Message &aMessage)
 {
     aMessage.SetDirectTransmission();
     aMessage.SetOffset(0);
@@ -46,12 +46,12 @@ otError MeshForwarder::SendMessage(Message &aMessage)
     mSendQueue.Enqueue(aMessage);
     mScheduleTransmissionTask.Post();
 
-    return OT_ERROR_NONE;
+    return kErrorNone;
 }
 
-otError MeshForwarder::EvictMessage(Message::Priority aPriority)
+Error MeshForwarder::EvictMessage(Message::Priority aPriority)
 {
-    otError  error = OT_ERROR_NOT_FOUND;
+    Error    error = kErrorNotFound;
     Message *message;
 
     VerifyOrExit((message = mSendQueue.GetTail()) != nullptr);
@@ -59,7 +59,7 @@ otError MeshForwarder::EvictMessage(Message::Priority aPriority)
     if (message->GetPriority() < static_cast<uint8_t>(aPriority))
     {
         RemoveMessage(*message);
-        ExitNow(error = OT_ERROR_NONE);
+        ExitNow(error = kErrorNone);
     }
 
 exit:

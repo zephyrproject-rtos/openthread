@@ -42,7 +42,7 @@
 #include <openthread/platform/time.h>
 
 #include "common/instance.hpp"
-#include "common/locator-getters.hpp"
+#include "common/locator_getters.hpp"
 #include "common/logging.hpp"
 
 #define ABS(value) (((value) >= 0) ? (value) : -(value))
@@ -161,7 +161,7 @@ void TimeSync::ProcessTimeSync(void)
 
     if (mTimeSyncRequired)
     {
-        VerifyOrExit(Get<Mle::MleRouter>().SendTimeSync() == OT_ERROR_NONE);
+        VerifyOrExit(Get<Mle::MleRouter>().SendTimeSync() == kErrorNone);
 
         mLastTimeSyncSent = TimerMilli::GetNow();
         mTimeSyncRequired = false;

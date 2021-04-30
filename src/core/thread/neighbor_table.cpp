@@ -35,7 +35,7 @@
 
 #include "common/code_utils.hpp"
 #include "common/instance.hpp"
-#include "common/locator-getters.hpp"
+#include "common/locator_getters.hpp"
 #include "thread/dua_manager.hpp"
 
 namespace ot {
@@ -151,7 +151,7 @@ Neighbor *NeighborTable::FindNeighbor(const Ip6::Address &aIp6Address, Neighbor:
 
     if (!macAddress.IsNone())
     {
-        neighbor = FindChildOrRouter(Neighbor::AddressMatcher(macAddress, aFilter));
+        neighbor = FindNeighbor(Neighbor::AddressMatcher(macAddress, aFilter));
         ExitNow();
     }
 
@@ -178,9 +178,9 @@ exit:
     return neighbor;
 }
 
-otError NeighborTable::GetNextNeighborInfo(otNeighborInfoIterator &aIterator, Neighbor::Info &aNeighInfo)
+Error NeighborTable::GetNextNeighborInfo(otNeighborInfoIterator &aIterator, Neighbor::Info &aNeighInfo)
 {
-    otError error = OT_ERROR_NONE;
+    Error   error = kErrorNone;
     int16_t index;
 
     // Non-negative iterator value gives the Child index into child table
@@ -226,7 +226,7 @@ otError NeighborTable::GetNextNeighborInfo(otNeighborInfoIterator &aIterator, Ne
     }
 
     aIterator = -index;
-    error     = OT_ERROR_NOT_FOUND;
+    error     = kErrorNotFound;
 
 exit:
     return error;
@@ -236,9 +236,9 @@ exit:
 
 #if OPENTHREAD_MTD
 
-otError NeighborTable::GetNextNeighborInfo(otNeighborInfoIterator &aIterator, Neighbor::Info &aNeighInfo)
+Error NeighborTable::GetNextNeighborInfo(otNeighborInfoIterator &aIterator, Neighbor::Info &aNeighInfo)
 {
-    otError error = OT_ERROR_NOT_FOUND;
+    Error error = kErrorNotFound;
 
     VerifyOrExit(aIterator == OT_NEIGHBOR_INFO_ITERATOR_INIT);
 
@@ -247,7 +247,7 @@ otError NeighborTable::GetNextNeighborInfo(otNeighborInfoIterator &aIterator, Ne
 
     aNeighInfo.SetFrom(Get<Mle::Mle>().GetParent());
     aNeighInfo.mIsChild = false;
-    error               = OT_ERROR_NONE;
+    error               = kErrorNone;
 
 exit:
     return error;
@@ -267,7 +267,9 @@ void NeighborTable::Signal(Event aEvent, const Neighbor &aNeighbor)
         {
         case OT_NEIGHBOR_TABLE_EVENT_CHILD_ADDED:
         case OT_NEIGHBOR_TABLE_EVENT_CHILD_REMOVED:
+#if OPENTHREAD_FTD
             static_cast<Child::Info &>(info.mInfo.mChild).SetFrom(static_cast<const Child &>(aNeighbor));
+#endif
             break;
 
         case OT_NEIGHBOR_TABLE_EVENT_ROUTER_ADDED:

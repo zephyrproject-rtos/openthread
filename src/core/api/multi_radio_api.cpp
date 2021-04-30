@@ -33,29 +33,29 @@
 
 #include "openthread-core-config.h"
 
+#if OPENTHREAD_CONFIG_MULTI_RADIO
+
 #include <openthread/multi_radio.h>
 
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
 #include "common/instance.hpp"
-#include "common/locator-getters.hpp"
+#include "common/locator_getters.hpp"
 #include "thread/radio_selector.hpp"
 
 using namespace ot;
-
-#if OPENTHREAD_CONFIG_MULTI_RADIO
 
 otError otMultiRadioGetNeighborInfo(otInstance *              aInstance,
                                     const otExtAddress *      aExtAddress,
                                     otMultiRadioNeighborInfo *aInfo)
 {
-    otError   error    = OT_ERROR_NONE;
+    Error     error    = kErrorNone;
     Instance &instance = *static_cast<Instance *>(aInstance);
     Neighbor *neighbor;
 
     neighbor = instance.Get<NeighborTable>().FindNeighbor(*static_cast<const Mac::ExtAddress *>(aExtAddress),
                                                           Neighbor::kInStateAnyExceptInvalid);
-    VerifyOrExit(neighbor != NULL, error = OT_ERROR_NOT_FOUND);
+    VerifyOrExit(neighbor != NULL, error = kErrorNotFound);
 
     neighbor->PopulateMultiRadioInfo(*aInfo);
 

@@ -39,7 +39,6 @@ import time
 import traceback
 import unittest
 from typing import Union, Dict, Optional, List
-from zeroconf import Zeroconf, ServiceInfo
 
 import pexpect
 import pexpect.popen_spawn
@@ -52,6 +51,8 @@ PORT_OFFSET = int(os.getenv('PORT_OFFSET', "0"))
 
 
 class OtbrDocker:
+    RESET_DELAY = 3
+
     _socat_proc = None
     _ot_rcp_proc = None
     _docker_proc = None
@@ -209,7 +210,7 @@ class OtbrDocker:
                     break
 
                 lines.append(line)
-                logging.info("%s $ %s", self, line.rstrip('\r\n'))
+                logging.info("%s $ %r", self, line.rstrip('\r\n'))
 
             proc.wait()
 
@@ -292,20 +293,33 @@ class OtbrDocker:
                     record[1] = int(record[1])
                     if record[3] == 'SRV':
                         record[4], record[5], record[6] = map(int, [record[4], record[5], record[6]])
+                    elif record[3] == 'TXT':
+                        record[4:] = [self.__parse_dns_dig_txt(line)]
 
                 dig_result[section].append(tuple(record))
 
         return dig_result
 
+    def __parse_dns_dig_txt(self, line: str):
+        # Example TXT entry:
+        # "xp=\\000\\013\\184\\000\\000\\000\\000\\000"
+        txt = {}
+        for entry in re.findall(r'"(.*?[^\\])"', line):
+            if entry == "":
+                continue
+
+            k, v = entry.split('=', 1)
+            txt[k] = v
+
+        return txt
+
     def _setup_sysctl(self):
         self.bash(f'sysctl net.ipv6.conf.{self.ETH_DEV}.accept_ra=2')
         self.bash(f'sysctl net.ipv6.conf.{self.ETH_DEV}.accept_ra_rt_info_max_plen=64')
 
-        # Zeroconf complains that there is not enough BUFS to subscribe multicast groups.
-        self.bash('sysctl net.ipv4.igmp_max_memberships=1024')
-
 
 class OtCli:
+    RESET_DELAY = 0.1
 
     def __init__(self, nodeid, is_mtd=False, version=None, is_bbr=False, **kwargs):
         self.verbose = int(float(os.getenv('VERBOSE', 0)))
@@ -909,7 +923,7 @@ class NodeImpl:
                 return service
 
     def get_srp_server_port(self):
-        """Returns the dynamic SRP server UDP port by parsing
+        """Returns the SRP server UDP port by parsing
            the SRP Server Data in Network Data.
         """
 
@@ -1168,6 +1182,7 @@ class NodeImpl:
     def register_multicast_listener(self, *ipaddrs: Union[ipaddress.IPv6Address, str], timeout=None):
         assert len(ipaddrs) > 0, ipaddrs
 
+        ipaddrs = map(str, ipaddrs)
         cmd = f'mlr reg {" ".join(ipaddrs)}'
         if timeout is not None:
             cmd += f' {int(timeout)}'
@@ -1751,14 +1766,16 @@ class NodeImpl:
             return self._expect_results(
                 r'\|\s(\S+)\s+\|\s(\S+)\s+\|\s([0-9a-fA-F]{4})\s\|\s([0-9a-fA-F]{16})\s\|\s(\d+)')
 
-    def ping(self, ipaddr, num_responses=1, size=None, timeout=5):
-        cmd = 'ping %s' % ipaddr
-        if size is not None:
-            cmd += ' %d' % size
+    def ping(self, ipaddr, num_responses=1, size=8, timeout=5, count=1, interval=1, hoplimit=64, interface=None):
+        args = f'{ipaddr} {size} {count} {interval} {hoplimit} {timeout}'
+        if interface is not None:
+            args = f'-I {interface} {args}'
+        cmd = f'ping {args}'
 
         self.send_command(cmd)
 
-        end = self.simulator.now() + timeout
+        wait_allowance = 3
+        end = self.simulator.now() + timeout + wait_allowance
 
         responders = {}
 
@@ -1781,12 +1798,11 @@ class NodeImpl:
                     responders[self.pexpect.match.groups()[0]] = 1
                 elif i == 1:
                     done = True
-
         return result
 
     def reset(self):
         self.send_command('reset')
-        time.sleep(0.1)
+        time.sleep(self.RESET_DELAY)
 
     def set_router_selection_jitter(self, jitter):
         cmd = 'routerselectionjitter %d' % jitter
@@ -1878,6 +1894,23 @@ class NodeImpl:
         self.send_command('dataset commit pending')
         self._expect_done()
 
+    def start_dataset_updater(self, panid=None, channel=None):
+        self.send_command('dataset clear')
+        self._expect_done()
+
+        if panid is not None:
+            cmd = 'dataset panid %d' % panid
+            self.send_command(cmd)
+            self._expect_done()
+
+        if channel is not None:
+            cmd = 'dataset channel %d' % channel
+            self.send_command(cmd)
+            self._expect_done()
+
+        self.send_command('dataset updater start')
+        self._expect_done()
+
     def announce_begin(self, mask, count, period, ipaddr):
         cmd = 'commissioner announce %d %d %d %s' % (
             mask,
@@ -1898,6 +1931,7 @@ class NodeImpl:
         master_key=None,
         mesh_local=None,
         network_name=None,
+        security_policy=None,
         binary=None,
     ):
         cmd = 'dataset mgmtsetcommand active '
@@ -1925,6 +1959,10 @@ class NodeImpl:
 
         if network_name is not None:
             cmd += 'networkname %s ' % self._escape_escapable(network_name)
+
+        if security_policy is not None:
+            rotation, flags = security_policy
+            cmd += 'securitypolicy %d %s ' % (rotation, flags)
 
         if binary is not None:
             cmd += '-x %s ' % binary
@@ -2635,8 +2673,9 @@ class LinuxHost():
         cmd = f'python3 /app/third_party/openthread/repo/tests/scripts/thread-cert/mcast6.py {self.ETH_DEV} {ip} &'
         self.bash(cmd)
 
-    def ping_ether(self, ipaddr, num_responses=1, size=None, timeout=5, ttl=None) -> int:
-        cmd = f'ping -6 {ipaddr} -I eth0 -c {num_responses} -W {timeout}'
+    def ping_ether(self, ipaddr, num_responses=1, size=None, timeout=5, ttl=None, interface='eth0') -> int:
+
+        cmd = f'ping -6 {ipaddr} -I {interface} -c {num_responses} -W {timeout}'
         if size is not None:
             cmd += f' -s {size}'
 
@@ -2655,7 +2694,7 @@ class LinuxHost():
         return resp_count
 
     def _getBackboneGua(self) -> Optional[str]:
-        for addr in self.get_addrs():
+        for addr in self.get_ether_addrs():
             if re.match(config.BACKBONE_PREFIX_REGEX_PATTERN, addr, re.I):
                 return addr
 
@@ -2665,11 +2704,18 @@ class LinuxHost():
         """ Returns the ULA addresses autoconfigured on the infra link.
         """
         addrs = []
-        for addr in self.get_addrs():
+        for addr in self.get_ether_addrs():
             if re.match(config.ONLINK_PREFIX_REGEX_PATTERN, addr, re.I):
                 addrs.append(addr)
 
         return addrs
+
+    def _getInfraGua(self) -> Optional[str]:
+        """ Returns the GUA addresses autoconfigured on the infra link.
+        """
+
+        gua_prefix = config.ONLINK_GUA_PREFIX.split('::/')[0]
+        return [addr for addr in self.get_ether_addrs() if addr.startswith(gua_prefix)]
 
     def ping(self, *args, **kwargs):
         backbone = kwargs.pop('backbone', False)
@@ -2677,6 +2723,15 @@ class LinuxHost():
             return self.ping_ether(*args, **kwargs)
         else:
             return super().ping(*args, **kwargs)
+
+    def udp_send_host(self, ipaddr, port, data, hop_limit=None):
+        if hop_limit is None:
+            if ipaddress.ip_address(ipaddr).is_multicast:
+                hop_limit = 10
+            else:
+                hop_limit = 64
+        cmd = f'python3 /app/third_party/openthread/repo/tests/scripts/thread-cert/udp_send_host.py {ipaddr} {port} "{data}" {hop_limit}'
+        self.bash(cmd)
 
     def add_ipmaddr(self, *args, **kwargs):
         backbone = kwargs.pop('backbone', False)
@@ -2706,27 +2761,77 @@ class LinuxHost():
         The return value is a dict with the same key/values of srp_server_get_service
         except that we don't have a `deleted` field here.
         """
-        zeroconf = Zeroconf()
-        timeout *= 1000  # Zeroconf use timeout in milliseconds.
-        try:
-            info = ServiceInfo(type_=f'{name}.local.', name=f'{instance}.{name}.local.', server=f'{host_name}.local.')
-            while timeout > 0 and not info.parsed_addresses():
-                info.request(zeroconf, 500)
-                timeout -= 500
-            if info.parsed_addresses():
-                return {
-                    'fullname': info.name,
-                    'instance': info.get_name(),
-                    'name': name,
-                    'port': info.port,
-                    'weight': info.weight,
-                    'priority': info.priority,
-                    'host_fullname': info.server,
-                    'host': host_name,
-                    'addresses': info.parsed_addresses()
-                }
-        finally:
-            zeroconf.close()
+
+        self.bash(f'dns-sd -Z {name} local. > /tmp/{name} 2>&1 &')
+        self.bash(f'dns-sd -G v6 {host_name}.local. > /tmp/{host_name} 2>&1 &')
+        time.sleep(timeout)
+
+        self.bash('pkill dns-sd')
+        addresses = []
+        service = {}
+
+        logging.debug(self.bash(f'cat /tmp/{host_name}'))
+        logging.debug(self.bash(f'cat /tmp/{name}'))
+
+        # example output in the host file:
+        # Timestamp     A/R Flags if Hostname                               Address                                     TTL
+        # 9:38:09.274  Add     23 48 my-host.local.                         2001:0000:0000:0000:0000:0000:0000:0002%<0>  120
+        #
+        for line in self.bash(f'cat /tmp/{host_name}'):
+            elements = line.split()
+            fullname = f'{host_name}.local.'
+            if fullname not in elements:
+                continue
+            addresses.append(elements[elements.index(fullname) + 1].split('%')[0])
+
+        logging.debug(f'addresses of {host_name}: {addresses}')
+
+        # example output of in the service file:
+        # _ipps._tcp                                      PTR     my-service._ipps._tcp
+        # my-service._ipps._tcp                           SRV     0 0 12345 my-host.local. ; Replace with unicast FQDN of target host
+        # my-service._ipps._tcp                           TXT     ""
+        #
+        for line in self.bash(f'cat /tmp/{name}'):
+            elements = line.split()
+            if not elements or elements[0] != f'{instance}.{name}':
+                continue
+            if elements[1] == 'SRV':
+                service['fullname'] = elements[0]
+                service['instance'] = instance
+                service['name'] = name
+                service['priority'] = int(elements[2])
+                service['weight'] = int(elements[3])
+                service['port'] = int(elements[4])
+                service['host_fullname'] = elements[5]
+                assert (service['host_fullname'] == f'{host_name}.local.')
+                service['host'] = host_name
+                service['addresses'] = addresses
+                return service if service['addresses'] else None
+
+    def start_radvd_service(self, prefix, slaac):
+        self.bash("""cat >/etc/radvd.conf <<EOF
+interface eth0
+{
+	AdvSendAdvert on;
+
+	MinRtrAdvInterval 3;
+	MaxRtrAdvInterval 30;
+	AdvDefaultPreference low;
+
+	prefix %s
+	{
+		AdvOnLink on;
+		AdvAutonomous %s;
+		AdvRouterAddr off;
+	};
+};
+EOF
+""" % (prefix, 'on' if slaac else 'off'))
+        self.bash('service radvd start')
+        self.bash('service radvd status')  # Make sure radvd service is running
+
+    def stop_radvd_service(self):
+        self.bash('service radvd stop')
 
 
 class OtbrNode(LinuxHost, NodeImpl, OtbrDocker):
@@ -2756,12 +2861,12 @@ class HostNode(LinuxHost, OtbrDocker):
     def start(self, start_radvd=True, prefix=config.DOMAIN_PREFIX, slaac=False):
         self._setup_sysctl()
         if start_radvd:
-            self._service_radvd_start(prefix, slaac)
+            self.start_radvd_service(prefix, slaac)
         else:
-            self._service_radvd_stop()
+            self.stop_radvd_service()
 
     def stop(self):
-        self._service_radvd_stop()
+        self.stop_radvd_service()
 
     def get_addrs(self) -> List[str]:
         return self.get_ether_addrs()
@@ -2789,39 +2894,15 @@ class HostNode(LinuxHost, OtbrDocker):
         Returns:
             IPv6 address string.
         """
-        assert address_type in [config.ADDRESS_TYPE.BACKBONE_GUA, config.ADDRESS_TYPE.ONLINK_ULA]
 
         if address_type == config.ADDRESS_TYPE.BACKBONE_GUA:
             return self._getBackboneGua()
-        if address_type == config.ADDRESS_TYPE.ONLINK_ULA:
+        elif address_type == config.ADDRESS_TYPE.ONLINK_ULA:
             return self._getInfraUla()
+        elif address_type == config.ADDRESS_TYPE.ONLINK_GUA:
+            return self._getInfraGua()
         else:
-            return None
-
-    def _service_radvd_start(self, prefix, slaac):
-        self.bash("""cat >/etc/radvd.conf <<EOF
-interface eth0
-{
-	AdvSendAdvert on;
-
-	MinRtrAdvInterval 3;
-	MaxRtrAdvInterval 30;
-	AdvDefaultPreference low;
-
-	prefix %s
-	{
-		AdvOnLink on;
-		AdvAutonomous %s;
-		AdvRouterAddr off;
-	};
-};
-EOF
-""" % (prefix, 'on' if slaac else 'off'))
-        self.bash('service radvd start')
-        self.bash('service radvd status')  # Make sure radvd service is running
-
-    def _service_radvd_stop(self):
-        self.bash('service radvd stop')
+            raise ValueError(f'unsupported address type: {address_type}')
 
 
 if __name__ == '__main__':

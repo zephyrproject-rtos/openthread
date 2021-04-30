@@ -263,7 +263,7 @@ class OpenThreadTHCI(object):
     def log(self, fmt, *args):
         try:
             msg = fmt % args
-            logging.info('%s - %s', self, msg)
+            print('%s - %s - %s' % (self.port, time.strftime('%b %d %H:%M:%S'), msg))
         except Exception:
             pass
 
@@ -1272,6 +1272,8 @@ class OpenThreadTHCI(object):
         self.__sendCommand('factoryreset', expectEcho=False)
         self.sleep(0.5)
 
+        self._onReset()
+
     @API
     def removeRouter(self, xRouterId):
         """kickoff router with a given router id from the Thread Network
@@ -2246,12 +2248,11 @@ class OpenThreadTHCI(object):
                                                  if 'recv' in infoValue else PlatformDiagnosticPacket_Direction.OUT if
                                                  'send' in infoValue else PlatformDiagnosticPacket_Direction.UNKNOWN)
                 elif 'type' in infoType:
-                    EncryptedPacket.Type = (PlatformDiagnosticPacket_Type.JOIN_FIN_req
-                                            if 'JOIN_FIN.req' in infoValue else
-                                            PlatformDiagnosticPacket_Type.JOIN_FIN_rsp if 'JOIN_FIN.rsp' in infoValue
-                                            else PlatformDiagnosticPacket_Type.JOIN_ENT_req if 'JOIN_ENT.ntf' in
-                                            infoValue else PlatformDiagnosticPacket_Type.JOIN_ENT_rsp if 'JOIN_ENT.rsp'
-                                            in infoValue else PlatformDiagnosticPacket_Type.UNKNOWN)
+                    EncryptedPacket.Type = (PlatformDiagnosticPacket_Type.JOIN_FIN_req if 'JOIN_FIN.req' in infoValue
+                                            else PlatformDiagnosticPacket_Type.JOIN_FIN_rsp if 'JOIN_FIN.rsp'
+                                            in infoValue else PlatformDiagnosticPacket_Type.JOIN_ENT_req if
+                                            'JOIN_ENT.ntf' in infoValue else PlatformDiagnosticPacket_Type.JOIN_ENT_rsp
+                                            if 'JOIN_ENT.rsp' in infoValue else PlatformDiagnosticPacket_Type.UNKNOWN)
                 elif 'len' in infoType:
                     bytesInEachLine = 16
                     EncryptedPacket.TLVsLength = int(infoValue)
@@ -3045,6 +3046,9 @@ class OpenThread(OpenThreadTHCI, IThci):
         if self.__handle:
             self.__handle.close()
             self.__handle = None
+
+    def _onReset(self):
+        pass
 
     def __socRead(self, size=512):
         if self._is_net:

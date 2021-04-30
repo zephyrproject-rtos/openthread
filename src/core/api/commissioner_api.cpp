@@ -33,14 +33,15 @@
 
 #include "openthread-core-config.h"
 
+#if OPENTHREAD_FTD && OPENTHREAD_CONFIG_COMMISSIONER_ENABLE
+
 #include <openthread/commissioner.h>
 
 #include "common/instance.hpp"
-#include "common/locator-getters.hpp"
+#include "common/locator_getters.hpp"
 
 using namespace ot;
 
-#if OPENTHREAD_FTD && OPENTHREAD_CONFIG_COMMISSIONER_ENABLE
 otError otCommissionerStart(otInstance *                 aInstance,
                             otCommissionerStateCallback  aStateCallback,
                             otCommissionerJoinerCallback aJoinerCallback,
@@ -60,7 +61,7 @@ otError otCommissionerStop(otInstance *aInstance)
 
 otError otCommissionerAddJoiner(otInstance *aInstance, const otExtAddress *aEui64, const char *aPskd, uint32_t aTimeout)
 {
-    otError                error;
+    Error                  error;
     MeshCoP::Commissioner &commissioner = static_cast<Instance *>(aInstance)->Get<MeshCoP::Commissioner>();
 
     if (aEui64 == nullptr)
@@ -95,7 +96,7 @@ otError otCommissionerGetNextJoinerInfo(otInstance *aInstance, uint16_t *aIterat
 
 otError otCommissionerRemoveJoiner(otInstance *aInstance, const otExtAddress *aEui64)
 {
-    otError                error;
+    Error                  error;
     MeshCoP::Commissioner &commissioner = static_cast<Instance *>(aInstance)->Get<MeshCoP::Commissioner>();
 
     if (aEui64 == nullptr)

@@ -53,24 +53,15 @@
 #define HAVE_LIBREADLINE 0
 #endif
 
-#define OT_POSIX_APP_TYPE_NCP 1
-#define OT_POSIX_APP_TYPE_CLI 2
-
 #include <openthread/cli.h>
 #include <openthread/diag.h>
 #include <openthread/logging.h>
 #include <openthread/tasklet.h>
 #include <openthread/thread.h>
 #include <openthread/platform/radio.h>
-#if OPENTHREAD_POSIX_APP_TYPE == OT_POSIX_APP_TYPE_NCP
-#include <openthread/ncp.h>
-#elif OPENTHREAD_POSIX_APP_TYPE == OT_POSIX_APP_TYPE_CLI
+#if !OPENTHREAD_POSIX_CONFIG_DAEMON_ENABLE
 #include <openthread/cli.h>
-
-#include "console_cli.h"
 #include "cli/cli_config.h"
-#else
-#error "Unknown posix app type!"
 #endif
 #include <common/code_utils.hpp>
 #include <common/logging.hpp>
@@ -81,6 +72,58 @@
 #ifndef OPENTHREAD_ENABLE_COVERAGE
 #define OPENTHREAD_ENABLE_COVERAGE 0
 #endif
+
+/**
+ * This function initializes NCP app.
+ *
+ * @param[in]  aInstance    A pointer to the OpenThread instance.
+ *
+ */
+void otAppNcpInit(otInstance *aInstance);
+
+/**
+ * This function deinitializes NCP app.
+ *
+ */
+void otAppNcpUpdate(otSysMainloopContext *aContext);
+
+/**
+ * This function updates the file descriptor sets with file descriptors used by console.
+ *
+ * @param[inout]    aMainloop   A pointer to the mainloop context.
+ *
+ */
+void otAppNcpProcess(const otSysMainloopContext *aContext);
+
+/**
+ * This function initializes CLI app.
+ *
+ * @param[in]  aInstance    A pointer to the OpenThread instance.
+ *
+ */
+void otAppCliInit(otInstance *aInstance);
+
+/**
+ * This function deinitializes CLI app.
+ *
+ */
+void otAppCliDeinit(void);
+
+/**
+ * This function updates the file descriptor sets with file descriptors used by console.
+ *
+ * @param[inout]    aMainloop   A pointer to the mainloop context.
+ *
+ */
+void otAppCliUpdate(otSysMainloopContext *aMainloop);
+
+/**
+ * This function performs console driver processing.
+ *
+ * @param[in]    aMainloop      A pointer to the mainloop context.
+ *
+ */
+void otAppCliProcess(const otSysMainloopContext *aMainloop);
 
 typedef struct PosixConfig
 {
@@ -244,7 +287,6 @@ static void ParseArg(int aArgCount, char *aArgVector[], PosixConfig *aConfig)
     aConfig->mPlatformConfig.mRadioUrl = aArgVector[optind];
 }
 
-#if OPENTHREAD_POSIX_APP_TYPE == OT_POSIX_APP_TYPE_CLI
 static void PrintRadioUrl(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
     (void)aArgsLength;
@@ -253,7 +295,6 @@ static void PrintRadioUrl(void *aContext, uint8_t aArgsLength, char *aArgs[])
     otPlatformConfig *config = (otPlatformConfig *)aContext;
     otCliOutputFormat("%s\r\nDone\r\n", config->mRadioUrl);
 }
-#endif // OPENTHREAD_POSIX_APP_TYPE == OT_POSIX_APP_TYPE_CLI
 
 static otInstance *InitInstance(PosixConfig *aConfig)
 {
@@ -302,12 +343,10 @@ void otPlatReset(otInstance *aInstance)
 
 int main(int argc, char *argv[])
 {
-    otInstance *instance;
-    int         rval = 0;
-    PosixConfig config;
-#if OPENTHREAD_POSIX_APP_TYPE == OT_POSIX_APP_TYPE_CLI
+    otInstance * instance;
+    int          rval = 0;
+    PosixConfig  config;
     otCliCommand radioUrlCommand = {"radiourl", PrintRadioUrl};
-#endif
 
 #ifdef __linux__
     // Ensure we terminate this process if the
@@ -329,16 +368,10 @@ int main(int argc, char *argv[])
     setlogmask(setlogmask(0) & LOG_UPTO(LOG_DEBUG));
     instance = InitInstance(&config);
 
-#if OPENTHREAD_POSIX_APP_TYPE == OT_POSIX_APP_TYPE_NCP
-    otNcpInit(instance);
-#elif OPENTHREAD_POSIX_APP_TYPE == OT_POSIX_APP_TYPE_CLI
-#ifdef OPENTHREAD_USE_CONSOLE
-    otxConsoleInit(instance);
-#else
-    otCliUartInit(instance);
+#if !OPENTHREAD_POSIX_CONFIG_DAEMON_ENABLE
+    otAppCliInit(instance);
 #endif
     otCliSetUserCommands(&radioUrlCommand, 1, &config.mPlatformConfig);
-#endif
 
     while (true)
     {
@@ -354,8 +387,8 @@ int main(int argc, char *argv[])
         mainloop.mTimeout.tv_sec  = 10;
         mainloop.mTimeout.tv_usec = 0;
 
-#ifdef OPENTHREAD_USE_CONSOLE
-        otxConsoleUpdate(&mainloop);
+#if !OPENTHREAD_POSIX_CONFIG_DAEMON_ENABLE
+        otAppCliUpdate(&mainloop);
 #endif
 
         otSysMainloopUpdate(instance, &mainloop);
@@ -363,8 +396,8 @@ int main(int argc, char *argv[])
         if (otSysMainloopPoll(&mainloop) >= 0)
         {
             otSysMainloopProcess(instance, &mainloop);
-#ifdef OPENTHREAD_USE_CONSOLE
-            otxConsoleProcess(&mainloop);
+#if !OPENTHREAD_POSIX_CONFIG_DAEMON_ENABLE
+            otAppCliProcess(&mainloop);
 #endif
         }
         else if (errno != EINTR)
@@ -374,8 +407,8 @@ int main(int argc, char *argv[])
         }
     }
 
-#ifdef OPENTHREAD_USE_CONSOLE
-    otxConsoleDeinit();
+#if !OPENTHREAD_POSIX_CONFIG_DAEMON_ENABLE
+    otAppCliDeinit();
 #endif
 
 exit:

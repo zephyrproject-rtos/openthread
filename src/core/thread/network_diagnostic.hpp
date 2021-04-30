@@ -36,6 +36,8 @@
 
 #include "openthread-core-config.h"
 
+#if OPENTHREAD_FTD || OPENTHREAD_CONFIG_TMF_NETWORK_DIAG_MTD_ENABLE
+
 #include <openthread/netdiag.h>
 
 #include "coap/coap.hpp"
@@ -93,11 +95,11 @@ public:
      * @param[in]  aCallbackContext  A pointer to application-specific context.
      *
      */
-    otError SendDiagnosticGet(const Ip6::Address &           aDestination,
-                              const uint8_t                  aTlvTypes[],
-                              uint8_t                        aCount,
-                              otReceiveDiagnosticGetCallback aCallback,
-                              void *                         aCallbackContext);
+    Error SendDiagnosticGet(const Ip6::Address &           aDestination,
+                            const uint8_t                  aTlvTypes[],
+                            uint8_t                        aCount,
+                            otReceiveDiagnosticGetCallback aCallback,
+                            void *                         aCallbackContext);
 
     /**
      * This method sends Diagnostic Reset request.
@@ -107,7 +109,7 @@ public:
      * @param[in] aCount        Number of types in aTlvTypes
      *
      */
-    otError SendDiagnosticReset(const Ip6::Address &aDestination, const uint8_t aTlvTypes[], uint8_t aCount);
+    Error SendDiagnosticReset(const Ip6::Address &aDestination, const uint8_t aTlvTypes[], uint8_t aCount);
 
     /**
      * This static method gets the next Network Diagnostic TLV in a given message.
@@ -116,20 +118,18 @@ public:
      * @param[inout]  aIterator        The Network Diagnostic iterator. To get the first TLV set it to `kIteratorInit`.
      * @param[out]    aNetworkDiagTlv  A reference to a Network Diagnostic TLV to output the next TLV.
      *
-     * @retval OT_ERROR_NONE       Successfully found the next Network Diagnostic TLV.
-     * @retval OT_ERROR_NOT_FOUND  No subsequent Network Diagnostic TLV exists in the message.
-     * @retval OT_ERROR_PARSE      Parsing the next Network Diagnostic failed.
+     * @retval kErrorNone       Successfully found the next Network Diagnostic TLV.
+     * @retval kErrorNotFound   No subsequent Network Diagnostic TLV exists in the message.
+     * @retval kErrorParse      Parsing the next Network Diagnostic failed.
      *
      */
-    static otError GetNextDiagTlv(const Coap::Message &aMessage,
-                                  Iterator &           aIterator,
-                                  otNetworkDiagTlv &   aNetworkDiagTlv);
+    static Error GetNextDiagTlv(const Coap::Message &aMessage, Iterator &aIterator, otNetworkDiagTlv &aNetworkDiagTlv);
 
 private:
-    otError AppendIp6AddressList(Message &aMessage);
-    otError AppendChildTable(Message &aMessage);
-    void    FillMacCountersTlv(MacCountersTlv &aMacCountersTlv);
-    otError FillRequestedTlvs(const Message &aRequest, Message &aResponse, NetworkDiagnosticTlv &aNetworkDiagnosticTlv);
+    Error AppendIp6AddressList(Message &aMessage);
+    Error AppendChildTable(Message &aMessage);
+    void  FillMacCountersTlv(MacCountersTlv &aMacCountersTlv);
+    Error FillRequestedTlvs(const Message &aRequest, Message &aResponse, NetworkDiagnosticTlv &aNetworkDiagnosticTlv);
 
     static void HandleDiagnosticGetRequest(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
     void        HandleDiagnosticGetRequest(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
@@ -140,8 +140,8 @@ private:
     static void HandleDiagnosticGetResponse(void *               aContext,
                                             otMessage *          aMessage,
                                             const otMessageInfo *aMessageInfo,
-                                            otError              aResult);
-    void HandleDiagnosticGetResponse(Coap::Message *aMessage, const Ip6::MessageInfo *aMessageInfo, otError aResult);
+                                            Error                aResult);
+    void HandleDiagnosticGetResponse(Coap::Message *aMessage, const Ip6::MessageInfo *aMessageInfo, Error aResult);
 
     static void HandleDiagnosticGetAnswer(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
     void        HandleDiagnosticGetAnswer(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
@@ -164,5 +164,7 @@ private:
 } // namespace NetworkDiagnostic
 
 } // namespace ot
+
+#endif // OPENTHREAD_FTD || OPENTHREAD_CONFIG_TMF_NETWORK_DIAG_MTD_ENABLE
 
 #endif // NETWORK_DIAGNOSTIC_HPP_

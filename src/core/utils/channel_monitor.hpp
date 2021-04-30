@@ -36,6 +36,8 @@
 
 #include "openthread-core-config.h"
 
+#if OPENTHREAD_CONFIG_CHANNEL_MONITOR_ENABLE
+
 #include <openthread/platform/radio.h>
 
 #include "common/locator.hpp"
@@ -55,8 +57,6 @@ namespace Utils {
  *
  * @{
  */
-
-#if OPENTHREAD_CONFIG_CHANNEL_MONITOR_ENABLE
 
 /**
  * This class implements the channel monitoring logic.
@@ -110,22 +110,22 @@ public:
      *
      * Once started, any previously collected data is cleared.
      *
-     * @retval OT_ERROR_NONE      Channel Monitoring started successfully.
-     * @retval OT_ERROR_ALREADY   Channel Monitoring has already been started.
+     * @retval kErrorNone      Channel Monitoring started successfully.
+     * @retval kErrorAlready   Channel Monitoring has already been started.
      *
      */
-    otError Start(void);
+    Error Start(void);
 
     /**
      * This method stops the Channel Monitoring operation.
      *
      * @note After `Stop()`, the previous data is still valid and can be read.
      *
-     * @retval OT_ERROR_NONE      Channel Monitoring stopped successfully.
-     * @retval OT_ERROR_ALREADY   Channel Monitoring has already been stopped.
+     * @retval kErrorNone      Channel Monitoring stopped successfully.
+     * @retval kErrorAlready   Channel Monitoring has already been stopped.
      *
      */
-    otError Stop(void);
+    Error Stop(void);
 
     /**
      * This method indicates whether the Channel Monitoring operation is started and running.
@@ -213,8 +213,6 @@ private:
     TimerMilli mTimer;
 };
 
-#endif // OPENTHREAD_CONFIG_CHANNEL_MONITOR_ENABLE
-
 /**
  * @}
  *
@@ -222,5 +220,7 @@ private:
 
 } // namespace Utils
 } // namespace ot
+
+#endif // OPENTHREAD_CONFIG_CHANNEL_MONITOR_ENABLE
 
 #endif // CHANNEL_MONITOR_HPP_

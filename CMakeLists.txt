@@ -41,6 +41,8 @@ option(OT_MBEDTLS_THREADING "enable mbedtls threading" OFF)
 
 add_library(ot-config INTERFACE)
 
+message(STATUS "OpenThread Source Directory: ${PROJECT_SOURCE_DIR}")
+
 target_include_directories(ot-config INTERFACE
     ${PROJECT_SOURCE_DIR}/include
     ${PROJECT_SOURCE_DIR}/src
@@ -58,9 +60,16 @@ include("${PROJECT_SOURCE_DIR}/etc/cmake/options.cmake")
 include("${PROJECT_SOURCE_DIR}/etc/cmake/functions.cmake")
 
 if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "default build type: Debug" FORCE)
+    # Check if this is a top-level CMake.
+    # If it is not, do not set the CMAKE_BUILD_TYPE because OpenThread is a part of something bigger.
+    if ("${CMAKE_PROJECT_NAME}" STREQUAL "openthread")
+        set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "default build type: Debug" FORCE)
+    endif ()
 endif()
-message(STATUS "CMake build type: ${CMAKE_BUILD_TYPE}")
+
+if (CMAKE_BUILD_TYPE)
+    message(STATUS "OpenThread CMake build type: ${CMAKE_BUILD_TYPE}")
+endif ()
 
 if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "(Apple)?[Cc]lang")
     option(OT_COMPILE_WARNING_AS_ERROR "whether to include -Werror -pedantic-errors with gcc-compatible compilers")
@@ -80,19 +89,23 @@ if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "(Apple)?[Cc]lang")
     )
 endif()
 
-execute_process(
-    COMMAND bash "-c" "third_party/nlbuild-autotools/repo/scripts/mkversion -b ${OT_DEFAULT_VERSION}"
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-    OUTPUT_VARIABLE OT_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-message(STATUS "Version: ${OT_VERSION}")
+set(OT_PACKAGE_NAME "OPENTHREAD" CACHE STRING "OpenThread Package Name")
+target_compile_definitions(ot-config INTERFACE "PACKAGE_NAME=\"${OT_PACKAGE_NAME}\"")
+message(STATUS "Package Name: ${OT_PACKAGE_NAME}")
 
-target_compile_definitions(ot-config INTERFACE
-    "PACKAGE_NAME=\"OPENTHREAD\""
-    "PACKAGE_VERSION=\"${OT_VERSION}\""
-)
+set(OT_PACKAGE_VERSION "" CACHE STRING "OpenThread Package Version")
+if(OT_PACKAGE_VERSION STREQUAL "")
+    execute_process(
+        COMMAND bash "-c" "third_party/nlbuild-autotools/repo/scripts/mkversion -b ${OT_DEFAULT_VERSION}"
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+        OUTPUT_VARIABLE OT_PACKAGE_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    message(STATUS "Setting default package version: ${OT_PACKAGE_VERSION}")
+endif()
+target_compile_definitions(ot-config INTERFACE "PACKAGE_VERSION=\"${OT_PACKAGE_VERSION}\"")
+message(STATUS "Package Version: ${OT_PACKAGE_VERSION}")
 
-set(OT_THREAD_VERSION "1.1" CACHE STRING "Thread version chosen by the user at configure time")
+set(OT_THREAD_VERSION "1.2" CACHE STRING "Thread version chosen by the user at configure time")
 set_property(CACHE OT_THREAD_VERSION PROPERTY STRINGS "1.1" "1.2")
 if(${OT_THREAD_VERSION} EQUAL "1.1")
     target_compile_definitions(ot-config INTERFACE "OPENTHREAD_CONFIG_THREAD_VERSION=OT_THREAD_VERSION_1_1")
@@ -163,6 +176,9 @@ elseif(OT_PLATFORM STREQUAL "external")
 elseif(OT_PLATFORM MATCHES "^nrf*")
     target_include_directories(ot-config INTERFACE ${PROJECT_SOURCE_DIR}/examples/platforms/nrf528xx/${OT_PLATFORM})
     add_subdirectory("${PROJECT_SOURCE_DIR}/examples/platforms/nrf528xx")
+elseif(OT_PLATFORM MATCHES "^efr*")
+    target_include_directories(ot-config INTERFACE ${PROJECT_SOURCE_DIR}/examples/platforms/efr32/${OT_PLATFORM})
+    add_subdirectory("${PROJECT_SOURCE_DIR}/examples/platforms/efr32")
 else()
     target_include_directories(ot-config INTERFACE ${PROJECT_SOURCE_DIR}/examples/platforms/${OT_PLATFORM})
     add_subdirectory("${PROJECT_SOURCE_DIR}/examples/platforms/${OT_PLATFORM}")
@@ -183,6 +199,10 @@ if(OT_PLATFORM STREQUAL "posix")
     endif()
 elseif(OT_PLATFORM)
     add_subdirectory(examples)
+endif()
+
+if (OT_DOC)
+    add_subdirectory(doc)
 endif()
 
 add_subdirectory(src)

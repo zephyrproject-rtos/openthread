@@ -34,6 +34,10 @@
 #ifndef OT_CORE_THREAD_BACKBONE_TMF_HPP_
 #define OT_CORE_THREAD_BACKBONE_TMF_HPP_
 
+#include "openthread-core-config.h"
+
+#if OPENTHREAD_FTD && OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE
+
 #include "coap/coap.hpp"
 
 namespace ot {
@@ -66,11 +70,11 @@ public:
     /**
      * This method starts the Backbone TMF agent.
      *
-     * @retval OT_ERROR_NONE    Successfully started the CoAP service.
-     * @retval OT_ERROR_FAILED  Failed to start the Backbone TMF agent.
+     * @retval kErrorNone    Successfully started the CoAP service.
+     * @retval kErrorFailed  Failed to start the Backbone TMF agent.
      *
      */
-    otError Start(void);
+    Error Start(void);
 
     /**
      * This method returns whether @p aMessageInfo meets Backbone Thread Management Framework Addressing Rules.
@@ -82,26 +86,28 @@ public:
     bool IsBackboneTmfMessage(const Ip6::MessageInfo &aMessageInfo) const;
 
     /**
-     * This method subscribes the Backbone TMF socket to a given Ip6 multicast group on the Backbone network.
+     * This method subscribes the Backbone TMF socket to a given IPv6 multicast group on the Backbone network.
      *
-     * @param[in] aAddress  The Ip6 multicast group address.
+     * @param[in] aAddress  The IPv6 multicast group address.
      *
      */
     void SubscribeMulticast(const Ip6::Address &aAddress);
 
     /**
-     * This method unsubscribes the Backbone TMF socket from a given Ip6 multicast group on the Backbone network.
+     * This method unsubscribes the Backbone TMF socket from a given IPv6 multicast group on the Backbone network.
      *
-     * @param[in] aAddress  The Ip6 multicast group address.
+     * @param[in] aAddress  The IPv6 multicast group address.
      *
      */
     void UnsubscribeMulticast(const Ip6::Address &aAddress);
 
 private:
-    static otError Filter(const ot::Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo, void *aContext);
+    static Error Filter(const ot::Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo, void *aContext);
 };
 
 } // namespace BackboneRouter
 } // namespace ot
+
+#endif //  OPENTHREAD_FTD && OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE
 
 #endif //  OT_CORE_THREAD_BACKBONE_TMF_HPP_

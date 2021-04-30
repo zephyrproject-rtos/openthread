@@ -33,12 +33,12 @@
 
 #include "channel_monitor.hpp"
 
+#if OPENTHREAD_CONFIG_CHANNEL_MONITOR_ENABLE
+
 #include "common/code_utils.hpp"
-#include "common/locator-getters.hpp"
+#include "common/locator_getters.hpp"
 #include "common/logging.hpp"
 #include "common/random.hpp"
-
-#if OPENTHREAD_CONFIG_CHANNEL_MONITOR_ENABLE
 
 namespace ot {
 namespace Utils {
@@ -67,11 +67,11 @@ ChannelMonitor::ChannelMonitor(Instance &aInstance)
     memset(mChannelOccupancy, 0, sizeof(mChannelOccupancy));
 }
 
-otError ChannelMonitor::Start(void)
+Error ChannelMonitor::Start(void)
 {
-    otError error = OT_ERROR_NONE;
+    Error error = kErrorNone;
 
-    VerifyOrExit(!IsRunning(), error = OT_ERROR_ALREADY);
+    VerifyOrExit(!IsRunning(), error = kErrorAlready);
     Clear();
     mTimer.Start(kTimerInterval);
     otLogDebgUtil("ChannelMonitor: Starting");
@@ -80,11 +80,11 @@ exit:
     return error;
 }
 
-otError ChannelMonitor::Stop(void)
+Error ChannelMonitor::Stop(void)
 {
-    otError error = OT_ERROR_NONE;
+    Error error = kErrorNone;
 
-    VerifyOrExit(IsRunning(), error = OT_ERROR_ALREADY);
+    VerifyOrExit(IsRunning(), error = kErrorAlready);
     mTimer.Stop();
     otLogDebgUtil("ChannelMonitor: Stopping");
 
@@ -212,7 +212,7 @@ Mac::ChannelMask ChannelMonitor::FindBestChannels(const Mac::ChannelMask &aMask,
 
     channel = Mac::ChannelMask::kChannelIteratorFirst;
 
-    while (aMask.GetNextChannel(channel) == OT_ERROR_NONE)
+    while (aMask.GetNextChannel(channel) == kErrorNone)
     {
         uint16_t occupancy = GetChannelOccupancy(channel);
 
@@ -236,4 +236,4 @@ Mac::ChannelMask ChannelMonitor::FindBestChannels(const Mac::ChannelMask &aMask,
 } // namespace Utils
 } // namespace ot
 
-#endif // #if OPENTHREAD_CONFIG_CHANNEL_MONITOR_ENABLE
+#endif // OPENTHREAD_CONFIG_CHANNEL_MONITOR_ENABLE

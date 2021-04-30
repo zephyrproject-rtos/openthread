@@ -33,14 +33,15 @@
 
 #include "openthread-core-config.h"
 
+#if OPENTHREAD_CONFIG_JOINER_ENABLE
+
 #include <openthread/joiner.h>
 
 #include "common/instance.hpp"
-#include "common/locator-getters.hpp"
+#include "common/locator_getters.hpp"
 
 using namespace ot;
 
-#if OPENTHREAD_CONFIG_JOINER_ENABLE
 otError otJoinerStart(otInstance *     aInstance,
                       const char *     aPskd,
                       const char *     aProvisioningUrl,
@@ -80,7 +81,7 @@ const otExtAddress *otJoinerGetId(otInstance *aInstance)
 
 otError otJoinerSetDiscerner(otInstance *aInstance, otJoinerDiscerner *aDiscerner)
 {
-    otError          error  = OT_ERROR_NONE;
+    Error            error  = kErrorNone;
     MeshCoP::Joiner &joiner = static_cast<Instance *>(aInstance)->Get<MeshCoP::Joiner>();
 
     if (aDiscerner != nullptr)

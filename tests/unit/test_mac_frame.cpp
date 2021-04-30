@@ -182,12 +182,12 @@ void TestMacNetworkName(void)
     SuccessOrQuit(networkName.Set(Mac::NameData(kName1, sizeof(kName1))), "NetworkName::Set() failed");
     CompareNetworkName(networkName, kName1);
 
-    VerifyOrQuit(networkName.Set(Mac::NameData(kName1, sizeof(kName1))) == OT_ERROR_ALREADY,
-                 "NetworkName::Set() accepted same name without returning OT_ERROR_ALREADY");
+    VerifyOrQuit(networkName.Set(Mac::NameData(kName1, sizeof(kName1))) == kErrorAlready,
+                 "NetworkName::Set() accepted same name without returning kErrorAlready");
     CompareNetworkName(networkName, kName1);
 
-    VerifyOrQuit(networkName.Set(Mac::NameData(kName1, sizeof(kName1) - 1)) == OT_ERROR_ALREADY,
-                 "NetworkName::Set() accepted same name without returning OT_ERROR_ALREADY");
+    VerifyOrQuit(networkName.Set(Mac::NameData(kName1, sizeof(kName1) - 1)) == kErrorAlready,
+                 "NetworkName::Set() accepted same name without returning kErrorAlready");
 
     SuccessOrQuit(networkName.Set(Mac::NameData(kName2, sizeof(kName2))), "NetworkName::Set() failed");
     CompareNetworkName(networkName, kName2);
@@ -198,15 +198,15 @@ void TestMacNetworkName(void)
     SuccessOrQuit(networkName.Set(Mac::NameData(kLongName, sizeof(kLongName))), "NetworkName::Set() failed");
     CompareNetworkName(networkName, kLongName);
 
-    VerifyOrQuit(networkName.Set(Mac::NameData(kLongName, sizeof(kLongName) - 1)) == OT_ERROR_ALREADY,
-                 "NetworkName::Set() accepted same name without returning OT_ERROR_ALREADY");
+    VerifyOrQuit(networkName.Set(Mac::NameData(kLongName, sizeof(kLongName) - 1)) == kErrorAlready,
+                 "NetworkName::Set() accepted same name without returning kErrorAlready");
 
     SuccessOrQuit(networkName.Set(Mac::NameData(nullptr, 0)), "NetworkName::Set() failed");
     CompareNetworkName(networkName, kEmptyName);
 
     SuccessOrQuit(networkName.Set(Mac::NameData(kName1, sizeof(kName1))), "NetworkName::Set() failed");
 
-    VerifyOrQuit(networkName.Set(Mac::NameData(kTooLongName, sizeof(kTooLongName))) == OT_ERROR_INVALID_ARGS,
+    VerifyOrQuit(networkName.Set(Mac::NameData(kTooLongName, sizeof(kTooLongName))) == kErrorInvalidArgs,
                  "NetworkName::Set() accepted an invalid (too long) name");
 
     CompareNetworkName(networkName, kName1);
@@ -310,7 +310,7 @@ void VerifyChannelMaskContent(const Mac::ChannelMask &aMask, uint8_t *aChannels,
     index   = 0;
     channel = Mac::ChannelMask::kChannelIteratorFirst;
 
-    while (aMask.GetNextChannel(channel) == OT_ERROR_NONE)
+    while (aMask.GetNextChannel(channel) == kErrorNone)
     {
         VerifyOrQuit(channel == aChannels[index++], "ChannelMask.GetNextChannel() failed");
     }
@@ -331,39 +331,48 @@ void VerifyChannelMaskContent(const Mac::ChannelMask &aMask, uint8_t *aChannels,
 
 void TestMacChannelMask(void)
 {
-    uint8_t all_channels[] = {11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26};
-    uint8_t channels1[]    = {11, 14, 15, 16, 17, 20, 21, 22, 24, 25};
-    uint8_t channels2[]    = {14, 21, 26};
-    uint8_t channels3[]    = {14, 21};
-    uint8_t channles4[]    = {20};
+    uint8_t allChannels[] = {11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26};
+    uint8_t channels1[]   = {11, 14, 15, 16, 17, 20, 21, 22, 24, 25};
+    uint8_t channels2[]   = {14, 21, 26};
+    uint8_t channels3[]   = {14, 21};
+    uint8_t channles4[]   = {20};
+
+    static const char kEmptyMaskString[]   = "{ }";
+    static const char kAllChannelsString[] = "{ 11-26 }";
+    static const char kChannels1String[]   = "{ 11, 14-17, 20-22, 24, 25 }";
+    static const char kChannels2String[]   = "{ 14, 21, 26 }";
+    static const char kChannels3String[]   = "{ 14, 21 }";
+    static const char kChannels4String[]   = "{ 20 }";
 
     Mac::ChannelMask mask1;
     Mac::ChannelMask mask2(Radio::kSupportedChannels);
 
     printf("Testing Mac::ChannelMask\n");
 
-    VerifyOrQuit(mask1.IsEmpty(), "ChannelMask.IsEmpty failed");
+    VerifyOrQuit(mask1.IsEmpty(), "ChannelMask::IsEmpty failed");
     printf("empty = %s\n", mask1.ToString().AsCString());
+    VerifyOrQuit(strcmp(mask1.ToString().AsCString(), kEmptyMaskString) == 0, "ChannelMask::ToString() failed");
 
-    VerifyOrQuit(!mask2.IsEmpty(), "ChannelMask.IsEmpty failed");
-    VerifyOrQuit(mask2.GetMask() == Radio::kSupportedChannels, "ChannelMask.GetMask() failed");
-    printf("all_channels = %s\n", mask2.ToString().AsCString());
+    VerifyOrQuit(!mask2.IsEmpty(), "ChannelMask::IsEmpty failed");
+    VerifyOrQuit(mask2.GetMask() == Radio::kSupportedChannels, "ChannelMask::GetMask() failed");
+    printf("allChannels = %s\n", mask2.ToString().AsCString());
+    VerifyOrQuit(strcmp(mask2.ToString().AsCString(), kAllChannelsString) == 0, "ChannelMask::ToString() failed");
 
     mask1.SetMask(Radio::kSupportedChannels);
-    VerifyOrQuit(!mask1.IsEmpty(), "ChannelMask.IsEmpty failed");
-    VerifyOrQuit(mask1.GetMask() == Radio::kSupportedChannels, "ChannelMask.GetMask() failed");
+    VerifyOrQuit(!mask1.IsEmpty(), "ChannelMask::IsEmpty failed");
+    VerifyOrQuit(mask1.GetMask() == Radio::kSupportedChannels, "ChannelMask::GetMask() failed");
 
-    VerifyChannelMaskContent(mask1, all_channels, sizeof(all_channels));
+    VerifyChannelMaskContent(mask1, allChannels, sizeof(allChannels));
 
     // Test ChannelMask::RemoveChannel()
-    for (uint8_t index = 0; index < sizeof(all_channels) - 1; index++)
+    for (uint8_t index = 0; index < sizeof(allChannels) - 1; index++)
     {
-        mask1.RemoveChannel(all_channels[index]);
-        VerifyChannelMaskContent(mask1, &all_channels[index + 1], sizeof(all_channels) - 1 - index);
+        mask1.RemoveChannel(allChannels[index]);
+        VerifyChannelMaskContent(mask1, &allChannels[index + 1], sizeof(allChannels) - 1 - index);
     }
 
     mask1.Clear();
-    VerifyOrQuit(mask1.IsEmpty(), "ChannelMask.IsEmpty failed");
+    VerifyOrQuit(mask1.IsEmpty(), "ChannelMask::IsEmpty failed");
     VerifyChannelMaskContent(mask1, nullptr, 0);
 
     for (uint8_t channel : channels1)
@@ -372,8 +381,9 @@ void TestMacChannelMask(void)
     }
 
     printf("channels1 = %s\n", mask1.ToString().AsCString());
+    VerifyOrQuit(strcmp(mask1.ToString().AsCString(), kChannels1String) == 0, "ChannelMask::ToString() failed");
 
-    VerifyOrQuit(!mask1.IsEmpty(), "ChannelMask.IsEmpty failed");
+    VerifyOrQuit(!mask1.IsEmpty(), "ChannelMask::IsEmpty failed");
     VerifyChannelMaskContent(mask1, channels1, sizeof(channels1));
 
     mask2.Clear();
@@ -384,29 +394,33 @@ void TestMacChannelMask(void)
     }
 
     printf("channels2 = %s\n", mask2.ToString().AsCString());
+    VerifyOrQuit(strcmp(mask2.ToString().AsCString(), kChannels2String) == 0, "ChannelMask::ToString() failed");
 
-    VerifyOrQuit(!mask2.IsEmpty(), "ChannelMask.IsEmpty failed");
+    VerifyOrQuit(!mask2.IsEmpty(), "ChannelMask::IsEmpty failed");
     VerifyChannelMaskContent(mask2, channels2, sizeof(channels2));
 
     mask1.Intersect(mask2);
     VerifyChannelMaskContent(mask1, channels3, sizeof(channels3));
+    printf("channels3 = %s\n", mask1.ToString().AsCString());
+    VerifyOrQuit(strcmp(mask1.ToString().AsCString(), kChannels3String) == 0, "ChannelMask::ToString() failed");
 
     mask2.Clear();
     mask2.AddChannel(channles4[0]);
     VerifyChannelMaskContent(mask2, channles4, sizeof(channles4));
 
     printf("channels4 = %s\n", mask2.ToString().AsCString());
+    VerifyOrQuit(strcmp(mask2.ToString().AsCString(), kChannels4String) == 0, "ChannelMask::ToString() failed");
 
     mask1.Clear();
     mask2.Clear();
-    VerifyOrQuit(mask1 == mask2, "ChannelMask.operator== failed");
+    VerifyOrQuit(mask1 == mask2, "ChannelMask::operator== failed");
 
     mask1.SetMask(Radio::kSupportedChannels);
     mask2.SetMask(Radio::kSupportedChannels);
-    VerifyOrQuit(mask1 == mask2, "ChannelMask.operator== failed");
+    VerifyOrQuit(mask1 == mask2, "ChannelMask::operator== failed");
 
     mask1.Clear();
-    VerifyOrQuit(mask1 != mask2, "ChannelMask.operator== failed");
+    VerifyOrQuit(mask1 != mask2, "ChannelMask::operator== failed");
 }
 
 void TestMacFrameApi(void)
@@ -424,7 +438,7 @@ void TestMacFrameApi(void)
     uint8_t mac_cmd_psdu2[] = {0x6b, 0xaa, 0x8d, 0xce, 0xfa, 0x00, 0x68, 0x01, 0x68, 0x0d,
                                0x08, 0x00, 0x00, 0x00, 0x01, 0x04, 0x0d, 0xed, 0x0b, 0x35,
                                0x0c, 0x80, 0x3f, 0x04, 0x4b, 0x88, 0x89, 0xd6, 0x59, 0xe1};
-    otError error;
+    Error   error;
     uint8_t scf; // SecurityControlField
 #endif
 
@@ -469,11 +483,11 @@ void TestMacFrameApi(void)
     VerifyOrQuit(frame.IsDstPanIdPresent() == true, "Mac::Frame::IsDstPanIdPresent failed\n");
     VerifyOrQuit(frame.IsDstAddrPresent() == true, "Mac::Frame::IsDstAddrPresent failed\n");
     VerifyOrQuit(frame.IsSrcAddrPresent() == true, "Mac::Frame::IsSrcAddrPresent failed\n");
-    VerifyOrQuit((error = frame.GetSecurityControlField(scf)) == OT_ERROR_NONE,
+    VerifyOrQuit((error = frame.GetSecurityControlField(scf)) == kErrorNone,
                  "Mac::Frame::GetSecurityControlField failed\n");
     VerifyOrQuit(scf == 0x0d, "Mac::Frame::GetSecurityControlField value failed\n");
     frame.SetSecurityControlField(0xff);
-    VerifyOrQuit((error = frame.GetSecurityControlField(scf)) == OT_ERROR_NONE,
+    VerifyOrQuit((error = frame.GetSecurityControlField(scf)) == kErrorNone,
                  "Mac::Frame::GetSecurityControlField failed\n");
     VerifyOrQuit(scf == 0xff, "Mac::Frame::SetSecurityControlField value failed\n");
 #endif // OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2
@@ -487,11 +501,11 @@ void TestMacFrameApi(void)
     VerifyOrQuit(frame.GetSequence() == 133, "Mac::Frame::GetSequence failed\n");
     VerifyOrQuit(frame.GetVersion() == Mac::Frame::kFcfFrameVersion2006, "Mac::Frame::GetVersion failed\n");
     VerifyOrQuit(frame.GetType() == Mac::Frame::kFcfFrameMacCmd, "Mac::Frame::GetType failed\n");
-    VerifyOrQuit(frame.GetCommandId(commandId) == OT_ERROR_NONE, "Mac::Frame::GetCommandId failed\n");
+    VerifyOrQuit(frame.GetCommandId(commandId) == kErrorNone, "Mac::Frame::GetCommandId failed\n");
     VerifyOrQuit(commandId == Mac::Frame::kMacCmdDataRequest, "Mac::Frame::GetCommandId value not correct\n");
-    VerifyOrQuit(frame.SetCommandId(Mac::Frame::kMacCmdBeaconRequest) == OT_ERROR_NONE,
+    VerifyOrQuit(frame.SetCommandId(Mac::Frame::kMacCmdBeaconRequest) == kErrorNone,
                  "Mac::Frame::SetCommandId failed\n");
-    VerifyOrQuit(frame.GetCommandId(commandId) == OT_ERROR_NONE, "Mac::Frame::GetCommandId failed\n");
+    VerifyOrQuit(frame.GetCommandId(commandId) == kErrorNone, "Mac::Frame::GetCommandId failed\n");
     VerifyOrQuit(commandId == Mac::Frame::kMacCmdBeaconRequest, "Mac::Frame::SetCommandId value not correct\n");
 
 #if (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
@@ -506,12 +520,12 @@ void TestMacFrameApi(void)
     VerifyOrQuit(frame.GetSequence() == 141, "Mac::Frame::GetSequence failed\n");
     VerifyOrQuit(frame.IsVersion2015() == true, "Mac::Frame::IsVersion2015 failed\n");
     VerifyOrQuit(frame.GetType() == Mac::Frame::kFcfFrameMacCmd, "Mac::Frame::GetVersion failed\n");
-    VerifyOrQuit(frame.GetCommandId(commandId) == OT_ERROR_NONE, "Mac::Frame::GetCommandId failed\n");
+    VerifyOrQuit(frame.GetCommandId(commandId) == kErrorNone, "Mac::Frame::GetCommandId failed\n");
     VerifyOrQuit(commandId == Mac::Frame::kMacCmdDataRequest, "Mac::Frame::GetCommandId value not correct\n");
     printf("commandId:%d\n", commandId);
-    VerifyOrQuit(frame.SetCommandId(Mac::Frame::kMacCmdOrphanNotification) == OT_ERROR_NONE,
+    VerifyOrQuit(frame.SetCommandId(Mac::Frame::kMacCmdOrphanNotification) == kErrorNone,
                  "Mac::Frame::SetCommandId failed\n");
-    VerifyOrQuit(frame.GetCommandId(commandId) == OT_ERROR_NONE, "Mac::Frame::GetCommandId failed\n");
+    VerifyOrQuit(frame.GetCommandId(commandId) == kErrorNone, "Mac::Frame::GetCommandId failed\n");
     VerifyOrQuit(commandId == Mac::Frame::kMacCmdOrphanNotification, "Mac::Frame::SetCommandId value not correct\n");
 
 #endif

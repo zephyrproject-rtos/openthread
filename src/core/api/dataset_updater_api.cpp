@@ -33,40 +33,39 @@
 
 #include "openthread-core-config.h"
 
+#if OPENTHREAD_CONFIG_DATASET_UPDATER_ENABLE && OPENTHREAD_FTD
+
 #include <openthread/dataset_updater.h>
 
 #include "common/instance.hpp"
-#include "common/locator-getters.hpp"
-#include "utils/dataset_updater.hpp"
+#include "common/locator_getters.hpp"
+#include "meshcop/dataset_updater.hpp"
 
 using namespace ot;
-
-#if OPENTHREAD_CONFIG_DATASET_UPDATER_ENABLE && OPENTHREAD_FTD
 
 otError otDatasetUpdaterRequestUpdate(otInstance *                aInstance,
                                       const otOperationalDataset *aDataset,
                                       otDatasetUpdaterCallback    aCallback,
-                                      void *                      aContext,
-                                      uint32_t                    aReryWaitInterval)
+                                      void *                      aContext)
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    return instance.Get<Utils::DatasetUpdater>().RequestUpdate(*static_cast<const MeshCoP::Dataset::Info *>(aDataset),
-                                                               aCallback, aContext, aReryWaitInterval);
+    return instance.Get<MeshCoP::DatasetUpdater>().RequestUpdate(*static_cast<const MeshCoP::Dataset::Info *>(aDataset),
+                                                                 aCallback, aContext);
 }
 
 void otDatasetUpdaterCancelUpdate(otInstance *aInstance)
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    instance.Get<Utils::DatasetUpdater>().CancelUpdate();
+    instance.Get<MeshCoP::DatasetUpdater>().CancelUpdate();
 }
 
 bool otDatasetUpdaterIsUpdateOngoing(otInstance *aInstance)
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    return instance.Get<Utils::DatasetUpdater>().IsUpdateOngoing();
+    return instance.Get<MeshCoP::DatasetUpdater>().IsUpdateOngoing();
 }
 
 #endif // OPENTHREAD_CONFIG_DATASET_UPDATER_ENABLE && OPENTHREAD_FTD

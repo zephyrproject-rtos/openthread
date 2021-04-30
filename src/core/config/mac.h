@@ -66,11 +66,11 @@
  *
  * The default maximum number of retries allowed after a transmission failure for direct transmissions.
  *
- * Equivalent to macMaxFrameRetries, default value is 3.
+ * Equivalent to macMaxFrameRetries, default value is 15.
  *
  */
 #ifndef OPENTHREAD_CONFIG_MAC_DEFAULT_MAX_FRAME_RETRIES_DIRECT
-#define OPENTHREAD_CONFIG_MAC_DEFAULT_MAX_FRAME_RETRIES_DIRECT 3
+#define OPENTHREAD_CONFIG_MAC_DEFAULT_MAX_FRAME_RETRIES_DIRECT 15
 #endif
 
 /**
@@ -316,6 +316,16 @@
 #endif
 
 /**
+ * @def OPENTHREAD_CONFIG_MAC_SOFTWARE_RX_TIMING_ENABLE
+ *
+ * Define to 1 to enable software reception target time logic.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_MAC_SOFTWARE_RX_TIMING_ENABLE
+#define OPENTHREAD_CONFIG_MAC_SOFTWARE_RX_TIMING_ENABLE 0
+#endif
+
+/**
  * @def OPENTHREAD_CONFIG_MAC_SOFTWARE_ENERGY_SCAN_ENABLE
  *
  * Define to 1 to enable software energy scanning logic.
@@ -376,16 +386,6 @@
 #endif
 
 /**
- * @def OPENTHREAD_CONFIG_CSL_SAMPLE_WINDOW
- *
- * The CSL sample window in 10 symbols.
- *
- */
-#ifndef OPENTHREAD_CONFIG_CSL_SAMPLE_WINDOW
-#define OPENTHREAD_CONFIG_CSL_SAMPLE_WINDOW 5
-#endif
-
-/**
  * @def OPENTHREAD_CONFIG_MAC_CSL_DEBUG_ENABLE
  *
  * CSL receiver debug option. When this option is enabled, a CSL receiver wouldn't actually sleep in CSL state so it
@@ -399,12 +399,24 @@
 /**
  * @def OPENTHREAD_CONFIG_CSL_RECEIVE_TIME_AHEAD
  *
- * For some reasons, CSL receivers wake up a little later than expected. This variable specifies how much time that
- * CSL receiver would wake up earlier than the expected sample window. The time is in unit of 10 symbols.
+ * Reception scheduling and ramp up time needed for the CSL receiver to be ready, in units of microseconds.
  *
  */
 #ifndef OPENTHREAD_CONFIG_CSL_RECEIVE_TIME_AHEAD
-#define OPENTHREAD_CONFIG_CSL_RECEIVE_TIME_AHEAD 2
+#define OPENTHREAD_CONFIG_CSL_RECEIVE_TIME_AHEAD 320
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_CSL_MIN_RECEIVE_ON
+ *
+ * The minimum CSL receive window (in microseconds) required to receive an IEEE 802.15.4 frame.
+ * - Maximum frame size with preamble: 6*2+127*2 symbols
+ * - AIFS: 12 symbols
+ * - Maximum ACK size with preamble: 6*2+33*2 symbols
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_CSL_MIN_RECEIVE_ON
+#define OPENTHREAD_CONFIG_CSL_MIN_RECEIVE_ON 356 * 16
 #endif
 
 /**

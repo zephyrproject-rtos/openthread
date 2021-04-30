@@ -40,7 +40,6 @@ set_target_properties(
 target_include_directories(ot-daemon PRIVATE ${COMMON_INCLUDES})
 
 target_compile_definitions(ot-daemon PRIVATE
-    OPENTHREAD_POSIX_APP_TYPE=OT_POSIX_APP_TYPE_CLI
     ${OT_PLATFORM_DEFINES}
 )
 
@@ -53,8 +52,10 @@ target_link_libraries(ot-daemon PRIVATE
     ${OT_PLATFORM_LIB}
     openthread-ftd
     ${OT_PLATFORM_LIB}
-    openthread-ncp-ftd
+    openthread-hdlc
+    openthread-spinel-rcp
     ${OT_MBEDTLS}
+    ot-config
 )
 
 add_executable(ot-ctl

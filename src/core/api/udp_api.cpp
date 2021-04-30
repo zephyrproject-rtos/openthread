@@ -36,7 +36,7 @@
 #include <openthread/udp.h>
 
 #include "common/instance.hpp"
-#include "common/locator-getters.hpp"
+#include "common/locator_getters.hpp"
 #include "common/new.hpp"
 #include "net/udp6.hpp"
 
@@ -68,7 +68,7 @@ otError otUdpBind(otInstance *aInstance, otUdpSocket *aSocket, const otSockAddr 
     Instance &instance = *static_cast<Instance *>(aInstance);
 
     return instance.Get<Ip6::Udp>().Bind(*static_cast<Ip6::Udp::SocketHandle *>(aSocket),
-                                         *static_cast<const Ip6::SockAddr *>(aSockName));
+                                         *static_cast<const Ip6::SockAddr *>(aSockName), OT_NETIF_THREAD);
 }
 
 otError otUdpConnect(otInstance *aInstance, otUdpSocket *aSocket, const otSockAddr *aSockName)

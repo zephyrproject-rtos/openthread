@@ -42,7 +42,6 @@ COVERAGE                  ?= 0
 CHANNEL_MANAGER           ?= 0
 CHANNEL_MONITOR           ?= 0
 CHILD_SUPERVISION         ?= 0
-CLI_TRANSPORT             ?= UART
 DATASET_UPDATER           ?= 0
 DEBUG                     ?= 0
 DHCP6_CLIENT              ?= 0
@@ -70,7 +69,9 @@ MLE_LONG_ROUTES           ?= 0
 MLR                       ?= 0
 MTD_NETDIAG               ?= 0
 MULTIPLE_INSTANCE         ?= 0
+NEIGHBOR_DISCOVERY_AGENT  ?= 0
 OTNS                      ?= 0
+PING_SENDER               ?= 1
 PLATFORM_UDP              ?= 0
 REFERENCE_DEVICE          ?= 0
 SERVICE                   ?= 0
@@ -80,8 +81,9 @@ SLAAC                     ?= 1
 SNTP_CLIENT               ?= 0
 SRP_CLIENT                ?= 0
 SRP_SERVER                ?= 0
-THREAD_VERSION            ?= 1.1
+THREAD_VERSION            ?= 1.2
 TIME_SYNC                 ?= 0
+TREL                      ?= 0
 UDP_FORWARD               ?= 0
 RCP_RESTORATION_MAX_COUNT ?= 0
 
@@ -140,10 +142,6 @@ endif
 
 ifeq ($(CHILD_SUPERVISION),1)
 COMMONCFLAGS                   += -DOPENTHREAD_CONFIG_CHILD_SUPERVISION_ENABLE=1
-endif
-
-ifneq ($(CLI_TRANSPORT),)
-COMMONCFLAGS                   += -DOPENTHREAD_CONFIG_CLI_TRANSPORT=OT_CLI_TRANSPORT_$(CLI_TRANSPORT)
 endif
 
 ifeq ($(CSL_RECEIVER),1)
@@ -259,6 +257,14 @@ ifeq ($(MULTIPLE_INSTANCE),1)
 COMMONCFLAGS                   += -DOPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE=1
 endif
 
+ifeq ($(NEIGHBOR_DISCOVERY_AGENT),1)
+COMMONCFLAGS                   += -DOPENTHREAD_CONFIG_NEIGHBOR_DISCOVERY_AGENT_ENABLE=1
+endif
+
+ifeq ($(PING_SENDER),1)
+COMMONCFLAGS                   += -DOPENTHREAD_CONFIG_PING_SENDER_ENABLE=1
+endif
+
 ifeq ($(PLATFORM_UDP),1)
 COMMONCFLAGS                   += -DOPENTHREAD_CONFIG_PLATFORM_UDP_ENABLE=1
 endif
@@ -296,6 +302,10 @@ endif
 
 ifeq ($(TIME_SYNC),1)
 COMMONCFLAGS                   += -DOPENTHREAD_CONFIG_TIME_SYNC_ENABLE=1 -DOPENTHREAD_CONFIG_MAC_HEADER_IE_SUPPORT=1
+endif
+
+ifeq ($(TREL),1)
+COMMONCFLAGS                   += -DOPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE=1
 endif
 
 ifeq ($(UDP_FORWARD),1)

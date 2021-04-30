@@ -36,6 +36,8 @@
 
 #include "openthread-core-config.h"
 
+#if OPENTHREAD_CONFIG_CHANNEL_MANAGER_ENABLE && OPENTHREAD_FTD
+
 #include <openthread/platform/radio.h>
 
 #include "common/locator.hpp"
@@ -54,8 +56,6 @@ namespace Utils {
  *
  * @{
  */
-
-#if OPENTHREAD_CONFIG_CHANNEL_MANAGER_ENABLE && OPENTHREAD_FTD
 
 /**
  * This class implements the Channel Manager.
@@ -120,11 +120,11 @@ public:
      *
      * @param[in]  aDelay             Delay in seconds.
      *
-     * @retval OT_ERROR_NONE          Delay was updated successfully.
-     * @retval OT_ERROR_INVALID_ARGS  The given delay @p aDelay is shorter than `kMinimumDelay`.
+     * @retval kErrorNone          Delay was updated successfully.
+     * @retval kErrorInvalidArgs   The given delay @p aDelay is shorter than `kMinimumDelay`.
      *
      */
-    otError SetDelay(uint16_t aDelay);
+    Error SetDelay(uint16_t aDelay);
 
     /**
      * This method requests that `ChannelManager` checks and selects a new channel and starts a channel change.
@@ -150,12 +150,12 @@ public:
      *
      * @param[in] aSkipQualityCheck        Indicates whether the quality check (step 1) should be skipped.
      *
-     * @retval OT_ERROR_NONE               Channel selection finished successfully.
-     * @retval OT_ERROR_NOT_FOUND          Supported channels is empty, therefore could not select a channel.
-     * @retval OT_ERROR_INVALID_STATE      Thread is not enabled or not enough data to select new channel.
+     * @retval kErrorNone              Channel selection finished successfully.
+     * @retval kErrorNotFound          Supported channels is empty, therefore could not select a channel.
+     * @retval kErrorInvalidState      Thread is not enabled or not enough data to select new channel.
      *
      */
-    otError RequestChannelSelect(bool aSkipQualityCheck);
+    Error RequestChannelSelect(bool aSkipQualityCheck);
 
     /**
      * This method enables/disables the auto-channel-selection functionality.
@@ -181,11 +181,11 @@ public:
      *
      * @param[in] aInterval            The interval (in seconds).
      *
-     * @retval OT_ERROR_NONE           The interval was set successfully.
-     * @retval OT_ERROR_INVALID_ARGS   The @p aInterval is not valid (zero).
+     * @retval kErrorNone          The interval was set successfully.
+     * @retval kErrorInvalidArgs   The @p aInterval is not valid (zero).
      *
      */
-    otError SetAutoChannelSelectionInterval(uint32_t aInterval);
+    Error SetAutoChannelSelectionInterval(uint32_t aInterval);
 
     /**
      * This method gets the period interval (in seconds) used by auto-channel-selection functionality.
@@ -227,14 +227,27 @@ public:
      */
     void SetFavoredChannels(uint32_t aChannelMask);
 
+    /**
+     * This method gets the CCA failure rate threshold
+     *
+     * @returns  The CCA failure rate threshold
+     *
+     */
+    uint16_t GetCcaFailureRateThreshold(void) const { return mCcaFailureRateThreshold; }
+
+    /**
+     * This method sets the CCA failure rate threshold
+     *
+     * @param[in]  aThreshold  A CCA failure rate threshold.
+     *
+     */
+    void SetCcaFailureRateThreshold(uint16_t aThreshold);
+
 private:
     enum
     {
         // Retry interval to resend Pending Dataset in case of tx failure (in ms).
         kPendingDatasetTxRetryInterval = 20000,
-
-        // Wait time after sending Pending Dataset to check whether the channel was changed (in ms).
-        kChangeCheckWaitInterval = 30000,
 
         // Maximum jitter/wait time to start a requested channel change (in ms).
         kRequestStartJitterInterval = 10000,
@@ -265,15 +278,15 @@ private:
     };
 
     void        StartDatasetUpdate(void);
-    static void HandleDatasetUpdateDone(otError aError, void *aContext);
-    void        HandleDatasetUpdateDone(otError aError);
+    static void HandleDatasetUpdateDone(Error aError, void *aContext);
+    void        HandleDatasetUpdateDone(Error aError);
     static void HandleTimer(Timer &aTimer);
     void        HandleTimer(void);
     void        StartAutoSelectTimer(void);
 
 #if OPENTHREAD_CONFIG_CHANNEL_MONITOR_ENABLE
-    otError FindBetterChannel(uint8_t &aNewChannel, uint16_t &aOccupancy);
-    bool    ShouldAttemptChannelChange(void);
+    Error FindBetterChannel(uint8_t &aNewChannel, uint16_t &aOccupancy);
+    bool  ShouldAttemptChannelChange(void);
 #endif
 
     Mac::ChannelMask mSupportedChannelMask;
@@ -284,9 +297,8 @@ private:
     TimerMilli       mTimer;
     uint32_t         mAutoSelectInterval;
     bool             mAutoSelectEnabled;
+    uint16_t         mCcaFailureRateThreshold;
 };
-
-#endif // OPENTHREAD_CONFIG_CHANNEL_MANAGER_ENABLE && OPENTHREAD_FTD
 
 /**
  * @}
@@ -295,5 +307,7 @@ private:
 
 } // namespace Utils
 } // namespace ot
+
+#endif // OPENTHREAD_CONFIG_CHANNEL_MANAGER_ENABLE && OPENTHREAD_FTD
 
 #endif // CHANNEL_MANAGER_HPP_

@@ -36,7 +36,7 @@
 #include "common/code_utils.hpp"
 #include "common/encoding.hpp"
 #include "common/instance.hpp"
-#include "common/locator-getters.hpp"
+#include "common/locator_getters.hpp"
 #include "common/message.hpp"
 #include "net/ip6.hpp"
 #include "net/netif.hpp"
@@ -56,6 +56,9 @@ ThreadNetif::ThreadNetif(Instance &aInstance)
 #if OPENTHREAD_CONFIG_DHCP6_SERVER_ENABLE
     , mDhcp6Server(aInstance)
 #endif
+#if OPENTHREAD_CONFIG_NEIGHBOR_DISCOVERY_AGENT_ENABLE
+    , mNeighborDiscoveryAgent(aInstance)
+#endif
 #if OPENTHREAD_CONFIG_IP6_SLAAC_ENABLE
     , mSlaac(aInstance)
 #endif
@@ -64,6 +67,9 @@ ThreadNetif::ThreadNetif(Instance &aInstance)
 #endif
 #if OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE
     , mSrpClient(aInstance)
+#endif
+#if OPENTHREAD_CONFIG_SRP_CLIENT_BUFFERS_ENABLE
+    , mSrpClientBuffers(aInstance)
 #endif
 #if OPENTHREAD_CONFIG_DNSSD_SERVER_ENABLE
     , mDnssdServer(aInstance)
@@ -161,7 +167,7 @@ void ThreadNetif::Up(void)
 
     SubscribeAllNodesMulticast();
     IgnoreError(Get<Mle::MleRouter>().Enable());
-    IgnoreError(Get<Tmf::TmfAgent>().Start());
+    IgnoreError(Get<Tmf::Agent>().Start());
 #if OPENTHREAD_CONFIG_DNSSD_SERVER_ENABLE
     IgnoreError(Get<Dns::ServiceDiscovery::Server>().Start());
 #endif
@@ -193,7 +199,7 @@ void ThreadNetif::Down(void)
 #if OPENTHREAD_CONFIG_DTLS_ENABLE
     Get<Coap::CoapSecure>().Stop();
 #endif
-    IgnoreError(Get<Tmf::TmfAgent>().Stop());
+    IgnoreError(Get<Tmf::Agent>().Stop());
     IgnoreError(Get<Mle::MleRouter>().Disable());
     RemoveAllExternalUnicastAddresses();
     UnsubscribeAllExternalMulticastAddresses();
@@ -211,16 +217,16 @@ exit:
     return;
 }
 
-otError ThreadNetif::RouteLookup(const Ip6::Address &aSource, const Ip6::Address &aDestination, uint8_t *aPrefixMatch)
+Error ThreadNetif::RouteLookup(const Ip6::Address &aSource, const Ip6::Address &aDestination, uint8_t *aPrefixMatch)
 {
-    otError  error;
+    Error    error;
     uint16_t rloc;
 
     SuccessOrExit(error = Get<NetworkData::Leader>().RouteLookup(aSource, aDestination, aPrefixMatch, &rloc));
 
     if (rloc == Get<Mle::MleRouter>().GetRloc16())
     {
-        error = OT_ERROR_NO_ROUTE;
+        error = kErrorNoRoute;
     }
 
 exit:

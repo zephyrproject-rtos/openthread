@@ -71,8 +71,22 @@ namespace Srp {
 class Server : public InstanceLocator, private NonCopyable
 {
     friend class ot::Notifier;
+    friend class UpdateMetadata;
+    friend class Service;
+    friend class Host;
 
 public:
+    enum : uint16_t
+    {
+        kUdpPort = OPENTHREAD_CONFIG_SRP_SERVER_UDP_PORT, ///< The SRP Server UDP listening port.
+    };
+
+    /**
+     * The ID of SRP service update transaction.
+     *
+     */
+    typedef otSrpServerServiceUpdateId ServiceUpdateId;
+
     class Host;
     class Service;
 
@@ -194,7 +208,7 @@ public:
          *
          * @param[in]  aFullName  The full name.
          *
-         * @returns  TRUE if the servce matches the full name, FALSE if doesn't match.
+         * @returns  TRUE if the service matches the full name, FALSE if doesn't match.
          *
          */
         bool Matches(const char *aFullName) const;
@@ -212,12 +226,11 @@ public:
 
     private:
         explicit Service(void);
-        otError SetFullName(const char *aFullName);
-        otError SetTxtData(const uint8_t *aTxtData, uint16_t aTxtDataLength);
-        otError SetTxtDataFromMessage(const Message &aMessage, uint16_t aOffset, uint16_t aLength);
-        otError CopyResourcesFrom(const Service &aService);
-        void    ClearResources(void);
-        void    DeleteResourcesButRetainName(void);
+        Error SetFullName(const char *aFullName);
+        Error SetTxtData(const uint8_t *aTxtData, uint16_t aTxtDataLength);
+        Error SetTxtDataFromMessage(const Message &aMessage, uint16_t aOffset, uint16_t aLength);
+        Error CopyResourcesFrom(const Service &aService);
+        void  ClearResources(void);
 
         char *           mFullName;
         uint16_t         mPriority;
@@ -235,20 +248,23 @@ public:
      * This class implements the Host which registers services on the SRP server.
      *
      */
-    class Host : public LinkedListEntry<Host>, private NonCopyable
+    class Host : public LinkedListEntry<Host>, public InstanceLocator, private NonCopyable
     {
         friend class LinkedListEntry<Host>;
         friend class Server;
+        friend class UpdateMetadata;
 
     public:
         /**
          * This method creates a new Host object.
          *
+         * @param[in]  aInstance  A reference to the OpenThread instance.
+         *
          * @returns  A pointer to the newly created Host object, nullptr if
          *           cannot allocate memory for the object.
          *
          */
-        static Host *New(void);
+        static Host *New(Instance &aInstance);
 
         /**
          * This method Frees the Host object.
@@ -276,7 +292,7 @@ public:
         const char *GetFullName(void) const { return mFullName; }
 
         /**
-         * This method returns adrersses of the host.
+         * This method returns addresses of the host.
          *
          * @param[out]  aAddressesNum  The number of the addresses.
          *
@@ -359,21 +375,20 @@ public:
             kMaxAddressesNum = OPENTHREAD_CONFIG_SRP_SERVER_MAX_ADDRESSES_NUM,
         };
 
-        explicit Host(void);
-        otError  SetFullName(const char *aFullName);
+        explicit Host(Instance &aInstance);
+        Error    SetFullName(const char *aFullName);
         void     SetKey(Dns::Ecdsa256KeyRecord &aKey);
         void     SetLease(uint32_t aLease);
         void     SetKeyLease(uint32_t aKeyLease);
         Service *GetNextService(Service *aService) { return aService ? aService->GetNext() : mServices.GetHead(); }
         Service *AddService(const char *aFullName);
-        void     RemoveAndFreeService(Service *aService);
-        void     RemoveAndFreeAllServices(void);
+        void     RemoveService(Service *aService, bool aRetainName, bool aNotifyServiceHandler);
+        void     FreeAllServices(void);
         void     ClearResources(void);
-        void     DeleteResourcesButRetainName(void);
         void     CopyResourcesFrom(const Host &aHost);
         Service *FindService(const char *aFullName);
         const Service *FindService(const char *aFullName) const;
-        otError        AddIp6Address(const Ip6::Address &aIp6Address);
+        Error          AddIp6Address(const Ip6::Address &aIp6Address);
 
         char *       mFullName;
         Ip6::Address mAddresses[kMaxAddressesNum];
@@ -429,13 +444,13 @@ public:
      *
      * @param[in]  aDomain  The domain to be set. MUST NOT be nullptr.
      *
-     * @retval  OT_ERROR_NONE           Successfully set the domain to @p aDomain.
-     * @retval  OT_ERROR_INVALID_STATE  The SRP server is already enabled and the Domain cannot be changed.
-     * @retval  OT_ERROR_INVALID_ARGS   The argument @p aDomain is not a valid DNS domain name.
-     * @retval  OT_ERROR_NO_BUFS        There is no memory to store content of @p aDomain.
+     * @retval  kErrorNone          Successfully set the domain to @p aDomain.
+     * @retval  kErrorInvalidState  The SRP server is already enabled and the Domain cannot be changed.
+     * @retval  kErrorInvalidArgs   The argument @p aDomain is not a valid DNS domain name.
+     * @retval  kErrorNoBufs        There is no memory to store content of @p aDomain.
      *
      */
-    otError SetDomain(const char *aDomain);
+    Error SetDomain(const char *aDomain);
 
     /**
      * This method tells whether the SRP server is currently running.
@@ -465,11 +480,11 @@ public:
      * @param[in]  aMinKeyLease  The minimum KEY-LEASE interval in seconds.
      * @param[in]  aMaxKeyLease  The maximum KEY-LEASE interval in seconds.
      *
-     * @retval  OT_ERROR_NONE          Successfully set the LEASE and KEY-LEASE ranges.
-     * @retval  OT_ERROR_INVALID_ARGS  The LEASE or KEY-LEASE range is not valid.
+     * @retval  kErrorNone         Successfully set the LEASE and KEY-LEASE ranges.
+     * @retval  kErrorInvalidArgs  The LEASE or KEY-LEASE range is not valid.
      *
      */
-    otError SetLeaseRange(uint32_t aMinLease, uint32_t aMaxLease, uint32_t aMinKeyLease, uint32_t aMaxKeyLease);
+    Error SetLeaseRange(uint32_t aMinLease, uint32_t aMaxLease, uint32_t aMinKeyLease, uint32_t aMaxKeyLease);
 
     /**
      * This method returns the next registered SRP host.
@@ -485,11 +500,11 @@ public:
      * This method receives the service update result from service handler set by
      * SetServiceHandler.
      *
-     * @param[in]  aHost   A pointer to the Host object which contains the SRP service updates.
+     * @param[in]  aId     The ID of the service update transaction.
      * @param[in]  aError  The service update result.
      *
      */
-    void HandleServiceUpdateResult(const Host *aHost, otError aError);
+    void HandleServiceUpdateResult(ServiceUpdateId aId, Error aError);
 
 private:
     enum : uint16_t
@@ -506,11 +521,8 @@ private:
         kDefaultEventsHandlerTimeout = OPENTHREAD_CONFIG_SRP_SERVER_SERVICE_UPDATE_TIMEOUT,
     };
 
-    /**
-     * This class includes metadata for processing a SRP update (register, deregister)
-     * and sending DNS response to the client.
-     *
-     */
+    // This class includes metadata for processing a SRP update (register, deregister)
+    // and sending DNS response to the client.
     class UpdateMetadata : public InstanceLocator, public LinkedListEntry<UpdateMetadata>
     {
         friend class LinkedListEntry<UpdateMetadata>;
@@ -523,9 +535,10 @@ private:
         void                     Free(void);
         TimeMilli                GetExpireTime(void) const { return mExpireTime; }
         const Dns::UpdateHeader &GetDnsHeader(void) const { return mDnsHeader; }
+        ServiceUpdateId          GetId(void) const { return mId; }
         Host &                   GetHost(void) { return *mHost; }
         const Ip6::MessageInfo & GetMessageInfo(void) const { return mMessageInfo; }
-        bool                     Matches(const Host *aHost) const { return mHost == aHost; }
+        bool                     Matches(ServiceUpdateId aId) const { return mId == aId; }
 
     private:
         UpdateMetadata(Instance &               aInstance,
@@ -535,6 +548,7 @@ private:
 
         TimeMilli         mExpireTime;
         Dns::UpdateHeader mDnsHeader;
+        ServiceUpdateId   mId;          // The ID of this service update transaction.
         Host *            mHost;        // The host will be updated. The UpdateMetadata has no ownership of this host.
         Ip6::MessageInfo  mMessageInfo; // The message info of the DNS update request.
         UpdateMetadata *  mNext;
@@ -543,61 +557,63 @@ private:
     void     Start(void);
     void     Stop(void);
     void     HandleNotifierEvents(Events aEvents);
-    otError  PublishServerData(void);
+    Error    PublishServerData(void);
     void     UnpublishServerData(void);
     uint32_t GrantLease(uint32_t aLease) const;
     uint32_t GrantKeyLease(uint32_t aKeyLease) const;
 
-    void    CommitSrpUpdate(otError                  aError,
-                            const Dns::UpdateHeader &aDnsHeader,
-                            Host &                   aHost,
-                            const Ip6::MessageInfo & aMessageInfo);
-    void    HandleDnsUpdate(Message &                aMessage,
-                            const Ip6::MessageInfo & aMessageInfo,
-                            const Dns::UpdateHeader &aDnsHeader,
-                            uint16_t                 aOffset);
-    otError ProcessUpdateSection(Host &                   aHost,
-                                 const Message &          aMessage,
-                                 const Dns::UpdateHeader &aDnsHeader,
-                                 const Dns::Zone &        aZone,
-                                 uint16_t &               aOffset) const;
-    otError ProcessAdditionalSection(Host *                   aHost,
-                                     const Message &          aMessage,
-                                     const Dns::UpdateHeader &aDnsHeader,
-                                     uint16_t &               aOffset) const;
-    otError VerifySignature(const Dns::Ecdsa256KeyRecord &aKey,
-                            const Message &               aMessage,
-                            Dns::UpdateHeader             aDnsHeader,
-                            uint16_t                      aSigOffset,
-                            uint16_t                      aSigRdataOffset,
-                            uint16_t                      aSigRdataLength,
-                            const char *                  aSignerName) const;
-    otError ProcessZoneSection(const Message &          aMessage,
+    ServiceUpdateId AllocateId(void) { return mServiceUpdateId++; }
+
+    void  CommitSrpUpdate(Error                    aError,
+                          const Dns::UpdateHeader &aDnsHeader,
+                          Host &                   aHost,
+                          const Ip6::MessageInfo & aMessageInfo);
+    void  HandleDnsUpdate(Message &                aMessage,
+                          const Ip6::MessageInfo & aMessageInfo,
+                          const Dns::UpdateHeader &aDnsHeader,
+                          uint16_t                 aOffset);
+    Error ProcessUpdateSection(Host &                   aHost,
+                               const Message &          aMessage,
                                const Dns::UpdateHeader &aDnsHeader,
-                               uint16_t &               aOffset,
-                               Dns::Zone &              aZone) const;
-    otError ProcessHostDescriptionInstruction(Host &                   aHost,
+                               const Dns::Zone &        aZone,
+                               uint16_t &               aOffset) const;
+    Error ProcessAdditionalSection(Host *                   aHost,
+                                   const Message &          aMessage,
+                                   const Dns::UpdateHeader &aDnsHeader,
+                                   uint16_t &               aOffset) const;
+    Error VerifySignature(const Dns::Ecdsa256KeyRecord &aKey,
+                          const Message &               aMessage,
+                          Dns::UpdateHeader             aDnsHeader,
+                          uint16_t                      aSigOffset,
+                          uint16_t                      aSigRdataOffset,
+                          uint16_t                      aSigRdataLength,
+                          const char *                  aSignerName) const;
+    Error ProcessZoneSection(const Message &          aMessage,
+                             const Dns::UpdateHeader &aDnsHeader,
+                             uint16_t &               aOffset,
+                             Dns::Zone &              aZone) const;
+    Error ProcessHostDescriptionInstruction(Host &                   aHost,
+                                            const Message &          aMessage,
+                                            const Dns::UpdateHeader &aDnsHeader,
+                                            const Dns::Zone &        aZone,
+                                            uint16_t                 aOffset) const;
+    Error ProcessServiceDiscoveryInstructions(Host &                   aHost,
                                               const Message &          aMessage,
                                               const Dns::UpdateHeader &aDnsHeader,
                                               const Dns::Zone &        aZone,
                                               uint16_t                 aOffset) const;
-    otError ProcessServiceDiscoveryInstructions(Host &                   aHost,
+    Error ProcessServiceDescriptionInstructions(Host &                   aHost,
                                                 const Message &          aMessage,
                                                 const Dns::UpdateHeader &aDnsHeader,
                                                 const Dns::Zone &        aZone,
-                                                uint16_t                 aOffset) const;
-    otError ProcessServiceDescriptionInstructions(Host &                   aHost,
-                                                  const Message &          aMessage,
-                                                  const Dns::UpdateHeader &aDnsHeader,
-                                                  const Dns::Zone &        aZone,
-                                                  uint16_t &               aOffset) const;
+                                                uint16_t &               aOffset) const;
 
     static bool    IsValidDeleteAllRecord(const Dns::ResourceRecord &aRecord);
     const Service *FindService(const char *aFullName) const;
 
     void        HandleUpdate(const Dns::UpdateHeader &aDnsHeader, Host *aHost, const Ip6::MessageInfo &aMessageInfo);
     void        AddHost(Host *aHost);
-    void        RemoveAndFreeHost(Host *aHost);
+    void        RemoveHost(Host *aHost, bool aRetainName, bool aNotifyServiceHandler);
     bool        HasNameConflictsWith(Host &aHost) const;
     void        SendResponse(const Dns::UpdateHeader &   aHeader,
                              Dns::UpdateHeader::Response aResponseCode,
@@ -613,7 +629,7 @@ private:
     static void HandleOutstandingUpdatesTimer(Timer &aTimer);
     void        HandleOutstandingUpdatesTimer(void);
 
-    void                  HandleServiceUpdateResult(UpdateMetadata *aUpdate, otError aError);
+    void                  HandleServiceUpdateResult(UpdateMetadata *aUpdate, Error aError);
     const UpdateMetadata *FindOutstandingUpdate(const Ip6::MessageInfo &aMessageInfo, uint16_t aDnsMessageId);
 
     Ip6::Udp::Socket                mSocket;
@@ -633,7 +649,8 @@ private:
     TimerMilli                 mOutstandingUpdatesTimer;
     LinkedList<UpdateMetadata> mOutstandingUpdates;
 
-    bool mEnabled;
+    ServiceUpdateId mServiceUpdateId;
+    bool            mEnabled;
 };
 
 } // namespace Srp

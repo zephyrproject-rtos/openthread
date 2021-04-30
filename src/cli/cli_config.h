@@ -37,6 +37,15 @@
 
 #include "openthread-core-config.h"
 
+#ifndef OPENTHREAD_POSIX
+#if defined(__ANDROID__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__linux__) || defined(__NetBSD__) || \
+    defined(__unix__)
+#define OPENTHREAD_POSIX 1
+#else
+#define OPENTHREAD_POSIX 0
+#endif
+#endif
+
 /**
  * @def OPENTHREAD_CONFIG_CLI_MAX_LINE_LENGTH
  *
@@ -44,83 +53,7 @@
  *
  */
 #ifndef OPENTHREAD_CONFIG_CLI_MAX_LINE_LENGTH
-#define OPENTHREAD_CONFIG_CLI_MAX_LINE_LENGTH 128
-#endif
-
-/**
- * @def OPENTHREAD_CONFIG_CLI_UART_RX_BUFFER_SIZE
- *
- * The size of CLI UART RX buffer in bytes.
- *
- */
-#ifndef OPENTHREAD_CONFIG_CLI_UART_RX_BUFFER_SIZE
-#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
-#define OPENTHREAD_CONFIG_CLI_UART_RX_BUFFER_SIZE 640
-#else
-#define OPENTHREAD_CONFIG_CLI_UART_RX_BUFFER_SIZE 512
-#endif
-#endif
-
-/**
- * @def OPENTHREAD_CONFIG_CLI_TX_BUFFER_SIZE
- *
- * The size of CLI message buffer in bytes.
- *
- */
-#ifndef OPENTHREAD_CONFIG_CLI_UART_TX_BUFFER_SIZE
-#define OPENTHREAD_CONFIG_CLI_UART_TX_BUFFER_SIZE 1024
-#endif
-
-/**
- * @def OPENTHREAD_CONFIG_UART_CLI_RAW
- *
- * TODO: complete.
- *
- */
-#ifndef OPENTHREAD_CONFIG_UART_CLI_RAW
-#define OPENTHREAD_CONFIG_UART_CLI_RAW 0
-#endif
-
-#define OT_CLI_TRANSPORT_UART (1)
-#define OT_CLI_TRANSPORT_CONSOLE (2)
-
-/**
- * @def OPENTHREAD_CONFIG_CLI_TRANSPORT
- *
- * The transport of the CLI.
- *
- */
-#ifndef OPENTHREAD_CONFIG_CLI_TRANSPORT
-#define OPENTHREAD_CONFIG_CLI_TRANSPORT OT_CLI_TRANSPORT_UART
-#endif
-
-#if OPENTHREAD_CONFIG_CLI_TRANSPORT != OT_CLI_TRANSPORT_UART && \
-    OPENTHREAD_CONFIG_CLI_TRANSPORT != OT_CLI_TRANSPORT_CONSOLE
-#error "Unsupported CLI transport!"
-#endif
-
-/**
- * @def OPENTHREAD_CONFIG_CLI_SRP_CLIENT_MAX_SERVICES
- *
- * The maximum number of service entries supported by SRP client.
- *
- * This is only applicable when SRP client is enabled, i.e. OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE is set.
- *
- */
-#ifndef OPENTHREAD_CONFIG_CLI_SRP_CLIENT_MAX_SERVICES
-#define OPENTHREAD_CONFIG_CLI_SRP_CLIENT_MAX_SERVICES 2
-#endif
-
-/**
- * @def OPENTHREAD_CONFIG_CLI_SRP_CLIENT_MAX_HOST_ADDRESSES
- *
- * The maximum number of host IPv6 address entries supported by SRP client.
- *
- * This is only applicable when SRP client is enabled, i.e. OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE is set.
- *
- */
-#ifndef OPENTHREAD_CONFIG_CLI_SRP_CLIENT_MAX_HOST_ADDRESSES
-#define OPENTHREAD_CONFIG_CLI_SRP_CLIENT_MAX_HOST_ADDRESSES 2
+#define OPENTHREAD_CONFIG_CLI_MAX_LINE_LENGTH 384
 #endif
 
 #endif // CONFIG_CLI_H_

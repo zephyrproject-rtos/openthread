@@ -127,6 +127,7 @@ enum
     OT_RADIO_CAPS_SLEEP_TO_TX      = 1 << 4, ///< Radio supports direct transition from sleep to TX with CSMA.
     OT_RADIO_CAPS_TRANSMIT_SEC     = 1 << 5, ///< Radio supports tx security.
     OT_RADIO_CAPS_TRANSMIT_TIMING  = 1 << 6, ///< Radio supports tx at specific time.
+    OT_RADIO_CAPS_RECEIVE_TIMING   = 1 << 7, ///< Radio supports rx at specific time.
 };
 
 #define OT_PANID_BROADCAST 0xffff ///< IEEE 802.15.4 Broadcast PAN ID
@@ -230,16 +231,35 @@ typedef struct otRadioFrame
          */
         struct
         {
-            const otMacKey *mAesKey;            ///< The key used for AES-CCM frame security.
-            otRadioIeInfo * mIeInfo;            ///< The pointer to the Header IE(s) related information.
-            uint32_t        mTxDelay;           ///< The delay time for this transmission (based on `mTxDelayBaseTime`).
-            uint32_t        mTxDelayBaseTime;   ///< The base time for the transmission delay.
-            uint8_t         mMaxCsmaBackoffs;   ///< Maximum number of backoffs attempts before declaring CCA failure.
-            uint8_t         mMaxFrameRetries;   ///< Maximum number of retries allowed after a transmission failure.
-            bool            mIsARetx : 1;       ///< True if this frame is a retransmission (ignored by radio driver).
-            bool            mCsmaCaEnabled : 1; ///< Set to true to enable CSMA-CA for this packet, false otherwise.
-            bool            mCslPresent : 1;    ///< Set to true if CSL header IE is present.
-            bool            mIsSecurityProcessed : 1; ///< True if SubMac should skip the AES processing of this frame.
+            const otMacKey *mAesKey;          ///< The key used for AES-CCM frame security.
+            otRadioIeInfo * mIeInfo;          ///< The pointer to the Header IE(s) related information.
+            uint32_t        mTxDelay;         ///< The delay time for this transmission (based on `mTxDelayBaseTime`).
+            uint32_t        mTxDelayBaseTime; ///< The base time for the transmission delay.
+            uint8_t         mMaxCsmaBackoffs; ///< Maximum number of backoffs attempts before declaring CCA failure.
+            uint8_t         mMaxFrameRetries; ///< Maximum number of retries allowed after a transmission failure.
+
+            /**
+             * Indicates whether the frame is a retransmission or not.
+             *
+             * If the platform layer does not provide `OT_RADIO_CAPS_TRANSMIT_SEC` capability, it can ignore this flag.
+             *
+             * If the platform provides `OT_RADIO_CAPS_TRANSMIT_SEC` capability, then platform is expected to handle tx
+             * security processing and assignment of frame counter. In this case the following behavior is expected:
+             *
+             * When `mIsARetx` is set, it indicates that OpenThread core has already set the frame counter and key id
+             * (if security is enabled) in the prepared frame. The counter is ensured to match the counter value from
+             * the previous attempts of the same frame. The platform should not assign or change the frame counter (but
+             * may still need to perform security processing depending on `mIsSecurityProcessed` flag).
+             *
+             * If `mIsARetx` is not set, then the frame counter and key id are not set in the frame by OpenThread core
+             * and it is the responsibility of the radio platform to assign them. The platform should update the frame
+             * (assign counter and key id) even if the transmission gets aborted or fails (e.g., channel access error).
+             *
+             */
+            bool mIsARetx : 1;
+            bool mCsmaCaEnabled : 1;       ///< Set to true to enable CSMA-CA for this packet, false otherwise.
+            bool mCslPresent : 1;          ///< Set to true if CSL header IE is present.
+            bool mIsSecurityProcessed : 1; ///< True if SubMac should skip the AES processing of this frame.
         } mTxInfo;
 
         /**
@@ -662,6 +682,18 @@ otError otPlatRadioSleep(otInstance *aInstance);
 otError otPlatRadioReceive(otInstance *aInstance, uint8_t aChannel);
 
 /**
+ * Schedule a radio reception window at a specific time and duration.
+ *
+ * @param[in]  aChannel   The radio channel on which to receive.
+ * @param[in]  aStart     The receive window start time, in microseconds.
+ * @param[in]  aDuration  The receive window duration, in microseconds
+ *
+ * @retval OT_ERROR_NONE    Successfully scheduled receive window.
+ * @retval OT_ERROR_FAILED  The receive window could not be scheduled.
+ */
+otError otPlatRadioReceiveAt(otInstance *aInstance, uint8_t aChannel, uint32_t aStart, uint32_t aDuration);
+
+/**
  * The radio driver calls this method to notify OpenThread of a received frame.
  *
  * @param[in]  aInstance The OpenThread instance structure.
@@ -968,6 +1000,18 @@ otError otPlatRadioEnableCsl(otInstance *aInstance, uint32_t aCslPeriod, const o
  *
  */
 void otPlatRadioUpdateCslSampleTime(otInstance *aInstance, uint32_t aCslSampleTime);
+
+/**
+ * Get the current accuracy, in units of ± ppm, of the clock used for scheduling CSL operations.
+ *
+ * @note Platforms may optimize this value based on operational conditions (i.e.: temperature).
+ *
+ * @param[in]   aInstance    A pointer to an OpenThread instance.
+ *
+ * @returns The current CSL rx/tx scheduling drift, in units of ± ppm.
+ *
+ */
+uint8_t otPlatRadioGetCslAccuracy(otInstance *aInstance);
 
 /**
  * Set the max transmit power for a specific channel.

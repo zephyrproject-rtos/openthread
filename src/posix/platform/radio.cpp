@@ -555,6 +555,13 @@ uint32_t otPlatRadioGetBusSpeed(otInstance *aInstance)
     return sRadioSpinel.GetBusSpeed();
 }
 
+uint8_t otPlatRadioGetCslAccuracy(otInstance *aInstance)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+
+    return 0;
+}
+
 otError otPlatRadioSetChannelMaxTransmitPower(otInstance *aInstance, uint8_t aChannel, int8_t aMaxPower)
 {
     OT_UNUSED_VARIABLE(aInstance);
@@ -571,4 +578,13 @@ otError otPlatRadioGetRegion(otInstance *aInstance, uint16_t *aRegionCode)
 {
     OT_UNUSED_VARIABLE(aInstance);
     return sRadioSpinel.GetRadioRegion(aRegionCode);
+}
+
+otError otPlatRadioReceiveAt(otInstance *aInstance, uint8_t aChannel, uint32_t aStart, uint32_t aDuration)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    OT_UNUSED_VARIABLE(aChannel);
+    OT_UNUSED_VARIABLE(aStart);
+    OT_UNUSED_VARIABLE(aDuration);
+    return OT_ERROR_NOT_IMPLEMENTED;
 }

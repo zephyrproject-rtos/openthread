@@ -38,11 +38,14 @@
 
 #include <stdint.h>
 
+#include <openthread/ip6.h>
+
 #include "common/clearable.hpp"
 #include "common/encoding.hpp"
 #include "common/equatable.hpp"
 #include "common/string.hpp"
 #include "mac/mac_types.hpp"
+#include "net/ip4_address.hpp"
 
 using ot::Encoding::BigEndian::HostSwap16;
 
@@ -74,11 +77,11 @@ public:
      * This method generates and sets the Network Prefix to a crypto-secure random Unique Local Address (ULA) based
      * on the pattern `fdxx:xxxx:xxxx:` (RFC 4193).
      *
-     * @retval OT_ERROR_NONE     Successfully generated a random ULA Network Prefix
-     * @retval OT_ERROR_FAILED   Failed to generate random ULA Network Prefix.
+     * @retval kErrorNone     Successfully generated a random ULA Network Prefix
+     * @retval kErrorFailed   Failed to generate random ULA Network Prefix.
      *
      */
-    otError GenerateRandomUla(void);
+    Error GenerateRandomUla(void);
 
 } OT_TOOL_PACKED_END;
 
@@ -87,7 +90,7 @@ public:
  *
  */
 OT_TOOL_PACKED_BEGIN
-class Prefix : public otIp6Prefix, public Clearable<Prefix>
+class Prefix : public otIp6Prefix, public Clearable<Prefix>, public Unequatable<Prefix>
 {
 public:
     enum : uint8_t
@@ -223,15 +226,18 @@ public:
     }
 
     /**
-     * This method overloads operator `==` to evaluate whether or not two prefixes are unequal.
+     * This method overloads operator `<` to compare two prefixes.
      *
-     * @param[in]  aOther  The other prefix to compare with.
+     * A prefix with shorter length is considered smaller than the one with longer length. If the prefix lengths are
+     * equal, then the prefix bytes are compared directly.
      *
-     * @retval TRUE   If the two prefixes are unequal.
-     * @retval FALSE  If the two prefixes are not unequal.
+     * @param[in] aOther  The other prefix to compare against.
+     *
+     * @retval TRUE   If the prefix is smaller than @p aOther.
+     * @retval FALSE  If the prefix is not smaller than @p aOther.
      *
      */
-    bool operator!=(const Prefix &aOther) const { return !(*this == aOther); }
+    bool operator<(const Prefix &aOther) const;
 
     /**
      * This static method converts a prefix length (in bits) to size (number of bytes).
@@ -254,6 +260,17 @@ public:
      *
      */
     static uint8_t MatchLength(const uint8_t *aPrefixA, const uint8_t *aPrefixB, uint8_t aMaxSize);
+
+    /**
+     * This method indicates whether or not the prefix has a valid length for use as a NAT64 prefix.
+     *
+     * A NAT64 prefix must have one of the following lengths: 32, 40, 48, 56, 64, or 96 (per RFC 6502).
+     *
+     * @retval TRUE   If the prefix has a valid length for use as a NAT64 prefix.
+     * @retval FALSE  If the prefix does not have a valid length for use as a NAT64 prefix.
+     *
+     */
+    bool IsValidNat64(void) const;
 
     /**
      * This method converts the prefix to a string.
@@ -415,7 +432,7 @@ public:
     bool IsAnycastLocator(void) const;
 
     /**
-     * This method indicates whether or not the Interface Identifier (IID) matches a Service Anycast  Locator (ALOC).
+     * This method indicates whether or not the Interface Identifier (IID) matches a Service Anycast Locator (ALOC).
      *
      * In addition to checking that the IID matches the locator pattern (`0000:00ff:fe00:xxxx`), this method also
      * checks that the locator value is a valid Service ALOC16 (0xfc10 – 0xfc2f).
@@ -876,15 +893,28 @@ public:
     bool MatchesFilter(TypeFilter aFilter) const;
 
     /**
-     * This method converts an IPv6 address string to binary.
+     * This method sets the IPv6 address by performing NAT64 address translation from a given IPv4 address as specified
+     * in RFC 6052.
      *
-     * @param[in]  aBuf  A pointer to the null-terminated string.
+     * The NAT64 @p aPrefix MUST have one of the following lengths: 32, 40, 48, 56, 64, or 96, otherwise the behavior
+     * of this method is undefined.
      *
-     * @retval OT_ERROR_NONE          Successfully parsed the IPv6 address string.
-     * @retval OT_ERROR_INVALID_ARGS  Failed to parse the IPv6 address string.
+     * @param[in] aPrefix      The prefix to use for IPv4/IPv6 translation.
+     * @param[in] aIp4Address  The IPv4 address to translate to IPv6.
      *
      */
-    otError FromString(const char *aBuf);
+    void SynthesizeFromIp4Address(const Prefix &aPrefix, const Ip4::Address &aIp4Address);
+
+    /**
+     * This method converts an IPv6 address string to binary.
+     *
+     * @param[in]  aString  A pointer to the null-terminated string.
+     *
+     * @retval kErrorNone          Successfully parsed the IPv6 address string.
+     * @retval kErrorParse         Failed to parse the IPv6 address string.
+     *
+     */
+    Error FromString(const char *aString);
 
     /**
      * This method converts an IPv6 address object to a string
@@ -903,10 +933,7 @@ public:
      * @retval false  The IPv6 address is larger than or equal to @p aOther.
      *
      */
-    bool operator<(const Ip6::Address &aOther) const
-    {
-        return memcmp(mFields.m8, aOther.mFields.m8, sizeof(Ip6::Address)) < 0;
-    }
+    bool operator<(const Address &aOther) const { return memcmp(mFields.m8, aOther.mFields.m8, sizeof(Address)) < 0; }
 
 private:
     void SetPrefix(uint8_t aOffset, const uint8_t *aPrefix, uint8_t aPrefixLength);
@@ -920,7 +947,6 @@ private:
 
     enum
     {
-        kIp4AddressSize                     = 4, ///< Size of the IPv4 address.
         kMulticastNetworkPrefixLengthOffset = 3, ///< Prefix-Based Multicast Address (RFC3306).
         kMulticastNetworkPrefixOffset       = 4, ///< Prefix-Based Multicast Address (RFC3306).
     };

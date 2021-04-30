@@ -156,16 +156,6 @@
 #define CLI_COAP_SECURE_USE_COAP_DEFAULT_HANDLER 1
 
 /**
- * @def OPENTHREAD_CONFIG_CSL_SAMPLE_WINDOW
- *
- * The CSL sample window in units of 10 symbols.
- *
- */
-#ifndef OPENTHREAD_CONFIG_CSL_SAMPLE_WINDOW
-#define OPENTHREAD_CONFIG_CSL_SAMPLE_WINDOW 5
-#endif
-
-/**
  * @def OPENTHREAD_CONFIG_PLATFORM_RADIO_COEX_ENABLE
  *
  * Define to 1 if you want to enable radio coexistence implemented in platform.
@@ -187,6 +177,26 @@
  */
 #ifndef OPENTHREAD_CONFIG_LOG_PLATFORM
 #define OPENTHREAD_CONFIG_LOG_PLATFORM 1
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_CLI_MAX_LINE_LENGTH
+ *
+ * The maximum size of the CLI line in bytes.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_CLI_MAX_LINE_LENGTH
+#define OPENTHREAD_CONFIG_CLI_MAX_LINE_LENGTH 640
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_CLI_UART_RX_BUFFER_SIZE
+ *
+ * The size of CLI UART RX buffer in bytes.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_CLI_UART_RX_BUFFER_SIZE
+#define OPENTHREAD_CONFIG_CLI_UART_RX_BUFFER_SIZE 640
 #endif
 
 #endif // OPENTHREAD_CORE_SIMULATION_CONFIG_H_

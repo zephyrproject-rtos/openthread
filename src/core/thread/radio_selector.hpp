@@ -36,6 +36,8 @@
 
 #include "openthread-core-config.h"
 
+#if OPENTHREAD_CONFIG_MULTI_RADIO
+
 #include <openthread/multi_radio.h>
 
 #include "common/locator.hpp"
@@ -43,8 +45,6 @@
 #include "mac/mac_frame.hpp"
 #include "mac/mac_links.hpp"
 #include "mac/mac_types.hpp"
-
-#if OPENTHREAD_CONFIG_MULTI_RADIO
 
 namespace ot {
 
@@ -140,7 +140,7 @@ public:
      * @param[in] aTxError   The transmission error.
      *
      */
-    void UpdateOnSendDone(Mac::TxFrame &aFrame, otError aTxError);
+    void UpdateOnSendDone(Mac::TxFrame &aFrame, Error aTxError);
 
 #if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
     /**
@@ -149,11 +149,11 @@ public:
      * The deferred ack model is used by TREL radio link.
      *
      * @param[in]  aNeighbor              The neighbor from which ack was expected
-     * @param[in]  aError                 The deferred ack status (`OT_ERROR_NONE` indicates ack was received).
+     * @param[in]  aError                 The deferred ack status (`kErrorNone` indicates ack was received).
      * @param[out] aAllowNeighborRemove   Boolean variable to output whether the neighbor is allowed to be removed.
      *
      */
-    void UpdateOnDeferredAck(Neighbor &aNeighbor, otError aTxError, bool &aAllowNeighborRemove);
+    void UpdateOnDeferredAck(Neighbor &aNeighbor, Error aTxError, bool &aAllowNeighborRemove);
 #endif
 
     /**

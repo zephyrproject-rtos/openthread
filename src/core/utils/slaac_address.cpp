@@ -33,16 +33,16 @@
 
 #include "slaac_address.hpp"
 
+#if OPENTHREAD_CONFIG_IP6_SLAAC_ENABLE
+
 #include "common/code_utils.hpp"
 #include "common/instance.hpp"
-#include "common/locator-getters.hpp"
+#include "common/locator_getters.hpp"
 #include "common/logging.hpp"
 #include "common/random.hpp"
 #include "common/settings.hpp"
 #include "crypto/sha256.hpp"
 #include "net/ip6_address.hpp"
-
-#if OPENTHREAD_CONFIG_IP6_SLAAC_ENABLE
 
 namespace ot {
 namespace Utils {
@@ -164,7 +164,7 @@ void Slaac::Update(UpdateMode aMode)
             {
                 iterator = NetworkData::kIteratorInit;
 
-                while (Get<NetworkData::Leader>().GetNextOnMeshPrefix(iterator, config) == OT_ERROR_NONE)
+                while (Get<NetworkData::Leader>().GetNextOnMeshPrefix(iterator, config) == kErrorNone)
                 {
                     if (config.mDp)
                     {
@@ -197,7 +197,7 @@ void Slaac::Update(UpdateMode aMode)
 
         iterator = NetworkData::kIteratorInit;
 
-        while (Get<NetworkData::Leader>().GetNextOnMeshPrefix(iterator, config) == OT_ERROR_NONE)
+        while (Get<NetworkData::Leader>().GetNextOnMeshPrefix(iterator, config) == kErrorNone)
         {
             Ip6::Prefix &prefix = config.GetPrefix();
 
@@ -252,10 +252,10 @@ void Slaac::Update(UpdateMode aMode)
     }
 }
 
-otError Slaac::GenerateIid(Ip6::NetifUnicastAddress &aAddress,
-                           uint8_t *                 aNetworkId,
-                           uint8_t                   aNetworkIdLength,
-                           uint8_t *                 aDadCounter) const
+Error Slaac::GenerateIid(Ip6::NetifUnicastAddress &aAddress,
+                         uint8_t *                 aNetworkId,
+                         uint8_t                   aNetworkIdLength,
+                         uint8_t *                 aDadCounter) const
 {
     /*
      *  This method generates a semantically opaque IID per RFC 7217.
@@ -272,7 +272,7 @@ otError Slaac::GenerateIid(Ip6::NetifUnicastAddress &aAddress,
      *
      */
 
-    otError              error      = OT_ERROR_FAILED;
+    Error                error      = kErrorFailed;
     const uint8_t        netIface[] = {'w', 'p', 'a', 'n'};
     uint8_t              dadCounter = aDadCounter ? *aDadCounter : 0;
     IidSecretKey         secretKey;
@@ -313,7 +313,7 @@ otError Slaac::GenerateIid(Ip6::NetifUnicastAddress &aAddress,
         }
 
         // Exit and return the address if the IID is not reserved,
-        ExitNow(error = OT_ERROR_NONE);
+        ExitNow(error = kErrorNone);
     }
 
     otLogWarnUtil("SLAAC: Failed to generate a non-reserved IID after %d attempts", kMaxIidCreationAttempts);
@@ -324,17 +324,17 @@ exit:
 
 void Slaac::GetIidSecretKey(IidSecretKey &aKey) const
 {
-    otError error;
+    Error error;
 
     error = Get<Settings>().ReadSlaacIidSecretKey(aKey);
-    VerifyOrExit(error != OT_ERROR_NONE);
+    VerifyOrExit(error != kErrorNone);
 
     // If there is no previously saved secret key, generate
     // a random one and save it.
 
     error = Random::Crypto::FillBuffer(aKey.m8, sizeof(IidSecretKey));
 
-    if (error != OT_ERROR_NONE)
+    if (error != kErrorNone)
     {
         IgnoreError(Random::Crypto::FillBuffer(aKey.m8, sizeof(IidSecretKey)));
     }

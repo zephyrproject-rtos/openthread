@@ -36,6 +36,8 @@
 
 #include "openthread-core-config.h"
 
+#if OPENTHREAD_FTD
+
 #include "coap/coap.hpp"
 #include "common/locator.hpp"
 #include "common/non_copyable.hpp"
@@ -86,11 +88,11 @@ public:
      *
      * @param[in]  aDelayTimerMinimal The value of minimal delay timer (in ms).
      *
-     * @retval  OT_ERROR_NONE         Successfully set the minimal delay timer.
-     * @retval  OT_ERROR_INVALID_ARGS If @p aDelayTimerMinimal is not valid.
+     * @retval  kErrorNone         Successfully set the minimal delay timer.
+     * @retval  kErrorInvalidArgs  If @p aDelayTimerMinimal is not valid.
      *
      */
-    otError SetDelayTimerMinimal(uint32_t aDelayTimerMinimal);
+    Error SetDelayTimerMinimal(uint32_t aDelayTimerMinimal);
 
     /**
      * This method gets minimal delay timer.
@@ -143,5 +145,7 @@ private:
 
 } // namespace MeshCoP
 } // namespace ot
+
+#endif // OPENTHREAD_FTD
 
 #endif // MESHCOP_LEADER_HPP_

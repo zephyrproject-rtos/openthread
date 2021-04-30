@@ -43,12 +43,11 @@
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
 #include "common/instance.hpp"
-#include "common/locator-getters.hpp"
+#include "common/locator_getters.hpp"
 #include "common/logging.hpp"
 #include "common/random.hpp"
 #include "common/settings.hpp"
 #include "net/ip6.hpp"
-#include "thread/network_data.hpp"
 #include "thread/network_data_leader.hpp"
 #include "thread/network_data_local.hpp"
 #include "thread/network_data_notifier.hpp"
@@ -71,9 +70,8 @@ RoutingManager::RoutingManager(Instance &aInstance)
     , mRouterAdvertisementCount(0)
     , mRouterSolicitTimer(aInstance, HandleRouterSolicitTimer)
     , mRouterSolicitCount(0)
+    , mRoutingPolicyTimer(aInstance, HandleRoutingPolicyTimer)
 {
-    mInfraIfLinkLocalAddress.Clear();
-
     mLocalOmrPrefix.Clear();
     memset(mAdvertisedOmrPrefixes, 0, sizeof(mAdvertisedOmrPrefixes));
 
@@ -82,14 +80,12 @@ RoutingManager::RoutingManager(Instance &aInstance)
     memset(mDiscoveredPrefixes, 0, sizeof(mDiscoveredPrefixes));
 }
 
-otError RoutingManager::Init(uint32_t            aInfraIfIndex,
-                             bool                aInfraIfIsRunning,
-                             const Ip6::Address *aInfraIfLinkLocalAddress)
+Error RoutingManager::Init(uint32_t aInfraIfIndex, bool aInfraIfIsRunning)
 {
-    otError error;
+    Error error;
 
-    VerifyOrExit(!IsInitialized(), error = OT_ERROR_INVALID_STATE);
-    VerifyOrExit(aInfraIfIndex > 0, error = OT_ERROR_INVALID_ARGS);
+    VerifyOrExit(!IsInitialized(), error = kErrorInvalidState);
+    VerifyOrExit(aInfraIfIndex > 0, error = kErrorInvalidArgs);
 
     SuccessOrExit(error = LoadOrGenerateRandomOmrPrefix());
     SuccessOrExit(error = LoadOrGenerateRandomOnLinkPrefix());
@@ -97,21 +93,21 @@ otError RoutingManager::Init(uint32_t            aInfraIfIndex,
     mInfraIfIndex = aInfraIfIndex;
 
     // Initialize the infra interface status.
-    SuccessOrExit(error = HandleInfraIfStateChanged(mInfraIfIndex, aInfraIfIsRunning, aInfraIfLinkLocalAddress));
+    SuccessOrExit(error = HandleInfraIfStateChanged(mInfraIfIndex, aInfraIfIsRunning));
 
 exit:
-    if (error != OT_ERROR_NONE)
+    if (error != kErrorNone)
     {
         mInfraIfIndex = 0;
     }
     return error;
 }
 
-otError RoutingManager::SetEnabled(bool aEnabled)
+Error RoutingManager::SetEnabled(bool aEnabled)
 {
-    otError error = OT_ERROR_NONE;
+    Error error = kErrorNone;
 
-    VerifyOrExit(IsInitialized(), error = OT_ERROR_INVALID_STATE);
+    VerifyOrExit(IsInitialized(), error = kErrorInvalidState);
 
     VerifyOrExit(aEnabled != mIsEnabled);
 
@@ -122,18 +118,18 @@ exit:
     return error;
 }
 
-otError RoutingManager::LoadOrGenerateRandomOmrPrefix(void)
+Error RoutingManager::LoadOrGenerateRandomOmrPrefix(void)
 {
-    otError error = OT_ERROR_NONE;
+    Error error = kErrorNone;
 
-    if (Get<Settings>().ReadOmrPrefix(mLocalOmrPrefix) != OT_ERROR_NONE || !IsValidOmrPrefix(mLocalOmrPrefix))
+    if (Get<Settings>().ReadOmrPrefix(mLocalOmrPrefix) != kErrorNone || !IsValidOmrPrefix(mLocalOmrPrefix))
     {
         Ip6::NetworkPrefix randomOmrPrefix;
 
         otLogNoteBr("no valid OMR prefix found in settings, generating new one");
 
         error = randomOmrPrefix.GenerateRandomUla();
-        if (error != OT_ERROR_NONE)
+        if (error != kErrorNone)
         {
             otLogCritBr("failed to generate random OMR prefix");
             ExitNow();
@@ -147,19 +143,18 @@ exit:
     return error;
 }
 
-otError RoutingManager::LoadOrGenerateRandomOnLinkPrefix(void)
+Error RoutingManager::LoadOrGenerateRandomOnLinkPrefix(void)
 {
-    otError error = OT_ERROR_NONE;
+    Error error = kErrorNone;
 
-    if (Get<Settings>().ReadOnLinkPrefix(mLocalOnLinkPrefix) != OT_ERROR_NONE ||
-        !IsValidOnLinkPrefix(mLocalOnLinkPrefix))
+    if (Get<Settings>().ReadOnLinkPrefix(mLocalOnLinkPrefix) != kErrorNone || !IsValidOnLinkPrefix(mLocalOnLinkPrefix))
     {
         Ip6::NetworkPrefix randomOnLinkPrefix;
 
         otLogNoteBr("no valid on-link prefix found in settings, generating new one");
 
         error = randomOnLinkPrefix.GenerateRandomUla();
-        if (error != OT_ERROR_NONE)
+        if (error != kErrorNone)
         {
             otLogCritBr("failed to generate random on-link prefix");
             ExitNow();
@@ -178,7 +173,7 @@ exit:
 
 void RoutingManager::EvaluateState(void)
 {
-    if (mIsEnabled && Get<Mle::MleRouter>().IsAttached() && mInfraIfIsRunning && mInfraIfLinkLocalAddress.IsLinkLocal())
+    if (mIsEnabled && Get<Mle::MleRouter>().IsAttached() && mInfraIfIsRunning)
     {
         Start();
     }
@@ -195,7 +190,7 @@ void RoutingManager::Start(void)
         otLogInfoBr("Border Routing manager started");
 
         mIsRunning = true;
-        StartRouterSolicitation();
+        StartRouterSolicitationDelay();
     }
 }
 
@@ -228,6 +223,8 @@ void RoutingManager::Stop(void)
     mRouterSolicitTimer.Stop();
     mRouterSolicitCount = 0;
 
+    mRoutingPolicyTimer.Stop();
+
     otLogInfoBr("Border Routing manager stopped");
 
     mIsRunning = false;
@@ -241,19 +238,12 @@ void RoutingManager::RecvIcmp6Message(uint32_t            aInfraIfIndex,
                                       const uint8_t *     aBuffer,
                                       uint16_t            aBufferLength)
 {
-    otError                  error = OT_ERROR_NONE;
+    Error                    error = kErrorNone;
     const Ip6::Icmp::Header *icmp6Header;
-    const Ip6::Address *     infraLinkLocalAddr;
 
-    VerifyOrExit(IsInitialized() && mIsRunning, error = OT_ERROR_DROP);
-
-    VerifyOrExit(aInfraIfIndex == mInfraIfIndex, error = OT_ERROR_DROP);
-    infraLinkLocalAddr = static_cast<const Ip6::Address *>(&mInfraIfLinkLocalAddress);
-
-    // Drop any ICMPv6 messages sent from myself.
-    VerifyOrExit(infraLinkLocalAddr != nullptr && aSrcAddress != *infraLinkLocalAddr, error = OT_ERROR_DROP);
-
-    VerifyOrExit(aBuffer != nullptr && aBufferLength >= sizeof(*icmp6Header), error = OT_ERROR_PARSE);
+    VerifyOrExit(IsInitialized() && mIsRunning, error = kErrorDrop);
+    VerifyOrExit(aInfraIfIndex == mInfraIfIndex, error = kErrorDrop);
+    VerifyOrExit(aBuffer != nullptr && aBufferLength >= sizeof(*icmp6Header), error = kErrorParse);
 
     icmp6Header = reinterpret_cast<const Ip6::Icmp::Header *>(aBuffer);
 
@@ -263,6 +253,8 @@ void RoutingManager::RecvIcmp6Message(uint32_t            aInfraIfIndex,
         HandleRouterAdvertisement(aSrcAddress, aBuffer, aBufferLength);
         break;
     case Ip6::Icmp::Header::kTypeRouterSolicit:
+        // Drop Router Solicitations initiated from infra interface.
+        VerifyOrExit(!otPlatInfraIfHasAddress(mInfraIfIndex, &aSrcAddress), error = kErrorDrop);
         HandleRouterSolicit(aSrcAddress, aBuffer, aBufferLength);
         break;
     default:
@@ -270,35 +262,24 @@ void RoutingManager::RecvIcmp6Message(uint32_t            aInfraIfIndex,
     }
 
 exit:
-    if (error != OT_ERROR_NONE)
+    if (error != kErrorNone)
     {
-        otLogDebgBr("drop ICMPv6 message: %s", otThreadErrorToString(error));
+        otLogDebgBr("drop ICMPv6 message: %s", ErrorToString(error));
     }
 }
 
-otError RoutingManager::HandleInfraIfStateChanged(uint32_t            aInfraIfIndex,
-                                                  bool                aIsRunning,
-                                                  const Ip6::Address *aLinkLocalAddress)
+Error RoutingManager::HandleInfraIfStateChanged(uint32_t aInfraIfIndex, bool aIsRunning)
 {
-    otError error = OT_ERROR_NONE;
+    Error error = kErrorNone;
 
-    VerifyOrExit(IsInitialized(), error = OT_ERROR_INVALID_STATE);
-    VerifyOrExit(aInfraIfIndex == mInfraIfIndex, error = OT_ERROR_INVALID_ARGS);
-    VerifyOrExit(aLinkLocalAddress == nullptr || aLinkLocalAddress->IsLinkLocal(), error = OT_ERROR_INVALID_ARGS);
+    VerifyOrExit(IsInitialized(), error = kErrorInvalidState);
+    VerifyOrExit(aInfraIfIndex == mInfraIfIndex, error = kErrorInvalidArgs);
+    VerifyOrExit(aIsRunning != mInfraIfIsRunning);
 
-    otLogInfoBr("infra interface state changed: %s, link-local-addr=%s", aIsRunning ? "RUNNING" : "NOT RUNNING",
-                (aLinkLocalAddress != nullptr) ? aLinkLocalAddress->ToString().AsCString() : "(null)");
+    otLogInfoBr("infra interface (%u) state changed: %sRUNNING -> %sRUNNING", aInfraIfIndex,
+                (mInfraIfIsRunning ? "" : "NOT "), (aIsRunning ? "" : "NOT "));
 
     mInfraIfIsRunning = aIsRunning;
-    if (aLinkLocalAddress == nullptr)
-    {
-        mInfraIfLinkLocalAddress.Clear();
-    }
-    else
-    {
-        mInfraIfLinkLocalAddress = *aLinkLocalAddress;
-    }
-
     EvaluateState();
 
 exit:
@@ -314,9 +295,9 @@ void RoutingManager::HandleNotifierEvents(Events aEvents)
         EvaluateState();
     }
 
-    if (aEvents.Contains(kEventThreadNetdataChanged))
+    if (mIsRunning && aEvents.Contains(kEventThreadNetdataChanged))
     {
-        EvaluateRoutingPolicy();
+        StartRoutingPolicyEvaluationDelay();
     }
 
 exit:
@@ -333,11 +314,11 @@ uint8_t RoutingManager::EvaluateOmrPrefix(Ip6::Prefix *aNewOmrPrefixes, uint8_t 
 
     OT_ASSERT(mIsRunning);
 
-    while (Get<NetworkData::Leader>().GetNextOnMeshPrefix(iterator, onMeshPrefixConfig) == OT_ERROR_NONE)
+    while (Get<NetworkData::Leader>().GetNextOnMeshPrefix(iterator, onMeshPrefixConfig) == kErrorNone)
     {
         uint8_t newPrefixIndex;
 
-        if (!IsValidOmrPrefix(onMeshPrefixConfig.GetPrefix()) || !onMeshPrefixConfig.mSlaac || onMeshPrefixConfig.mDp)
+        if (!IsValidOmrPrefix(onMeshPrefixConfig))
         {
             continue;
         }
@@ -362,7 +343,7 @@ uint8_t RoutingManager::EvaluateOmrPrefix(Ip6::Prefix *aNewOmrPrefixes, uint8_t 
         }
 
         aNewOmrPrefixes[newOmrPrefixNum] = onMeshPrefixConfig.GetPrefix();
-        if (smallestOmrPrefix == nullptr || IsPrefixSmallerThan(onMeshPrefixConfig.GetPrefix(), *smallestOmrPrefix))
+        if (smallestOmrPrefix == nullptr || (onMeshPrefixConfig.GetPrefix() < *smallestOmrPrefix))
         {
             smallestOmrPrefix = &aNewOmrPrefixes[newOmrPrefixNum];
         }
@@ -377,7 +358,7 @@ uint8_t RoutingManager::EvaluateOmrPrefix(Ip6::Prefix *aNewOmrPrefixes, uint8_t 
     if (newOmrPrefixNum == 0)
     {
         otLogInfoBr("EvaluateOmrPrefix: no valid OMR prefixes found in Thread network");
-        if (PublishLocalOmrPrefix() == OT_ERROR_NONE)
+        if (PublishLocalOmrPrefix() == kErrorNone)
         {
             aNewOmrPrefixes[newOmrPrefixNum++] = mLocalOmrPrefix;
         }
@@ -397,9 +378,9 @@ uint8_t RoutingManager::EvaluateOmrPrefix(Ip6::Prefix *aNewOmrPrefixes, uint8_t 
     return newOmrPrefixNum;
 }
 
-otError RoutingManager::PublishLocalOmrPrefix(void)
+Error RoutingManager::PublishLocalOmrPrefix(void)
 {
-    otError                         error = OT_ERROR_NONE;
+    Error                           error = kErrorNone;
     NetworkData::OnMeshPrefixConfig omrPrefixConfig;
 
     OT_ASSERT(mIsRunning);
@@ -414,10 +395,10 @@ otError RoutingManager::PublishLocalOmrPrefix(void)
     omrPrefixConfig.mPreference   = OT_ROUTE_PREFERENCE_MED;
 
     error = Get<NetworkData::Local>().AddOnMeshPrefix(omrPrefixConfig);
-    if (error != OT_ERROR_NONE)
+    if (error != kErrorNone)
     {
         otLogWarnBr("failed to publish local OMR prefix %s in Thread network: %s",
-                    mLocalOmrPrefix.ToString().AsCString(), otThreadErrorToString(error));
+                    mLocalOmrPrefix.ToString().AsCString(), ErrorToString(error));
     }
     else
     {
@@ -430,7 +411,7 @@ otError RoutingManager::PublishLocalOmrPrefix(void)
 
 void RoutingManager::UnpublishLocalOmrPrefix(void)
 {
-    otError error = OT_ERROR_NONE;
+    Error error = kErrorNone;
 
     VerifyOrExit(mIsRunning);
 
@@ -440,16 +421,16 @@ void RoutingManager::UnpublishLocalOmrPrefix(void)
     otLogInfoBr("unpublished local OMR prefix %s from Thread network", mLocalOmrPrefix.ToString().AsCString());
 
 exit:
-    if (error != OT_ERROR_NONE)
+    if (error != kErrorNone)
     {
         otLogWarnBr("failed to unpublish local OMR prefix %s from Thread network: %s",
-                    mLocalOmrPrefix.ToString().AsCString(), otThreadErrorToString(error));
+                    mLocalOmrPrefix.ToString().AsCString(), ErrorToString(error));
     }
 }
 
-otError RoutingManager::AddExternalRoute(const Ip6::Prefix &aPrefix, otRoutePreference aRoutePreference)
+Error RoutingManager::AddExternalRoute(const Ip6::Prefix &aPrefix, otRoutePreference aRoutePreference)
 {
-    otError                          error;
+    Error                            error;
     NetworkData::ExternalRouteConfig routeConfig;
 
     OT_ASSERT(mIsRunning);
@@ -460,10 +441,9 @@ otError RoutingManager::AddExternalRoute(const Ip6::Prefix &aPrefix, otRoutePref
     routeConfig.mPreference = aRoutePreference;
 
     error = Get<NetworkData::Local>().AddHasRoutePrefix(routeConfig);
-    if (error != OT_ERROR_NONE)
+    if (error != kErrorNone)
     {
-        otLogWarnBr("failed to add external route %s: %s", aPrefix.ToString().AsCString(),
-                    otThreadErrorToString(error));
+        otLogWarnBr("failed to add external route %s: %s", aPrefix.ToString().AsCString(), ErrorToString(error));
     }
     else
     {
@@ -476,7 +456,7 @@ otError RoutingManager::AddExternalRoute(const Ip6::Prefix &aPrefix, otRoutePref
 
 void RoutingManager::RemoveExternalRoute(const Ip6::Prefix &aPrefix)
 {
-    otError error = OT_ERROR_NONE;
+    Error error = kErrorNone;
 
     VerifyOrExit(mIsRunning);
 
@@ -486,10 +466,9 @@ void RoutingManager::RemoveExternalRoute(const Ip6::Prefix &aPrefix)
     otLogInfoBr("removed external route %s", aPrefix.ToString().AsCString());
 
 exit:
-    if (error != OT_ERROR_NONE)
+    if (error != kErrorNone)
     {
-        otLogWarnBr("failed to remove external route %s: %s", aPrefix.ToString().AsCString(),
-                    otThreadErrorToString(error));
+        otLogWarnBr("failed to remove external route %s: %s", aPrefix.ToString().AsCString(), ErrorToString(error));
     }
 }
 
@@ -526,7 +505,7 @@ const Ip6::Prefix *RoutingManager::EvaluateOnLinkPrefix(void)
             continue;
         }
 
-        if (smallestOnLinkPrefix == nullptr || IsPrefixSmallerThan(prefix.mPrefix, *smallestOnLinkPrefix))
+        if (smallestOnLinkPrefix == nullptr || (prefix.mPrefix < *smallestOnLinkPrefix))
         {
             smallestOnLinkPrefix = &prefix.mPrefix;
         }
@@ -539,7 +518,7 @@ const Ip6::Prefix *RoutingManager::EvaluateOnLinkPrefix(void)
         {
             newOnLinkPrefix = mAdvertisedOnLinkPrefix;
         }
-        else if (AddExternalRoute(mLocalOnLinkPrefix, OT_ROUTE_PREFERENCE_MED) == OT_ERROR_NONE)
+        else if (AddExternalRoute(mLocalOnLinkPrefix, OT_ROUTE_PREFERENCE_MED) == kErrorNone)
         {
             newOnLinkPrefix = &mLocalOnLinkPrefix;
         }
@@ -550,7 +529,7 @@ const Ip6::Prefix *RoutingManager::EvaluateOnLinkPrefix(void)
     // the same smallest on-link prefix and the application-specific prefix is not used.
     else if (mAdvertisedOnLinkPrefix != nullptr)
     {
-        if (IsPrefixSmallerThan(*mAdvertisedOnLinkPrefix, *smallestOnLinkPrefix))
+        if (*mAdvertisedOnLinkPrefix < *smallestOnLinkPrefix)
         {
             newOnLinkPrefix = mAdvertisedOnLinkPrefix;
         }
@@ -579,11 +558,11 @@ exit:
 // OMR prefix in the Thread network.
 void RoutingManager::EvaluateRoutingPolicy(void)
 {
+    OT_ASSERT(mIsRunning);
+
     const Ip6::Prefix *newOnLinkPrefix = nullptr;
     Ip6::Prefix        newOmrPrefixes[kMaxOmrPrefixNum];
     uint8_t            newOmrPrefixNum = 0;
-
-    VerifyOrExit(mIsRunning);
 
     otLogInfoBr("evaluating routing policy");
 
@@ -621,15 +600,27 @@ void RoutingManager::EvaluateRoutingPolicy(void)
     static_assert(sizeof(mAdvertisedOmrPrefixes) == sizeof(newOmrPrefixes), "invalid new OMR prefix array size");
     memcpy(mAdvertisedOmrPrefixes, newOmrPrefixes, sizeof(newOmrPrefixes[0]) * newOmrPrefixNum);
     mAdvertisedOmrPrefixNum = newOmrPrefixNum;
+}
 
-exit:
-    return;
+void RoutingManager::StartRoutingPolicyEvaluationDelay(void)
+{
+    OT_ASSERT(mIsRunning);
+
+    uint32_t randomDelay;
+
+    static_assert(kMaxRoutingPolicyDelay > 0, "invalid maximum routing policy evaluation delay");
+    randomDelay = Random::NonCrypto::GetUint32InRange(0, Time::SecToMsec(kMaxRoutingPolicyDelay));
+
+    otLogInfoBr("start evaluating routing policy, scheduled in %u milliseconds", randomDelay);
+    mRoutingPolicyTimer.Start(randomDelay);
 }
 
 // starts sending Router Solicitations in random delay
 // between 0 and kMaxRtrSolicitationDelay.
-void RoutingManager::StartRouterSolicitation(void)
+void RoutingManager::StartRouterSolicitationDelay(void)
 {
+    OT_ASSERT(mAdvertisedOnLinkPrefix == nullptr);
+
     uint32_t randomDelay;
 
     mRouterSolicitCount = 0;
@@ -641,7 +632,7 @@ void RoutingManager::StartRouterSolicitation(void)
     mRouterSolicitTimer.Start(randomDelay);
 }
 
-otError RoutingManager::SendRouterSolicitation(void)
+Error RoutingManager::SendRouterSolicitation(void)
 {
     Ip6::Address                    destAddress;
     RouterAdv::RouterSolicitMessage routerSolicit;
@@ -761,7 +752,7 @@ void RoutingManager::SendRouterAdvertisement(const Ip6::Prefix *aNewOmrPrefixes,
     // Send the message only when there are options.
     if (bufferLength > sizeof(routerAdv))
     {
-        otError      error;
+        Error        error;
         Ip6::Address destAddress;
 
         ++mRouterAdvertisementCount;
@@ -769,29 +760,20 @@ void RoutingManager::SendRouterAdvertisement(const Ip6::Prefix *aNewOmrPrefixes,
         destAddress.SetToLinkLocalAllNodesMulticast();
         error = otPlatInfraIfSendIcmp6Nd(mInfraIfIndex, &destAddress, buffer, bufferLength);
 
-        if (error == OT_ERROR_NONE)
+        if (error == kErrorNone)
         {
             otLogInfoBr("sent Router Advertisement on interface %u", mInfraIfIndex);
         }
         else
         {
-            otLogWarnBr("failed to send Router Advertisement on interface %u: %s", mInfraIfIndex,
-                        otThreadErrorToString(error));
+            otLogWarnBr("failed to send Router Advertisement on interface %u: %s", mInfraIfIndex, ErrorToString(error));
         }
     }
 }
 
-bool RoutingManager::IsPrefixSmallerThan(const Ip6::Prefix &aFirstPrefix, const Ip6::Prefix &aSecondPrefix)
+bool RoutingManager::IsValidOmrPrefix(const NetworkData::OnMeshPrefixConfig &aOnMeshPrefixConfig)
 {
-    uint8_t matchedLength;
-
-    OT_ASSERT(aFirstPrefix.GetLength() == aSecondPrefix.GetLength());
-
-    matchedLength =
-        Ip6::Prefix::MatchLength(aFirstPrefix.GetBytes(), aSecondPrefix.GetBytes(), aFirstPrefix.GetBytesSize());
-
-    return matchedLength < aFirstPrefix.GetLength() &&
-           aFirstPrefix.GetBytes()[matchedLength / CHAR_BIT] < aSecondPrefix.GetBytes()[matchedLength / CHAR_BIT];
+    return IsValidOmrPrefix(aOnMeshPrefixConfig.GetPrefix()) && aOnMeshPrefixConfig.mSlaac && !aOnMeshPrefixConfig.mDp;
 }
 
 bool RoutingManager::IsValidOmrPrefix(const Ip6::Prefix &aOmrPrefix)
@@ -799,6 +781,12 @@ bool RoutingManager::IsValidOmrPrefix(const Ip6::Prefix &aOmrPrefix)
     // Accept ULA prefix with length of 64 bits and GUA prefix.
     return (aOmrPrefix.mLength == kOmrPrefixLength && aOmrPrefix.mPrefix.mFields.m8[0] == 0xfd) ||
            (aOmrPrefix.mLength >= 3 && (aOmrPrefix.GetBytes()[0] & 0xE0) == 0x20);
+}
+
+bool RoutingManager::IsValidOnLinkPrefix(const RouterAdv::PrefixInfoOption &aPio, bool aManagedAddrConfig)
+{
+    return IsValidOnLinkPrefix(aPio.GetPrefix()) && aPio.GetOnLink() &&
+           (aPio.GetAutoAddrConfig() || aManagedAddrConfig);
 }
 
 bool RoutingManager::IsValidOnLinkPrefix(const Ip6::Prefix &aOnLinkPrefix)
@@ -832,19 +820,18 @@ void RoutingManager::HandleRouterSolicitTimer(void)
     if (mRouterSolicitCount < kMaxRtrSolicitations)
     {
         uint32_t nextSolicitationDelay;
-        otError  error;
+        Error    error;
 
         error = SendRouterSolicitation();
         ++mRouterSolicitCount;
 
-        if (error == OT_ERROR_NONE)
+        if (error == kErrorNone)
         {
             otLogDebgBr("successfully sent %uth Router Solicitation", mRouterSolicitCount);
         }
         else
         {
-            otLogCritBr("failed to send %uth Router Solicitation: %s", mRouterSolicitCount,
-                        otThreadErrorToString(error));
+            otLogCritBr("failed to send %uth Router Solicitation: %s", mRouterSolicitCount, ErrorToString(error));
         }
 
         nextSolicitationDelay =
@@ -868,6 +855,11 @@ void RoutingManager::HandleDiscoveredPrefixInvalidTimer(Timer &aTimer)
 void RoutingManager::HandleDiscoveredPrefixInvalidTimer(void)
 {
     InvalidateDiscoveredPrefixes();
+}
+
+void RoutingManager::HandleRoutingPolicyTimer(Timer &aTimer)
+{
+    aTimer.Get<RoutingManager>().EvaluateRoutingPolicy();
 }
 
 void RoutingManager::HandleRouterSolicit(const Ip6::Address &aSrcAddress,
@@ -914,6 +906,7 @@ void RoutingManager::HandleRouterAdvertisement(const Ip6::Address &aSrcAddress,
                                                const uint8_t *     aBuffer,
                                                uint16_t            aBufferLength)
 {
+    OT_ASSERT(mIsRunning);
     OT_UNUSED_VARIABLE(aSrcAddress);
 
     using RouterAdv::Option;
@@ -921,18 +914,20 @@ void RoutingManager::HandleRouterAdvertisement(const Ip6::Address &aSrcAddress,
     using RouterAdv::RouteInfoOption;
     using RouterAdv::RouterAdvMessage;
 
-    bool           needReevaluate = false;
-    const uint8_t *optionsBegin;
-    uint16_t       optionsLength;
-    const Option * option;
+    bool                    needReevaluate = false;
+    const uint8_t *         optionsBegin;
+    uint16_t                optionsLength;
+    const Option *          option;
+    const RouterAdvMessage *routerAdvMessage;
 
     VerifyOrExit(aBufferLength >= sizeof(RouterAdvMessage));
 
     otLogInfoBr("received Router Advertisement from %s on interface %u", aSrcAddress.ToString().AsCString(),
                 mInfraIfIndex);
 
-    optionsBegin  = aBuffer + sizeof(RouterAdvMessage);
-    optionsLength = aBufferLength - sizeof(RouterAdvMessage);
+    routerAdvMessage = reinterpret_cast<const RouterAdvMessage *>(aBuffer);
+    optionsBegin     = aBuffer + sizeof(RouterAdvMessage);
+    optionsLength    = aBufferLength - sizeof(RouterAdvMessage);
 
     option = nullptr;
     while ((option = Option::GetNextOption(option, optionsBegin, optionsLength)) != nullptr)
@@ -945,7 +940,7 @@ void RoutingManager::HandleRouterAdvertisement(const Ip6::Address &aSrcAddress,
 
             if (pio->IsValid())
             {
-                needReevaluate |= UpdateDiscoveredPrefixes(*pio);
+                needReevaluate |= UpdateDiscoveredPrefixes(*pio, routerAdvMessage->GetManagedAddrConfig());
             }
         }
         break;
@@ -968,23 +963,25 @@ void RoutingManager::HandleRouterAdvertisement(const Ip6::Address &aSrcAddress,
 
     if (needReevaluate)
     {
-        EvaluateRoutingPolicy();
+        StartRoutingPolicyEvaluationDelay();
     }
 
 exit:
     return;
 }
 
-bool RoutingManager::UpdateDiscoveredPrefixes(const RouterAdv::PrefixInfoOption &aPio)
+bool RoutingManager::UpdateDiscoveredPrefixes(const RouterAdv::PrefixInfoOption &aPio, bool aManagedAddrConfig)
 {
     Ip6::Prefix prefix         = aPio.GetPrefix();
     bool        needReevaluate = false;
 
-    if (!IsValidOnLinkPrefix(prefix))
+    if (!IsValidOnLinkPrefix(aPio, aManagedAddrConfig))
     {
-        otLogInfoBr("ignore invalid prefix in PIO: %s", prefix.ToString().AsCString());
+        otLogInfoBr("ignore invalid on-link prefix in PIO: %s", prefix.ToString().AsCString());
         ExitNow();
     }
+
+    VerifyOrExit(mAdvertisedOnLinkPrefix == nullptr || prefix != *mAdvertisedOnLinkPrefix);
 
     otLogInfoBr("discovered on-link prefix (%s, %u seconds) from interface %u", prefix.ToString().AsCString(),
                 aPio.GetValidLifetime(), mInfraIfIndex);
@@ -1009,12 +1006,21 @@ bool RoutingManager::UpdateDiscoveredPrefixes(const RouterAdv::RouteInfoOption &
 
     if (!IsValidOmrPrefix(prefix))
     {
-        otLogInfoBr("ignore invalid prefix in RIO: %s", prefix.ToString().AsCString());
+        otLogInfoBr("ignore invalid OMR prefix in RIO: %s", prefix.ToString().AsCString());
         ExitNow();
     }
 
-    // Ignore the OMR prefix that matches what we have advertised.
+    // Ignore OMR prefixes advertised by ourselves or in current Thread Network Data.
+    // The `mAdvertisedOmrPrefixes` and the OMR prefix set in Network Data should eventually
+    // be equal, but there is time that they are not synchronized immediately:
+    // 1. Network Data could contain more OMR prefixes than `mAdvertisedOmrPrefixes` because
+    //    we added random delay before Evaluating routing policy when Network Data is changed.
+    // 2. `mAdvertisedOmrPrefixes` could contain more OMR prefixes than Network Data because
+    //    it takes time to sync a new OMR prefix into Network Data (multicast loopback RA
+    //    messages are usually faster than Thread Network Data propagation).
+    // They are the reasons why we need both the checks.
     VerifyOrExit(!ContainsPrefix(prefix, mAdvertisedOmrPrefixes, mAdvertisedOmrPrefixNum));
+    VerifyOrExit(!NetworkDataContainsOmrPrefix(prefix));
 
     otLogInfoBr("discovered OMR prefix (%s, %u seconds) from interface %u", prefix.ToString().AsCString(),
                 aRio.GetRouteLifetime(), mInfraIfIndex);
@@ -1069,9 +1075,12 @@ bool RoutingManager::InvalidateDiscoveredPrefixes(const Ip6::Prefix *aPrefix, bo
     {
         mDiscoveredPrefixInvalidTimer.Stop();
 
-        // There are no valid on-link prefixes on infra link now, start Router Solicitation
-        // To find out more on-link prefixes or timeout to advertise my local on-link prefix.
-        StartRouterSolicitation();
+        if (mAdvertisedOnLinkPrefix == nullptr)
+        {
+            // There are no valid on-link prefixes on infra link now, start Router Solicitation
+            // To find out more on-link prefixes or timeout to advertise my local on-link prefix.
+            StartRouterSolicitationDelay();
+        }
     }
     else
     {
@@ -1129,12 +1138,18 @@ bool RoutingManager::AddDiscoveredPrefix(const Ip6::Prefix &aPrefix,
 
         SuccessOrExit(AddExternalRoute(aPrefix, aRoutePreference));
 
-        if (aIsOnLinkPrefix)
+        if (aIsOnLinkPrefix && mRouterSolicitCount > 0)
         {
             // Stop Router Solicitation if we discovered a valid on-link prefix.
             // Otherwise, we wait till the Router Solicitation process times out.
             // So the maximum delay before the Border Router starts advertising
-            // its own on-link prefix is 9 (4 + 4 + 1) seconds.
+            // its own on-link prefix is 10 seconds = RS_DELAY (1) + RS_INTERNAL (4)
+            // + RS_INTERVAL (4) + RS_DELAY (1).
+            //
+            // Always send at least one RS message so that all BRs will respond.
+            // Consider that there are multiple BRs on the infra link, we may not learn
+            // RIOs of other BRs if the router discovery process is stopped immediately
+            // before sending any RS messages because of receiving an unsolicited RA.
             mRouterSolicitTimer.Stop();
         }
 
@@ -1153,6 +1168,24 @@ bool RoutingManager::AddDiscoveredPrefix(const Ip6::Prefix &aPrefix,
 
 exit:
     return added;
+}
+
+bool RoutingManager::NetworkDataContainsOmrPrefix(const Ip6::Prefix &aPrefix) const
+{
+    NetworkData::Iterator           iterator = NetworkData::kIteratorInit;
+    NetworkData::OnMeshPrefixConfig onMeshPrefixConfig;
+    bool                            contain = false;
+
+    while (Get<NetworkData::Leader>().GetNextOnMeshPrefix(iterator, onMeshPrefixConfig) == OT_ERROR_NONE)
+    {
+        if (IsValidOmrPrefix(onMeshPrefixConfig) && onMeshPrefixConfig.GetPrefix() == aPrefix)
+        {
+            contain = true;
+            break;
+        }
+    }
+
+    return contain;
 }
 
 } // namespace BorderRouter

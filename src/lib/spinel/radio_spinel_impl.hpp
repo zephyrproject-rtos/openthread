@@ -52,6 +52,7 @@
 #include "meshcop/dataset.hpp"
 #include "meshcop/meshcop_tlvs.hpp"
 #include "radio/radio.hpp"
+#include "thread/key_manager.hpp"
 
 #ifndef MS_PER_S
 #define MS_PER_S 1000
@@ -248,7 +249,9 @@ void RadioSpinel<InterfaceType, ProcessContextType>::Init(bool aResetRadio,
 
         if (aRestoreDatasetFromNcp)
         {
+#if !OPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE
             exitCode = (RestoreDatasetFromNcp() == OT_ERROR_NONE) ? OT_EXIT_SUCCESS : OT_EXIT_FAILURE;
+#endif
         }
 
         DieNow(exitCode);
@@ -412,6 +415,7 @@ exit:
     return error;
 }
 
+#if !OPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE
 template <typename InterfaceType, typename ProcessContextType>
 otError RadioSpinel<InterfaceType, ProcessContextType>::RestoreDatasetFromNcp(void)
 {
@@ -429,6 +433,7 @@ exit:
     Instance::Get().template Get<SettingsDriver>().Deinit();
     return error;
 }
+#endif
 
 template <typename InterfaceType, typename ProcessContextType>
 void RadioSpinel<InterfaceType, ProcessContextType>::Deinit(void)
@@ -585,6 +590,7 @@ exit:
     LogIfFail("Error processing response", error);
 }
 
+#if !OPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE
 template <typename InterfaceType, typename ProcessContextType>
 otError RadioSpinel<InterfaceType, ProcessContextType>::ThreadDatasetHandler(const uint8_t *aBuffer, uint16_t aLength)
 {
@@ -694,8 +700,17 @@ otError RadioSpinel<InterfaceType, ProcessContextType>::ThreadDatasetHandler(con
 
         case SPINEL_PROP_DATASET_SECURITY_POLICY:
         {
+            uint8_t flags[2];
+            uint8_t flagsLength = 1;
+
             SuccessOrExit(error = decoder.ReadUint16(opDataset.mSecurityPolicy.mRotationTime));
-            SuccessOrExit(error = decoder.ReadUint8(opDataset.mSecurityPolicy.mFlags));
+            SuccessOrExit(error = decoder.ReadUint8(flags[0]));
+            if (otThreadGetVersion() >= OT_THREAD_VERSION_1_2 && decoder.GetRemainingLengthInStruct() > 0)
+            {
+                SuccessOrExit(error = decoder.ReadUint8(flags[1]));
+                ++flagsLength;
+            }
+            static_cast<SecurityPolicy &>(opDataset.mSecurityPolicy).SetFlags(flags, flagsLength);
             opDataset.mComponents.mIsSecurityPolicyPresent = true;
             break;
         }
@@ -738,6 +753,7 @@ otError RadioSpinel<InterfaceType, ProcessContextType>::ThreadDatasetHandler(con
 exit:
     return error;
 }
+#endif // #if !OPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE
 
 template <typename InterfaceType, typename ProcessContextType>
 void RadioSpinel<InterfaceType, ProcessContextType>::HandleWaitingResponse(uint32_t          aCommand,
@@ -2120,13 +2136,14 @@ void RadioSpinel<InterfaceType, ProcessContextType>::CalcRcpTimeOffset(void)
     localTxTimestamp = otPlatTimeGet();
 
     // Dummy timestamp payload to make request length same as response
-    error = GetWithParam(SPINEL_PROP_RCP_TIMESTAMP, buffer, packed, SPINEL_DATATYPE_UINT64_S, &remoteTimestamp);
+    error = GetWithParam(SPINEL_PROP_RCP_TIMESTAMP, buffer, static_cast<spinel_size_t>(packed),
+                         SPINEL_DATATYPE_UINT64_S, &remoteTimestamp);
 
     localRxTimestamp = otPlatTimeGet();
 
     VerifyOrExit(error == OT_ERROR_NONE, mRadioTimeRecalcStart = localRxTimestamp);
 
-    mRadioTimeOffset      = remoteTimestamp - ((localRxTimestamp / 2) + (localTxTimestamp / 2));
+    mRadioTimeOffset      = static_cast<int64_t>(remoteTimestamp - ((localRxTimestamp / 2) + (localTxTimestamp / 2)));
     mIsTimeSynced         = true;
     mRadioTimeRecalcStart = localRxTimestamp + RCP_TIME_OFFSET_CHECK_INTERVAL;
 
@@ -2150,6 +2167,8 @@ uint32_t RadioSpinel<InterfaceType, ProcessContextType>::GetBusSpeed(void) const
 template <typename InterfaceType, typename ProcessContextType>
 void RadioSpinel<InterfaceType, ProcessContextType>::HandleRcpUnexpectedReset(spinel_status_t aStatus)
 {
+    OT_UNUSED_VARIABLE(aStatus);
+
     otLogCritPlat("Unexpected RCP reset: %s", spinel_status_to_cstr(aStatus));
 
 #if OPENTHREAD_SPINEL_CONFIG_RCP_RESTORATION_MAX_COUNT > 0
@@ -2266,8 +2285,12 @@ void RadioSpinel<InterfaceType, ProcessContextType>::RestoreProperties(void)
                          sizeof(otMacKey)));
     }
 
-    SuccessOrDie(Instance::Get().template Get<Settings>().ReadNetworkInfo(networkInfo));
-    SuccessOrDie(Set(SPINEL_PROP_RCP_MAC_FRAME_COUNTER, SPINEL_DATATYPE_UINT32_S, networkInfo.GetMacFrameCounter()));
+    if (mInstance != nullptr)
+    {
+        SuccessOrDie(static_cast<Instance *>(mInstance)->template Get<Settings>().ReadNetworkInfo(networkInfo));
+        SuccessOrDie(
+            Set(SPINEL_PROP_RCP_MAC_FRAME_COUNTER, SPINEL_DATATYPE_UINT32_S, networkInfo.GetMacFrameCounter()));
+    }
 
     for (int i = 0; i < mSrcMatchShortEntryCount; ++i)
     {

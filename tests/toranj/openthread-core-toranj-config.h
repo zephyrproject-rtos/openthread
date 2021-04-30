@@ -313,12 +313,12 @@
 #define OPENTHREAD_CONFIG_LOG_PLATFORM 1
 
 /**
- * @def OPENTHREAD_CONFIG_NCP_UART_ENABLE
+ * @def OPENTHREAD_CONFIG_NCP_HDLC_ENABLE
  *
- * Define to 1 to enable NCP UART support.
+ * Define to 1 to enable NCP HDLC support.
  *
  */
-#define OPENTHREAD_CONFIG_NCP_UART_ENABLE 1
+#define OPENTHREAD_CONFIG_NCP_HDLC_ENABLE 1
 
 /**
  * @def OPENTHREAD_CONFIG_NCP_TX_BUFFER_SIZE
@@ -414,6 +414,14 @@
  *
  */
 #define OPENTHREAD_CONFIG_CHANNEL_MANAGER_THRESHOLD_TO_CHANGE_CHANNEL (0xffff * 10 / 100)
+
+/**
+ * @def OPENTHREAD_CONFIG_ANNOUNCE_SENDER_ENABLE
+ *
+ * Define as 1 to enable `AnnounceSender` which will periodically send MLE Announce message on all channels.
+ *
+ */
+#define OPENTHREAD_CONFIG_ANNOUNCE_SENDER_ENABLE 1
 
 /**
  * @def OPENTHREAD_CONFIG_CHILD_SUPERVISION_ENABLE

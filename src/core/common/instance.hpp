@@ -39,13 +39,13 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include <openthread/error.h>
 #include <openthread/heap.h>
 #include <openthread/platform/logging.h>
 #if OPENTHREAD_CONFIG_HEAP_EXTERNAL_ENABLE
 #include <openthread/platform/memory.h>
 #endif
 
+#include "common/error.hpp"
 #include "common/non_copyable.hpp"
 #include "common/random_manager.hpp"
 #include "common/tasklet.hpp"
@@ -64,20 +64,23 @@
 #include "common/settings.hpp"
 #include "crypto/mbedtls.hpp"
 #include "meshcop/border_agent.hpp"
+#if (OPENTHREAD_CONFIG_DATASET_UPDATER_ENABLE || OPENTHREAD_CONFIG_CHANNEL_MANAGER_ENABLE) && OPENTHREAD_FTD
+#include "meshcop/dataset_updater.hpp"
+#endif
 #include "net/ip6.hpp"
 #include "thread/announce_sender.hpp"
 #include "thread/link_quality.hpp"
 #include "thread/thread_netif.hpp"
 #include "thread/tmf.hpp"
 #include "utils/heap.hpp"
+#if OPENTHREAD_CONFIG_PING_SENDER_ENABLE
+#include "utils/ping_sender.hpp"
+#endif
 #if OPENTHREAD_CONFIG_CHANNEL_MANAGER_ENABLE && OPENTHREAD_FTD
 #include "utils/channel_manager.hpp"
 #endif
 #if OPENTHREAD_CONFIG_CHANNEL_MONITOR_ENABLE
 #include "utils/channel_monitor.hpp"
-#endif
-#if (OPENTHREAD_CONFIG_DATASET_UPDATER_ENABLE || OPENTHREAD_CONFIG_CHANNEL_MANAGER_ENABLE) && OPENTHREAD_FTD
-#include "utils/dataset_updater.hpp"
 #endif
 
 #if (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
@@ -238,11 +241,11 @@ public:
      *
      * Erase is successful/allowed only if the device is in `disabled` state/role.
      *
-     * @retval OT_ERROR_NONE           All persistent info/state was erased successfully.
-     * @retval OT_ERROR_INVALID_STATE  Device is not in `disabled` state/role.
+     * @retval kErrorNone          All persistent info/state was erased successfully.
+     * @retval kErrorInvalidState  Device is not in `disabled` state/role.
      *
      */
-    otError ErasePersistentInfo(void);
+    Error ErasePersistentInfo(void);
 
 #if OPENTHREAD_CONFIG_HEAP_EXTERNAL_ENABLE
     static void  HeapFree(void *aPointer) { otPlatFree(aPointer); }
@@ -278,6 +281,29 @@ public:
      *
      */
     Coap::CoapSecure &GetApplicationCoapSecure(void) { return mApplicationCoapSecure; }
+#endif
+
+#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
+    /**
+     * This method enables/disables the "DNS name compressions" mode.
+     *
+     * By default DNS name compression is enabled. When disabled, DNS names are appended as full and never compressed.
+     * This is applicable to OpenThread's DNS and SRP client/server modules.
+     *
+     * This is intended for testing only and available under a `REFERENCE_DEVICE` config.
+     *
+     * @param[in] aEnabled   TRUE to enable the "DNS name compression" mode, FALSE to disable.
+     *
+     */
+    static void SetDnsNameCompressionEnabled(bool aEnabled) { sDnsNameCompressionEnabled = aEnabled; }
+
+    /**
+     * This method indicates whether the "DNS name compression" mode is enabled or not.
+     *
+     * @returns TRUE if the "DNS name compressions" mode is enabled, FALSE otherwise.
+     *
+     */
+    static bool IsDnsNameCompressionEnabled(void) { return sDnsNameCompressionEnabled; }
 #endif
 
 #endif // OPENTHREAD_MTD || OPENTHREAD_FTD
@@ -350,6 +376,10 @@ private:
     Coap::CoapSecure mApplicationCoapSecure;
 #endif
 
+#if OPENTHREAD_CONFIG_PING_SENDER_ENABLE
+    Utils::PingSender mPingSender;
+#endif
+
 #if OPENTHREAD_CONFIG_CHANNEL_MONITOR_ENABLE
     Utils::ChannelMonitor mChannelMonitor;
 #endif
@@ -359,7 +389,7 @@ private:
 #endif
 
 #if (OPENTHREAD_CONFIG_DATASET_UPDATER_ENABLE || OPENTHREAD_CONFIG_CHANNEL_MANAGER_ENABLE) && OPENTHREAD_FTD
-    Utils::DatasetUpdater mDatasetUpdater;
+    MeshCoP::DatasetUpdater mDatasetUpdater;
 #endif
 
 #if OPENTHREAD_CONFIG_ANNOUNCE_SENDER_ENABLE
@@ -389,6 +419,10 @@ private:
     FactoryDiags::Diags mDiags;
 #endif
     bool mIsInitialized;
+
+#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE && (OPENTHREAD_FTD || OPENTHREAD_MTD)
+    static bool sDnsNameCompressionEnabled;
+#endif
 };
 
 // Specializations of the `Get<Type>()` method.
@@ -626,7 +660,7 @@ template <> inline Ip6::Mpl &Instance::Get(void)
     return mIp6.mMpl;
 }
 
-template <> inline Tmf::TmfAgent &Instance::Get(void)
+template <> inline Tmf::Agent &Instance::Get(void)
 {
     return mThreadNetif.mTmfAgent;
 }
@@ -683,6 +717,13 @@ template <> inline Srp::Client &Instance::Get(void)
 }
 #endif
 
+#if OPENTHREAD_CONFIG_SRP_CLIENT_BUFFERS_ENABLE
+template <> inline Utils::SrpClientBuffers &Instance::Get(void)
+{
+    return mThreadNetif.mSrpClientBuffers;
+}
+#endif
+
 #if OPENTHREAD_CONFIG_DNSSD_SERVER_ENABLE
 template <> inline Dns::ServiceDiscovery::Server &Instance::Get(void)
 {
@@ -708,6 +749,13 @@ template <> inline Dhcp6::Client &Instance::Get(void)
 template <> inline Dhcp6::Server &Instance::Get(void)
 {
     return mThreadNetif.mDhcp6Server;
+}
+#endif
+
+#if OPENTHREAD_CONFIG_NEIGHBOR_DISCOVERY_AGENT_ENABLE
+template <> inline NeighborDiscovery::Agent &Instance::Get(void)
+{
+    return mThreadNetif.mNeighborDiscoveryAgent;
 }
 #endif
 
@@ -742,6 +790,13 @@ template <> inline Utils::SupervisionListener &Instance::Get(void)
     return mThreadNetif.mSupervisionListener;
 }
 
+#if OPENTHREAD_CONFIG_PING_SENDER_ENABLE
+template <> inline Utils::PingSender &Instance::Get(void)
+{
+    return mPingSender;
+}
+#endif
+
 #if OPENTHREAD_CONFIG_CHANNEL_MONITOR_ENABLE
 template <> inline Utils::ChannelMonitor &Instance::Get(void)
 {
@@ -757,7 +812,7 @@ template <> inline Utils::ChannelManager &Instance::Get(void)
 #endif
 
 #if (OPENTHREAD_CONFIG_DATASET_UPDATER_ENABLE || OPENTHREAD_CONFIG_CHANNEL_MANAGER_ENABLE) && OPENTHREAD_FTD
-template <> inline Utils::DatasetUpdater &Instance::Get(void)
+template <> inline MeshCoP::DatasetUpdater &Instance::Get(void)
 {
     return mDatasetUpdater;
 }

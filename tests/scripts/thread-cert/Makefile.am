@@ -151,12 +151,14 @@ EXTRA_DIST                                                         = \
     simulator.py                                                     \
     sniffer.py                                                       \
     sniffer_transport.py                                             \
+    test_anycast.py                                                  \
     test_coap.py                                                     \
     test_coap_observe.py                                             \
     test_coaps.py                                                    \
     test_coap_block.py                                               \
     test_common.py                                                   \
     test_crypto.py                                                   \
+    test_dataset_updater.py                                          \
     test_diag.py                                                     \
     test_dnssd.py                                                    \
     test_ipv6.py                                                     \
@@ -167,6 +169,7 @@ EXTRA_DIST                                                         = \
     test_mle.py                                                      \
     test_network_data.py                                             \
     test_network_layer.py                                            \
+    test_ping.py                                                     \
     test_reed_address_solicit_rejected.py                            \
     test_reset.py                                                    \
     test_route_table.py                                              \
@@ -205,12 +208,14 @@ check_PROGRAMS                                                     = \
     $(NULL)
 
 check_SCRIPTS                                                      = \
+    test_anycast.py                                                  \
     test_coap.py                                                     \
     test_coap_observe.py                                             \
     test_coaps.py                                                    \
     test_coap_block.py                                               \
     test_common.py                                                   \
     test_crypto.py                                                   \
+    test_dataset_updater.py                                          \
     test_diag.py                                                     \
     test_dnssd.py                                                    \
     test_ipv6.py                                                     \
@@ -221,6 +226,7 @@ check_SCRIPTS                                                      = \
     test_mle.py                                                      \
     test_network_data.py                                             \
     test_network_layer.py                                            \
+    test_ping.py                                                     \
     test_reed_address_solicit_rejected.py                            \
     test_reset.py                                                    \
     test_route_table.py                                              \

@@ -36,12 +36,12 @@
 
 #include "openthread-core-config.h"
 
+#if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
+
 #include "common/locator.hpp"
 #include "mac/mac_types.hpp"
 #include "net/ip6_address.hpp"
 #include "radio/trel_packet.hpp"
-
-#if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
 
 namespace ot {
 namespace Trel {
@@ -92,11 +92,11 @@ public:
      *
      * @param[in] aPacket   A packet to send.
      *
-     * @retval OT_ERROR_NONE   The frame was sent successfully.
-     * @retval OT_ERROR_ABORT  The interface is not ready and send was aborted.
+     * @retval kErrorNone   The frame was sent successfully.
+     * @retval kErrorAbort  The interface is not ready and send was aborted.
      *
      */
-    otError Send(const Packet &aPacket);
+    Error Send(const Packet &aPacket);
 
     /**
      * This method is a callback from platform layer to handle a received packet over the interface.

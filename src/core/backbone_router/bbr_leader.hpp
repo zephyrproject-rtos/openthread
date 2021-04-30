@@ -37,6 +37,7 @@
 #include "openthread-core-config.h"
 
 #if (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
+
 #include <openthread/backbone_router.h>
 #include <openthread/ip6.h>
 
@@ -106,22 +107,22 @@ public:
      *
      * @param[out]  aConfig        The Primary Backbone Router information.
      *
-     * @retval OT_ERROR_NONE       Successfully got the Primary Backbone Router information.
-     * @retval OT_ERROR_NOT_FOUND  No Backbone Router in the Thread Network.
+     * @retval kErrorNone          Successfully got the Primary Backbone Router information.
+     * @retval kErrorNotFound      No Backbone Router in the Thread Network.
      *
      */
-    otError GetConfig(BackboneRouterConfig &aConfig) const;
+    Error GetConfig(BackboneRouterConfig &aConfig) const;
 
     /**
      * This method gets the Backbone Router Service ID.
      *
      * @param[out]  aServiceId     The reference whether to put the Backbone Router Service ID.
      *
-     * @retval OT_ERROR_NONE       Successfully got the Backbone Router Service ID.
-     * @retval OT_ERROR_NOT_FOUND  Backbone Router service doesn't exist.
+     * @retval kErrorNone          Successfully got the Backbone Router Service ID.
+     * @retval kErrorNotFound      Backbone Router service doesn't exist.
      *
      */
-    otError GetServiceId(uint8_t &aServiceId) const;
+    Error GetServiceId(uint8_t &aServiceId) const;
 
     /**
      * This method gets the short address of the Primary Backbone Router.

@@ -37,6 +37,7 @@
 
 #include "common/logging.hpp"
 #include "common/new.hpp"
+#include "radio/trel_link.hpp"
 #include "utils/heap.hpp"
 
 namespace ot {
@@ -51,6 +52,9 @@ OT_DEFINE_ALIGNED_VAR(gInstanceRaw, sizeof(Instance), uint64_t);
 #if OPENTHREAD_MTD || OPENTHREAD_FTD
 #if !OPENTHREAD_CONFIG_HEAP_EXTERNAL_ENABLE
 Utils::Heap Instance::sHeap;
+#endif
+#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
+bool Instance::sDnsNameCompressionEnabled = true;
 #endif
 #endif
 
@@ -73,6 +77,9 @@ Instance::Instance(void)
 #endif
 #if OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE
     , mApplicationCoapSecure(*this, /* aLayerTwoSecurity */ true)
+#endif
+#if OPENTHREAD_CONFIG_PING_SENDER_ENABLE
+    , mPingSender(*this)
 #endif
 #if OPENTHREAD_CONFIG_CHANNEL_MONITOR_ENABLE
     , mChannelMonitor(*this)
@@ -170,6 +177,10 @@ void Instance::AfterInit(void)
     Get<Settings>().Init();
     IgnoreError(Get<Mle::MleRouter>().Restore());
 
+#if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
+    Get<Trel::Link>().AfterInit();
+#endif
+
 #endif // OPENTHREAD_MTD || OPENTHREAD_FTD
 
 #if OPENTHREAD_ENABLE_VENDOR_EXTENSION
@@ -214,11 +225,11 @@ void Instance::FactoryReset(void)
     otPlatReset(this);
 }
 
-otError Instance::ErasePersistentInfo(void)
+Error Instance::ErasePersistentInfo(void)
 {
-    otError error = OT_ERROR_NONE;
+    Error error = kErrorNone;
 
-    VerifyOrExit(Get<Mle::MleRouter>().IsDisabled(), error = OT_ERROR_INVALID_STATE);
+    VerifyOrExit(Get<Mle::MleRouter>().IsDisabled(), error = kErrorInvalidState);
     Get<Settings>().Wipe();
 
 exit:

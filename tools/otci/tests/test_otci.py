@@ -189,6 +189,8 @@ class TestOTCI(unittest.TestCase):
         leader.set_allowlist([leader.get_extaddr()])
         leader.disable_allowlist()
 
+        self.assertEqual([], leader.backbone_router_get_multicast_listeners())
+
         leader.add_ipmaddr('ff04::1')
         leader.del_ipmaddr('ff04::1')
         leader.add_ipmaddr('ff04::2')
@@ -223,6 +225,10 @@ class TestOTCI(unittest.TestCase):
         logging.info('leader bbr state: %r', leader.get_backbone_router_state())
         logging.info('leader bbr config: %r', leader.get_backbone_router_config())
         logging.info('leader PBBR: %r', leader.get_primary_backbone_router_info())
+
+        leader.wait(10)
+        self.assertEqual(1, len(leader.backbone_router_get_multicast_listeners()))
+        self.assertEqual('ff04::2', leader.backbone_router_get_multicast_listeners()[0][0])
 
         logging.info('leader bufferinfo: %r', leader.get_message_buffer_info())
 
@@ -366,6 +372,12 @@ class TestOTCI(unittest.TestCase):
         self.assertEqual('example2.com.', server.srp_server_get_domain())
         server.srp_server_set_domain('default.service.arpa.')
         self.assertEqual('default.service.arpa.', server.srp_server_get_domain())
+
+        default_leases = server.srp_server_get_lease()
+        self.assertEqual(default_leases, (1800, 7200, 86400, 1209600))
+        server.srp_server_set_lease(1801, 7201, 86401, 1209601)
+        leases = server.srp_server_get_lease()
+        self.assertEqual(leases, (1801, 7201, 86401, 1209601))
 
         self.assertFalse(client.srp_client_get_state())
         self.assertEqual('Removed', client.srp_client_get_host_state())

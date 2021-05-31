@@ -946,19 +946,13 @@ Error Ip6::HandlePayload(Message &          aMessage,
                          Message::Ownership aMessageOwnership)
 {
     Error    error   = kErrorNone;
-    Message *message = nullptr;
+    Message *message = (aMessageOwnership == Message::kTakeCustody) ? &aMessage : nullptr;
 
     VerifyOrExit(aIpProto == kProtoUdp || aIpProto == kProtoIcmp6);
 
-    switch (aMessageOwnership)
+    if (aMessageOwnership == Message::kCopyToUse)
     {
-    case Message::kTakeCustody:
-        message = &aMessage;
-        break;
-
-    case Message::kCopyToUse:
         VerifyOrExit((message = aMessage.Clone()) != nullptr, error = kErrorNoBufs);
-        break;
     }
 
     switch (aIpProto)
@@ -1289,10 +1283,14 @@ start:
             sourcePort = HostSwap16(sourcePort);
             destPort   = HostSwap16(destPort);
 
+#if !OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
             if (nextHeader == kProtoUdp)
             {
                 VerifyOrExit(Get<Udp>().ShouldUsePlatformUdp(destPort), error = kErrorDrop);
             }
+#else
+            OT_UNUSED_VARIABLE(destPort);
+#endif
 
 #if OPENTHREAD_CONFIG_UNSECURE_TRAFFIC_MANAGED_BY_STACK_ENABLE
             // check whether source port is an unsecure port

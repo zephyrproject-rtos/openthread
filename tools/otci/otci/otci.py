@@ -947,6 +947,11 @@ class OTCI(object):
 
         return txt_dict
 
+    def srp_server_get_lease(self) -> Tuple[int, int, int, int]:
+        """Get SRP server LEASE & KEY-LEASE range (in seconds)."""
+        lines = self.execute_command(f'srp server lease')
+        return tuple([int(line.split(':')[1].strip()) for line in lines])
+
     def srp_server_set_lease(self, min_lease: int, max_lease: int, min_key_lease: int, max_key_lease: int):
         """Configure SRP server LEASE & KEY-LEASE range (in seconds)."""
         self.execute_command(f'srp server lease {min_lease} {max_lease} {min_key_lease} {max_key_lease}')
@@ -1678,7 +1683,7 @@ class OTCI(object):
             elif key == 'PSKc':
                 dataset['pskc'] = val
             elif key == 'Security Policy':
-                rotation_time, flags = val.split(' ')
+                rotation_time, flags = val.split(', ') if ', ' in val else val.split(' ')
                 rotation_time = int(rotation_time)
                 dataset['security_policy'] = SecurityPolicy(rotation_time, flags)
             else:
@@ -1992,6 +1997,15 @@ class OTCI(object):
     def set_backbone_router_jitter(self, val: int):
         """Set jitter (in seconds) for Backbone Router registration for Thread 1.2 FTD."""
         self.execute_command(f'bbr jitter {val}')
+
+    def backbone_router_get_multicast_listeners(self) -> List[Tuple[Ip6Addr, int]]:
+        """Get Backbone Router Multicast Listeners."""
+        listeners = []
+        for line in self.execute_command('bbr mgmt mlr listener'):
+            ip, timeout = line.split()
+            listeners.append((Ip6Addr(ip), int(timeout)))
+
+        return listeners
 
     #
     # Thread 1.2 and DUA/MLR utilities

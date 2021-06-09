@@ -124,7 +124,7 @@ Mle::Mle(Instance &aInstance)
     mParentCandidate.Clear();
     ResetCounters();
 
-    mLinkLocal64.InitAsThreadOrigin();
+    mLinkLocal64.InitAsThreadOrigin(/* aPreferred */ true);
     mLinkLocal64.GetAddress().SetToLinkLocalAddress(Get<Mac::Mac>().GetExtAddress());
 
     mLeaderAloc.InitAsThreadOriginRealmLocalScope();
@@ -329,7 +329,7 @@ Error Mle::Restore(void)
     Get<DuaManager>().Restore();
 #endif
 
-    SuccessOrExit(error = Get<Settings>().ReadNetworkInfo(networkInfo));
+    SuccessOrExit(error = Get<Settings>().Read(networkInfo));
 
     Get<KeyManager>().SetCurrentKeySequence(networkInfo.GetKeySequence());
     Get<KeyManager>().SetMleFrameCounter(networkInfo.GetMleFrameCounter());
@@ -362,7 +362,7 @@ Error Mle::Restore(void)
 
     if (!IsActiveRouter(networkInfo.GetRloc16()))
     {
-        error = Get<Settings>().ReadParentInfo(parentInfo);
+        error = Get<Settings>().Read(parentInfo);
 
         if (error != kErrorNone)
         {
@@ -433,7 +433,7 @@ Error Mle::Store(void)
             parentInfo.SetExtAddress(mParent.GetExtAddress());
             parentInfo.SetVersion(mParent.GetVersion());
 
-            SuccessOrExit(error = Get<Settings>().SaveParentInfo(parentInfo));
+            SuccessOrExit(error = Get<Settings>().Save(parentInfo));
         }
     }
     else
@@ -446,7 +446,7 @@ Error Mle::Store(void)
         // address. If there is a previously saved `NetworkInfo`, we
         // just update the key sequence and MAC and MLE frame counters.
 
-        SuccessOrExit(Get<Settings>().ReadNetworkInfo(networkInfo));
+        SuccessOrExit(Get<Settings>().Read(networkInfo));
     }
 
     networkInfo.SetKeySequence(Get<KeyManager>().GetCurrentKeySequence());
@@ -456,7 +456,7 @@ Error Mle::Store(void)
                                    OPENTHREAD_CONFIG_STORE_FRAME_COUNTER_AHEAD);
     networkInfo.SetDeviceMode(mDeviceMode.Get());
 
-    SuccessOrExit(error = Get<Settings>().SaveNetworkInfo(networkInfo));
+    SuccessOrExit(error = Get<Settings>().Save(networkInfo));
 
     Get<KeyManager>().SetStoredMleFrameCounter(networkInfo.GetMleFrameCounter());
     Get<KeyManager>().SetStoredMacFrameCounter(networkInfo.GetMacFrameCounter());
@@ -694,7 +694,8 @@ void Mle::SetStateChild(uint16_t aRloc16)
 #if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
     if (Get<Mac::Mac>().IsCslEnabled())
     {
-        IgnoreError(Get<Radio>().EnableCsl(Get<Mac::Mac>().GetCslPeriod(), &GetParent().GetExtAddress()));
+        IgnoreError(Get<Radio>().EnableCsl(Get<Mac::Mac>().GetCslPeriod(), GetParent().GetRloc16(),
+                                           &GetParent().GetExtAddress()));
         ScheduleChildUpdateRequest();
     }
 #endif
@@ -822,6 +823,19 @@ void Mle::SetMeshLocalPrefix(const MeshLocalPrefix &aMeshLocalPrefix)
 exit:
     return;
 }
+
+#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
+Error Mle::SetMeshLocalIid(const Ip6::InterfaceIdentifier &aMlIid)
+{
+    Error error = kErrorNone;
+
+    VerifyOrExit(!Get<ThreadNetif>().HasUnicastAddress(mMeshLocal64), error = kErrorInvalidState);
+
+    mMeshLocal64.GetAddress().SetIid(aMlIid);
+exit:
+    return error;
+}
+#endif
 
 void Mle::ApplyMeshLocalPrefix(void)
 {
@@ -1580,11 +1594,6 @@ void Mle::HandleNotifierEvents(Events aEvents)
         {
             IgnoreError(Store());
         }
-    }
-
-    if (aEvents.Contains(kEventSecurityPolicyChanged))
-    {
-        Get<Ip6::Filter>().AllowNativeCommissioner(Get<KeyManager>().GetSecurityPolicy().mNativeCommissioningEnabled);
     }
 
 exit:
@@ -2801,7 +2810,7 @@ void Mle::HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageIn
 #if OPENTHREAD_FTD
         if (IsRouterOrLeader())
         {
-            Get<MleRouter>().HandleChildUpdateRequest(aMessage, aMessageInfo, keySequence);
+            Get<MleRouter>().HandleChildUpdateRequest(aMessage, aMessageInfo);
         }
         else
 #endif
@@ -3598,6 +3607,7 @@ void Mle::HandleChildUpdateRequest(const Message &aMessage, const Ip6::MessageIn
         tlvs[numTlvs++] = Tlv::kLinkFrameCounter;
         break;
     case kErrorNotFound:
+        challenge.mLength = 0;
         break;
     default:
         ExitNow(error = kErrorParse);
@@ -3655,7 +3665,7 @@ void Mle::HandleChildUpdateRequest(const Message &aMessage, const Ip6::MessageIn
     }
 
 #if OPENTHREAD_CONFIG_MULTI_RADIO
-    if (aNeighbor != nullptr)
+    if ((aNeighbor != nullptr) && (challenge.mLength != 0))
     {
         aNeighbor->ClearLastRxFragmentTag();
     }
@@ -4121,7 +4131,7 @@ void Mle::Log(MessageAction aAction, MessageType aType, const Ip6::Address &aAdd
 
     if (aRloc != Mac::kShortAddrInvalid)
     {
-        IgnoreError(rlocString.Set(",0x%04x", aRloc));
+        rlocString.Append(",0x%04x", aRloc);
     }
 
     otLogInfoMle("%s %s%s (%s%s)", MessageActionToString(aAction), MessageTypeToString(aType),

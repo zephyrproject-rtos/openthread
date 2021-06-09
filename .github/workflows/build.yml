@@ -56,6 +56,15 @@ jobs:
       run: |
         script/make-pretty check
 
+  markdown-lint-check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: gaurav-nelson/github-action-markdown-link-check@v1
+      with:
+        use-verbose-mode: 'yes'
+        max-depth: 3
+
   cmake-version:
     runs-on: ubuntu-18.04
     steps:
@@ -215,9 +224,9 @@ jobs:
       - name: Bootstrap
         run: |
           sudo dpkg --add-architecture i386
-          sudo rm /etc/apt/sources.list.d/* && sudo apt-get update
-          sudo apt-get --no-install-recommends install -y clang-${{ matrix.clang_ver }} clang++-${{ matrix.clang_ver }} g++-multilib ninja-build
-          sudo apt-get --no-install-recommends install -y libreadline-dev:i386 libncurses-dev:i386
+          sudo apt-get update
+          sudo apt-get --no-install-recommends install -y clang-${{ matrix.clang_ver }} clang++-${{ matrix.clang_ver }} ninja-build
+          sudo apt-get --no-install-recommends install -y g++-multilib libreadline-dev:i386 libncurses-dev:i386
       - name: Build
         run: |
           script/check-simulation-build

@@ -270,6 +270,8 @@ SOURCES_COMMON                                  = \
     thread/network_data_local.cpp                 \
     thread/network_data_notifier.cpp              \
     thread/network_data_service.cpp               \
+    thread/network_data_tlvs.cpp                  \
+    thread/network_data_types.cpp                 \
     thread/network_diagnostic.cpp                 \
     thread/panid_query_server.cpp                 \
     thread/radio_selector.cpp                     \
@@ -397,6 +399,7 @@ HEADERS_COMMON                                  = \
     common/random.hpp                             \
     common/random_manager.hpp                     \
     common/settings.hpp                           \
+    common/settings_driver.hpp                    \
     common/string.hpp                             \
     common/tasklet.hpp                            \
     common/time.hpp                               \
@@ -532,6 +535,7 @@ HEADERS_COMMON                                  = \
     thread/network_data_notifier.hpp              \
     thread/network_data_service.hpp               \
     thread/network_data_tlvs.hpp                  \
+    thread/network_data_types.hpp                 \
     thread/network_diagnostic.hpp                 \
     thread/network_diagnostic_tlvs.hpp            \
     thread/panid_query_server.hpp                 \

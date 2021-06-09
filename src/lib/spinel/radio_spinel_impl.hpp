@@ -234,6 +234,9 @@ void RadioSpinel<InterfaceType, ProcessContextType>::Init(bool aResetRadio,
     if (aResetRadio)
     {
         SuccessOrExit(error = SendReset());
+#if OPENTHREAD_SPINEL_CONFIG_RESET_CONNECTION
+        SuccessOrDie(mSpinelInterface.ResetConnection());
+#endif
     }
 
     SuccessOrExit(error = WaitResponse());
@@ -2227,6 +2230,9 @@ void RadioSpinel<InterfaceType, ProcessContextType>::RecoverFromRcpFailure(void)
     if (mResetRadioOnStartup)
     {
         SuccessOrDie(SendReset());
+#if OPENTHREAD_SPINEL_CONFIG_RESET_CONNECTION
+        SuccessOrDie(mSpinelInterface.ResetConnection());
+#endif
     }
 
     SuccessOrDie(WaitResponse());
@@ -2287,7 +2293,7 @@ void RadioSpinel<InterfaceType, ProcessContextType>::RestoreProperties(void)
 
     if (mInstance != nullptr)
     {
-        SuccessOrDie(static_cast<Instance *>(mInstance)->template Get<Settings>().ReadNetworkInfo(networkInfo));
+        SuccessOrDie(static_cast<Instance *>(mInstance)->template Get<Settings>().Read(networkInfo));
         SuccessOrDie(
             Set(SPINEL_PROP_RCP_MAC_FRAME_COUNTER, SPINEL_DATATYPE_UINT32_S, networkInfo.GetMacFrameCounter()));
     }

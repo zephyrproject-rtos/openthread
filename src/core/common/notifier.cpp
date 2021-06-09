@@ -228,7 +228,7 @@ void Notifier::LogEvents(Events aEvents) const
                 addSpace = false;
             }
 
-            IgnoreError(string.Append("%s%s", addSpace ? " " : "", EventToString(static_cast<Event>(1 << bit))));
+            string.Append("%s%s", addSpace ? " " : "", EventToString(static_cast<Event>(1 << bit)));
             addSpace = true;
 
             flags ^= (1 << bit);

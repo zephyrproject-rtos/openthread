@@ -304,7 +304,7 @@ class OtbrDocker:
         # Example TXT entry:
         # "xp=\\000\\013\\184\\000\\000\\000\\000\\000"
         txt = {}
-        for entry in re.findall(r'"(.*?[^\\])"', line):
+        for entry in re.findall(r'"((?:[^\\]|\\.)*?)"', line):
             if entry == "":
                 continue
 
@@ -931,8 +931,9 @@ class NodeImpl:
             # TODO: for now, we are using 0xfd as the SRP service data.
             #       May use a dedicated bit flag for SRP server.
             if int(service[1], 16) == 0x5d:
-                # The SRP server data are 2-bytes UDP port number.
-                return int(service[2], 16)
+                # The SRP server data contains IPv6 address (16 bytes)
+                # followed by UDP port number.
+                return int(service[2][2 * 16:], 16)
 
     def srp_client_start(self, server_address, server_port):
         self.send_command(f'srp client start {server_address} {server_port}')
@@ -2621,6 +2622,11 @@ class NodeImpl:
 
         return result
 
+    def set_mliid(self, mliid: str):
+        cmd = f'mliid {mliid}'
+        self.send_command(cmd)
+        self._expect_command_output(cmd)
+
 
 class Node(NodeImpl, OtCli):
     pass
@@ -2812,18 +2818,21 @@ class LinuxHost():
         self.bash("""cat >/etc/radvd.conf <<EOF
 interface eth0
 {
-	AdvSendAdvert on;
+    AdvSendAdvert on;
 
-	MinRtrAdvInterval 3;
-	MaxRtrAdvInterval 30;
-	AdvDefaultPreference low;
+    AdvReachableTime 200;
+    AdvRetransTimer 200;
+    AdvDefaultLifetime 1800;
+    MinRtrAdvInterval 1200;
+    MaxRtrAdvInterval 1800;
+    AdvDefaultPreference low;
 
-	prefix %s
-	{
-		AdvOnLink on;
-		AdvAutonomous %s;
-		AdvRouterAddr off;
-	};
+    prefix %s
+    {
+        AdvOnLink on;
+        AdvAutonomous %s;
+        AdvRouterAddr off;
+    };
 };
 EOF
 """ % (prefix, 'on' if slaac else 'off'))
@@ -2832,6 +2841,9 @@ EOF
 
     def stop_radvd_service(self):
         self.bash('service radvd stop')
+
+    def kill_radvd_service(self):
+        self.bash('pkill radvd')
 
 
 class OtbrNode(LinuxHost, NodeImpl, OtbrDocker):
@@ -2880,7 +2892,7 @@ class HostNode(LinuxHost, OtbrDocker):
 
         addrs = []
         for addr in self.get_ip6_address(config.ADDRESS_TYPE.ONLINK_ULA):
-            if addr.startswith(prefix.split('::')[0]):
+            if ipaddress.IPv6Address(addr) in ipaddress.IPv6Network(prefix):
                 addrs.append(addr)
 
         return addrs

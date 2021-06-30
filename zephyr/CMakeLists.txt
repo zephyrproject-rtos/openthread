@@ -19,6 +19,12 @@ set(
     FORCE
 )
 
+if(CONFIG_ASSERT)
+  set(OT_ASSERT ON CACHE BOOL "Enable assert function OT_ASSERT()" FORCE)
+else()
+  set(OT_ASSERT OFF CACHE BOOL "Enable assert function OT_ASSERT()" FORCE)
+endif()
+
 if(CONFIG_OPENTHREAD_BACKBONE_ROUTER)
   set(OT_BACKBONE_ROUTER ON CACHE BOOL "Enable backbone router functionality" FORCE)
 else()

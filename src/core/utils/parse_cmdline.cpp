@@ -37,6 +37,7 @@
 
 #include "common/code_utils.hpp"
 #include "common/numeric_limits.hpp"
+#include "common/string.hpp"
 #include "net/ip6_address.hpp"
 
 namespace ot {
@@ -84,12 +85,11 @@ exit:
     return error;
 }
 
-Error ParseCmd(char *aCommandString, uint8_t &aArgsLength, Arg *aArgs, uint8_t aArgsLengthMax)
+Error ParseCmd(char *aCommandString, Arg aArgs[], uint8_t aArgsMaxLength)
 {
-    Error error = kErrorNone;
-    char *cmd;
-
-    aArgsLength = 0;
+    Error   error = kErrorNone;
+    uint8_t index = 0;
+    char *  cmd;
 
     for (cmd = aCommandString; *cmd; cmd++)
     {
@@ -103,15 +103,23 @@ Error ParseCmd(char *aCommandString, uint8_t &aArgsLength, Arg *aArgs, uint8_t a
             *cmd = '\0';
         }
 
-        if ((*cmd != '\0') && ((aArgsLength == 0) || (*(cmd - 1) == '\0')))
+        if ((*cmd != '\0') && ((index == 0) || (*(cmd - 1) == '\0')))
         {
-            VerifyOrExit(aArgsLength < aArgsLengthMax, error = kErrorInvalidArgs);
+            if (index == aArgsMaxLength - 1)
+            {
+                error = kErrorInvalidArgs;
+                break;
+            }
 
-            aArgs[aArgsLength++].SetCString(cmd);
+            aArgs[index++].SetCString(cmd);
         }
     }
 
-exit:
+    while (index < aArgsMaxLength)
+    {
+        aArgs[index++].Clear();
+    }
+
     return error;
 }
 
@@ -122,7 +130,7 @@ template <typename UintType> Error ParseUint(const char *aString, UintType &aUin
 
     SuccessOrExit(error = ParseAsUint64(aString, value));
 
-    VerifyOrExit(value <= NumericLimits<UintType>::Max(), error = kErrorInvalidArgs);
+    VerifyOrExit(value <= NumericLimits<UintType>::kMax, error = kErrorInvalidArgs);
     aUint = static_cast<UintType>(value);
 
 exit:
@@ -157,6 +165,8 @@ Error ParseAsUint64(const char *aString, uint64_t &aUint64)
         kMaxDecBeforeOverlow = (0xffffffffffffffffULL / 10),
     };
 
+    VerifyOrExit(aString != nullptr, error = kErrorInvalidArgs);
+
     if (cur[0] == '0' && (cur[1] == 'x' || cur[1] == 'X'))
     {
         cur += 2;
@@ -190,7 +200,7 @@ template <typename IntType> Error ParseInt(const char *aString, IntType &aInt)
 
     SuccessOrExit(error = ParseAsInt32(aString, value));
 
-    VerifyOrExit((NumericLimits<IntType>::Min() <= value) && (value <= NumericLimits<IntType>::Max()),
+    VerifyOrExit((NumericLimits<IntType>::kMin <= value) && (value <= NumericLimits<IntType>::kMax),
                  error = kErrorInvalidArgs);
     aInt = static_cast<IntType>(value);
 
@@ -214,6 +224,8 @@ Error ParseAsInt32(const char *aString, int32_t &aInt32)
     uint64_t value;
     bool     isNegavtive = false;
 
+    VerifyOrExit(aString != nullptr, error = kErrorInvalidArgs);
+
     if (*aString == '-')
     {
         aString++;
@@ -225,8 +237,8 @@ Error ParseAsInt32(const char *aString, int32_t &aInt32)
     }
 
     SuccessOrExit(error = ParseAsUint64(aString, value));
-    VerifyOrExit(value <= (isNegavtive ? static_cast<uint64_t>(-static_cast<int64_t>(NumericLimits<int32_t>::Min()))
-                                       : static_cast<uint64_t>(NumericLimits<int32_t>::Max())),
+    VerifyOrExit(value <= (isNegavtive ? static_cast<uint64_t>(-static_cast<int64_t>(NumericLimits<int32_t>::kMin))
+                                       : static_cast<uint64_t>(NumericLimits<int32_t>::kMax)),
                  error = kErrorInvalidArgs);
     aInt32 = static_cast<int32_t>(isNegavtive ? -static_cast<int64_t>(value) : static_cast<int64_t>(value));
 
@@ -247,6 +259,11 @@ exit:
 }
 #if OPENTHREAD_FTD || OPENTHREAD_MTD
 
+Error ParseAsIp6Address(const char *aString, otIp6Address &aAddress)
+{
+    return (aString != nullptr) ? otIp6AddressFromString(aString, &aAddress) : kErrorInvalidArgs;
+}
+
 Error ParseAsIp6Prefix(const char *aString, otIp6Prefix &aPrefix)
 {
     enum : uint8_t
@@ -258,7 +275,9 @@ Error ParseAsIp6Prefix(const char *aString, otIp6Prefix &aPrefix)
     char        string[kMaxIp6AddressStringSize];
     const char *prefixLengthStr;
 
-    prefixLengthStr = strchr(aString, '/');
+    VerifyOrExit(aString != nullptr);
+
+    prefixLengthStr = StringFind(aString, '/');
     VerifyOrExit(prefixLengthStr != nullptr);
 
     VerifyOrExit(prefixLengthStr - aString < static_cast<int32_t>(sizeof(string)));
@@ -274,75 +293,126 @@ exit:
 }
 #endif // #if OPENTHREAD_FTD || OPENTHREAD_MTD
 
-Error ParseAsHexString(const char *aString, uint8_t *aBuffer, uint16_t aSize)
+enum HexStringParseMode
 {
-    Error    error;
-    uint16_t readSize = aSize;
+    kModeExtactSize,   // Parse hex string expecting an exact size (number of bytes when parsed).
+    kModeUpToSize,     // Parse hex string expecting less than or equal a given size.
+    kModeAllowPartial, // Allow parsing of partial segments.
+};
 
-    SuccessOrExit(error = ParseAsHexString(aString, readSize, aBuffer, kDisallowTruncate));
-    VerifyOrExit(readSize == aSize, error = kErrorInvalidArgs);
-
-exit:
-    return error;
-}
-
-Error ParseAsHexString(const char *aString, uint16_t &aSize, uint8_t *aBuffer, HexStringParseMode aMode)
+static Error ParseHexString(const char *&aString, uint16_t &aSize, uint8_t *aBuffer, HexStringParseMode aMode)
 {
-    Error       error     = kErrorNone;
-    uint8_t     byte      = 0;
-    uint16_t    readBytes = 0;
-    const char *hex       = aString;
-    size_t      hexLength = strlen(aString);
-    uint8_t     numChars;
+    Error  error      = kErrorNone;
+    size_t parsedSize = 0;
+    size_t stringLength;
+    size_t expectedSize;
+    bool   skipFirstDigit;
 
-    if (aMode == kDisallowTruncate)
+    VerifyOrExit(aString != nullptr, error = kErrorInvalidArgs);
+
+    stringLength = strlen(aString);
+    expectedSize = (stringLength + 1) / 2;
+
+    switch (aMode)
     {
-        VerifyOrExit((hexLength + 1) / 2 <= aSize, error = kErrorInvalidArgs);
+    case kModeExtactSize:
+        VerifyOrExit(expectedSize == aSize, error = kErrorInvalidArgs);
+        break;
+    case kModeUpToSize:
+        VerifyOrExit(expectedSize <= aSize, error = kErrorInvalidArgs);
+        break;
+    case kModeAllowPartial:
+        break;
     }
 
-    // Handle the case where number of chars in hex string is odd.
-    numChars = hexLength & 1;
+    // If number of chars in hex string is odd, we skip parsing
+    // the first digit.
 
-    while (*hex != '\0')
+    skipFirstDigit = ((stringLength & 1) != 0);
+
+    while (parsedSize < expectedSize)
     {
         uint8_t digit;
 
-        SuccessOrExit(error = ParseHexDigit(*hex, digit));
-        byte |= digit;
-
-        hex++;
-        numChars++;
-
-        if (numChars >= 2)
+        if ((aMode == kModeAllowPartial) && (parsedSize == aSize))
         {
-            numChars   = 0;
-            *aBuffer++ = byte;
-            byte       = 0;
-            readBytes++;
+            // If partial parse mode is allowed, stop once we read the
+            // requested size.
+            ExitNow(error = kErrorPending);
+        }
 
-            if (readBytes == aSize)
-            {
-                ExitNow();
-            }
+        if (skipFirstDigit)
+        {
+            *aBuffer       = 0;
+            skipFirstDigit = false;
         }
         else
         {
-            byte <<= 4;
+            SuccessOrExit(error = ParseHexDigit(*aString, digit));
+            aString++;
+            *aBuffer = static_cast<uint8_t>(digit << 4);
         }
+
+        SuccessOrExit(error = ParseHexDigit(*aString, digit));
+        aString++;
+        *aBuffer |= digit;
+
+        aBuffer++;
+        parsedSize++;
     }
 
-    aSize = readBytes;
+    aSize = static_cast<uint16_t>(parsedSize);
 
 exit:
     return error;
 }
 
-void Arg::CopyArgsToStringArray(Arg aArgs[], uint8_t aArgsLength, char *aStrings[])
+Error ParseAsHexString(const char *aString, uint8_t *aBuffer, uint16_t aSize)
 {
-    for (uint8_t i = 0; i < aArgsLength; i++)
+    return ParseHexString(aString, aSize, aBuffer, kModeExtactSize);
+}
+
+Error ParseAsHexString(const char *aString, uint16_t &aSize, uint8_t *aBuffer)
+{
+    return ParseHexString(aString, aSize, aBuffer, kModeUpToSize);
+}
+
+Error ParseAsHexStringSegment(const char *&aString, uint16_t &aSize, uint8_t *aBuffer)
+{
+    return ParseHexString(aString, aSize, aBuffer, kModeAllowPartial);
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+// Arg class
+
+uint16_t Arg::GetLength(void) const
+{
+    return IsEmpty() ? 0 : static_cast<uint16_t>(strlen(mString));
+}
+
+bool Arg::operator==(const char *aString) const
+{
+    return !IsEmpty() && (strcmp(mString, aString) == 0);
+}
+
+void Arg::CopyArgsToStringArray(Arg aArgs[], char *aStrings[])
+{
+    for (uint8_t i = 0; !aArgs[i].IsEmpty(); i++)
     {
         aStrings[i] = aArgs[i].GetCString();
     }
+}
+
+uint8_t Arg::GetArgsLength(Arg aArgs[])
+{
+    uint8_t length = 0;
+
+    while (!aArgs[length].IsEmpty())
+    {
+        length++;
+    }
+
+    return length;
 }
 
 } // namespace CmdLineParser

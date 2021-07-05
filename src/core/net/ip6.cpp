@@ -49,6 +49,7 @@
 #include "net/ip6_filter.hpp"
 #include "net/netif.hpp"
 #include "net/udp6.hpp"
+#include "openthread/ip6.h"
 #include "thread/mle.hpp"
 
 using IcmpType = ot::Ip6::Icmp::Header::Type;
@@ -71,6 +72,9 @@ Ip6::Ip6(Instance &aInstance)
     , mIcmp(aInstance)
     , mUdp(aInstance)
     , mMpl(aInstance)
+#if OPENTHREAD_CONFIG_TCP_ENABLE
+    , mTcp(aInstance)
+#endif
 {
 }
 
@@ -957,6 +961,15 @@ Error Ip6::HandlePayload(Message &          aMessage,
 
     switch (aIpProto)
     {
+#if OPENTHREAD_CONFIG_TCP_ENABLE
+    case kProtoTcp:
+        error = mTcp.ProcessReceivedSegment(*message, aMessageInfo);
+        if (error == kErrorDrop)
+        {
+            otLogNoteIp6("Error TCP Checksum");
+        }
+        break;
+#endif
     case kProtoUdp:
         error = mUdp.HandleMessage(*message, aMessageInfo);
         if (error == kErrorDrop)
@@ -1029,8 +1042,9 @@ Error Ip6::ProcessReceiveCallback(Message &          aMessage,
             Udp::Header udp;
 
             IgnoreError(aMessage.Read(aMessage.GetOffset(), udp));
-            VerifyOrExit(Get<Udp>().ShouldUsePlatformUdp(udp.GetDestinationPort()), error = kErrorNoRoute);
-
+            VerifyOrExit(Get<Udp>().ShouldUsePlatformUdp(udp.GetDestinationPort()) &&
+                             !Get<Udp>().IsPortInUse(udp.GetDestinationPort()),
+                         error = kErrorNoRoute);
             break;
         }
 

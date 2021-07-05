@@ -74,6 +74,7 @@ set(COMMON_SOURCES
     api/srp_client_buffers_api.cpp
     api/srp_server_api.cpp
     api/tasklet_api.cpp
+    api/tcp_api.cpp
     api/thread_api.cpp
     api/thread_ftd_api.cpp
     api/udp_api.cpp
@@ -91,6 +92,7 @@ set(COMMON_SOURCES
     coap/coap_secure.cpp
     common/crc16.cpp
     common/error.cpp
+    common/heap_string.cpp
     common/instance.cpp
     common/logging.cpp
     common/message.cpp
@@ -159,6 +161,7 @@ set(COMMON_SOURCES
     net/socket.cpp
     net/srp_client.cpp
     net/srp_server.cpp
+    net/tcp6.cpp
     net/udp6.cpp
     radio/radio.cpp
     radio/radio_callbacks.cpp

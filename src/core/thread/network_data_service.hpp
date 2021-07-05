@@ -399,6 +399,16 @@ public:
         {
         }
 
+        /**
+         * This method resets the iterator to start from beginning.
+         *
+         */
+        void Reset(void)
+        {
+            mServiceTlv   = nullptr;
+            mServerSubTlv = nullptr;
+        }
+
     private:
         const ServiceTlv *mServiceTlv;
         const ServerTlv * mServerSubTlv;
@@ -613,6 +623,13 @@ private:
                        bool        aServerStable,
                        uint8_t &   aServiceId) const;
     Error IterateToNextServer(Iterator &aIterator) const;
+
+#if (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
+    bool IsBackboneRouterPreferredTo(const ServerTlv &                 aServerTlv,
+                                     const BackboneRouter::ServerData &aServerData,
+                                     const ServerTlv &                 aOtherServerTlv,
+                                     const BackboneRouter::ServerData &aOtherServerData) const;
+#endif
 };
 
 } // namespace Service

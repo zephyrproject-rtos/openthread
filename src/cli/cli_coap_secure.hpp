@@ -38,8 +38,10 @@
 
 #if OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE
 
-#include "coap/coap_message.hpp"
-#include "coap/coap_secure.hpp"
+#include <mbedtls/ssl.h>
+
+#include <openthread/coap_secure.h>
+
 #include "utils/lookup_table.hpp"
 #include "utils/parse_cmdline.hpp"
 
@@ -72,11 +74,10 @@ public:
     /**
      * This method interprets a list of CLI arguments.
      *
-     * @param[in]  aArgsLength  The number of elements in @p aArgs.
      * @param[in]  aArgs        An array of command line arguments.
      *
      */
-    otError Process(uint8_t aArgsLength, Arg aArgs[]);
+    otError Process(Arg aArgs[]);
 
 private:
     enum
@@ -90,21 +91,34 @@ private:
     struct Command
     {
         const char *mName;
-        otError (CoapSecure::*mHandler)(uint8_t aArgsLength, Arg aArgs[]);
+        otError (CoapSecure::*mHandler)(Arg aArgs[]);
     };
+
+#if OPENTHREAD_CONFIG_COAP_BLOCKWISE_TRANSFER_ENABLE
+    enum BlockType : uint8_t
+    {
+        kBlockType1,
+        kBlockType2,
+    };
+#endif
 
     void PrintPayload(otMessage *aMessage) const;
 
-    otError ProcessHelp(uint8_t aArgsLength, Arg aArgs[]);
-    otError ProcessConnect(uint8_t aArgsLength, Arg aArgs[]);
-    otError ProcessDisconnect(uint8_t aArgsLength, Arg aArgs[]);
-    otError ProcessPsk(uint8_t aArgsLength, Arg aArgs[]);
-    otError ProcessRequest(uint8_t aArgsLength, Arg aArgs[]);
-    otError ProcessResource(uint8_t aArgsLength, Arg aArgs[]);
-    otError ProcessSet(uint8_t aArgsLength, Arg aArgs[]);
-    otError ProcessStart(uint8_t aArgsLength, Arg aArgs[]);
-    otError ProcessStop(uint8_t aArgsLength, Arg aArgs[]);
-    otError ProcessX509(uint8_t aArgsLength, Arg aArgs[]);
+    otError ProcessConnect(Arg aArgs[]);
+    otError ProcessDelete(Arg aArgs[]);
+    otError ProcessDisconnect(Arg aArgs[]);
+    otError ProcessGet(Arg aArgs[]);
+    otError ProcessHelp(Arg aArgs[]);
+    otError ProcessPost(Arg aArgs[]);
+    otError ProcessPsk(Arg aArgs[]);
+    otError ProcessPut(Arg aArgs[]);
+    otError ProcessResource(Arg aArgs[]);
+    otError ProcessSet(Arg aArgs[]);
+    otError ProcessStart(Arg aArgs[]);
+    otError ProcessStop(Arg aArgs[]);
+    otError ProcessX509(Arg aArgs[]);
+
+    otError ProcessRequest(Arg aArgs[], otCoapCode aCoapCode);
 
     void Stop(void);
 
@@ -145,15 +159,15 @@ private:
 
     static constexpr Command sCommands[] = {
         {"connect", &CoapSecure::ProcessConnect},
-        {"delete", &CoapSecure::ProcessRequest},
+        {"delete", &CoapSecure::ProcessDelete},
         {"disconnect", &CoapSecure::ProcessDisconnect},
-        {"get", &CoapSecure::ProcessRequest},
+        {"get", &CoapSecure::ProcessGet},
         {"help", &CoapSecure::ProcessHelp},
-        {"post", &CoapSecure::ProcessRequest},
+        {"post", &CoapSecure::ProcessPost},
 #ifdef MBEDTLS_KEY_EXCHANGE_PSK_ENABLED
         {"psk", &CoapSecure::ProcessPsk},
 #endif
-        {"put", &CoapSecure::ProcessRequest},
+        {"put", &CoapSecure::ProcessPut},
         {"resource", &CoapSecure::ProcessResource},
         {"set", &CoapSecure::ProcessSet},
         {"start", &CoapSecure::ProcessStart},

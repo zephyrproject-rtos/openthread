@@ -121,7 +121,7 @@ EXTRA_DIST                                                         = \
     Cert_9_2_08_PersistentDatasets.py                                \
     Cert_9_2_09_PendingPartition.py                                  \
     Cert_9_2_10_PendingPartition.py                                  \
-    Cert_9_2_11_MasterKey.py                                         \
+    Cert_9_2_11_NetworkKey.py                                        \
     Cert_9_2_12_Announce.py                                          \
     Cert_9_2_13_EnergyScan.py                                        \
     Cert_9_2_14_PanIdQuery.py                                        \
@@ -180,6 +180,7 @@ EXTRA_DIST                                                         = \
     test_srp_lease.py                                                \
     test_srp_name_conflicts.py                                       \
     test_srp_register_single_service.py                              \
+    test_srp_sub_type.py                                             \
     thread_cert.py                                                   \
     tlvs_parsing.py                                                  \
     thread_cert.py                                                   \
@@ -238,6 +239,7 @@ check_SCRIPTS                                                      = \
     test_srp_lease.py                                                \
     test_srp_name_conflicts.py                                       \
     test_srp_register_single_service.py                              \
+    test_srp_sub_type.py                                             \
     Cert_5_1_01_RouterAttach.py                                      \
     Cert_5_1_02_ChildAddressTimeout.py                               \
     Cert_5_1_03_RouterAddressReallocation.py                         \
@@ -328,7 +330,7 @@ check_SCRIPTS                                                      = \
     Cert_9_2_08_PersistentDatasets.py                                \
     Cert_9_2_09_PendingPartition.py                                  \
     Cert_9_2_10_PendingPartition.py                                  \
-    Cert_9_2_11_MasterKey.py                                         \
+    Cert_9_2_11_NetworkKey.py                                        \
     Cert_9_2_12_Announce.py                                          \
     Cert_9_2_13_EnergyScan.py                                        \
     Cert_9_2_14_PanIdQuery.py                                        \

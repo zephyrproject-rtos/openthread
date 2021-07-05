@@ -168,8 +168,12 @@ if (openthread_enable_core_config_args) {
       defines += [ "OPENTHREAD_CONFIG_LEGACY_ENABLE=1" ]
     }
 
-    if (openthread_config_link_metrics_enable) {
-      defines += [ "OPENTHREAD_CONFIG_MLE_LINK_METRICS_ENABLE=1" ]
+    if (openthread_config_link_metrics_initiator_enable) {
+      defines += [ "DOPENTHREAD_CONFIG_MLE_LINK_METRICS_INITIATOR_ENABLE=1" ]
+    }
+
+    if (openthread_config_link_metrics_subject_enable) {
+      defines += [ "DOPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE=1" ]
     }
 
     if (openthread_config_link_raw_enable) {
@@ -334,6 +338,7 @@ openthread_core_files = [
   "api/srp_client_buffers_api.cpp",
   "api/srp_server_api.cpp",
   "api/tasklet_api.cpp",
+  "api/tcp_api.cpp",
   "api/thread_api.cpp",
   "api/thread_ftd_api.cpp",
   "api/udp_api.cpp",
@@ -372,6 +377,8 @@ openthread_core_files = [
   "common/error.cpp",
   "common/error.hpp",
   "common/extension.hpp",
+  "common/heap_string.cpp",
+  "common/heap_string.hpp",
   "common/instance.cpp",
   "common/instance.hpp",
   "common/iterator_utils.hpp",
@@ -519,7 +526,8 @@ openthread_core_files = [
   "net/srp_client.hpp",
   "net/srp_server.cpp",
   "net/srp_server.hpp",
-  "net/tcp.hpp",
+  "net/tcp6.cpp",
+  "net/tcp6.hpp",
   "net/udp6.cpp",
   "net/udp6.hpp",
   "radio/max_power_table.hpp",

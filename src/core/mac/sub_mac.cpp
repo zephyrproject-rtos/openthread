@@ -331,14 +331,14 @@ void SubMac::ProcessTransmitSecurity(void)
     VerifyOrExit(mTransmitFrame.GetSecurityEnabled());
     VerifyOrExit(!mTransmitFrame.IsSecurityProcessed());
 
+    SuccessOrExit(mTransmitFrame.GetKeyIdMode(keyIdMode));
+
     if (!mTransmitFrame.IsARetransmission())
     {
         mTransmitFrame.SetKeyId(mKeyId);
     }
 
     VerifyOrExit(ShouldHandleTransmitSecurity());
-
-    SuccessOrExit(mTransmitFrame.GetKeyIdMode(keyIdMode));
     VerifyOrExit(keyIdMode == Frame::kKeyIdMode1);
 
     mTransmitFrame.SetAesKey(GetCurrentMacKey());
@@ -1058,18 +1058,19 @@ void SubMac::GetCslWindowEdges(uint32_t &ahead, uint32_t &after)
 {
     uint32_t semiPeriod = mCslPeriod * kUsPerTenSymbols / 2;
     uint64_t curTime    = otPlatRadioGetNow(&GetInstance());
-    uint32_t elapsed, semiWindow;
+    uint64_t elapsed;
+    uint32_t semiWindow;
 
     if (mCslLastSync.GetValue() > curTime)
     {
-        elapsed = static_cast<uint32_t>(UINT64_MAX - mCslLastSync.GetValue() + curTime);
+        elapsed = UINT64_MAX - mCslLastSync.GetValue() + curTime;
     }
     else
     {
-        elapsed = static_cast<uint32_t>(curTime - mCslLastSync.GetValue());
+        elapsed = curTime - mCslLastSync.GetValue();
     }
 
-    semiWindow = elapsed * (Get<Radio>().GetCslAccuracy() + mCslParentDrift) / 1000000;
+    semiWindow = static_cast<uint32_t>(elapsed * (Get<Radio>().GetCslAccuracy() + mCslParentDrift) / 1000000);
     semiWindow += mCslParentUncert * kUsPerUncertUnit;
 
     ahead = (semiWindow + kCslReceiveTimeAhead > semiPeriod) ? semiPeriod : semiWindow + kCslReceiveTimeAhead;

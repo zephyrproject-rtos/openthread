@@ -90,7 +90,7 @@
 #include "backbone_router/bbr_local.hpp"
 #endif
 
-#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_ENABLE
+#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_INITIATOR_ENABLE || OPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE
 #include "thread/link_metrics.hpp"
 #endif
 
@@ -645,6 +645,13 @@ template <> inline NetworkData::Service::Manager &Instance::Get(void)
     return mThreadNetif.mNetworkDataServiceManager;
 }
 
+#if OPENTHREAD_CONFIG_TCP_ENABLE
+template <> inline Ip6::Tcp &Instance::Get(void)
+{
+    return mIp6.mTcp;
+}
+#endif
+
 template <> inline Ip6::Udp &Instance::Get(void)
 {
     return mIp6.mUdp;
@@ -891,7 +898,7 @@ template <> inline DuaManager &Instance::Get(void)
 }
 #endif
 
-#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_ENABLE
+#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_INITIATOR_ENABLE || OPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE
 template <> inline LinkMetrics &Instance::Get(void)
 {
     return mThreadNetif.mLinkMetrics;

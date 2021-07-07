@@ -95,7 +95,10 @@ class OtCliCommandRunner(OTCommandHandler):
     def execute_command(self, cmd, timeout=10) -> List[str]:
         self.__otcli.writeline(cmd)
 
-        if cmd in {'reset', 'factoryreset'}:
+        if cmd in ('reset', 'factoryreset'):
+            self.wait(3)
+            self.__otcli.writeline('extaddr')
+            self.wait(1)
             return []
 
         if self.__expect_command_echoback:
@@ -174,31 +177,46 @@ class OtCliCommandRunner(OTCommandHandler):
 
 class OtbrSshCommandRunner(OTCommandHandler):
 
-    def __init__(self, host, port, username, password):
+    def __init__(self, host, port, username, password, sudo):
         import paramiko
 
         self.__host = host
         self.__port = port
+        self.__sudo = sudo
         self.__ssh = paramiko.SSHClient()
         self.__ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        self.__ssh.connect(host,
-                           port=port,
-                           username=username,
-                           password=password,
-                           allow_agent=False,
-                           look_for_keys=False)
+
+        try:
+            self.__ssh.connect(host,
+                               port=port,
+                               username=username,
+                               password=password,
+                               allow_agent=False,
+                               look_for_keys=False)
+        except paramiko.ssh_exception.AuthenticationException:
+            if not password:
+                self.__ssh.get_transport().auth_none(username)
+            else:
+                raise
 
     def __repr__(self):
         return f'{self.__host}:{self.__port}'
 
     def execute_command(self, cmd: str, timeout: float) -> List[str]:
-        sh_cmd = f'sudo ot-ctl "{cmd}"'
+        sh_cmd = f'ot-ctl -- {cmd}'
+        if self.__sudo:
+            sh_cmd = 'sudo ' + sh_cmd
+
         cmd_in, cmd_out, cmd_err = self.__ssh.exec_command(sh_cmd, timeout=int(timeout), bufsize=1024)
         err = cmd_err.read().decode('utf-8')
         if err:
             raise CommandError(cmd, [err])
 
         output = [l.rstrip('\r\n') for l in cmd_out.readlines()]
+
+        if cmd in ('reset', 'factoryreset'):
+            self.wait(3)
+
         return output
 
     def close(self):

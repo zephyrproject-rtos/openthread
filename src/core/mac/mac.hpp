@@ -234,21 +234,6 @@ public:
 #endif
 
     /**
-     * This method requests an Out of Band frame for MAC Transmission.
-     *
-     * An Out of Band frame is one that was generated outside of OpenThread.
-     *
-     * @param[in]  aOobFrame  A pointer to the frame.
-     *
-     * @retval kErrorNone          Successfully scheduled the frame transmission.
-     * @retval kErrorAlready       MAC layer is busy sending a previously requested frame.
-     * @retval kErrorInvalidState  The MAC layer is not enabled.
-     * @retval kErrorInvalidArgs   The argument @p aOobFrame is nullptr.
-     *
-     */
-    Error RequestOutOfBandFrameTransmission(otRadioFrame *aOobFrame);
-
-    /**
      * This method requests transmission of a data poll (MAC Data Request) frame.
      *
      * @retval kErrorNone          Data poll transmission request is scheduled successfully.
@@ -747,7 +732,6 @@ private:
         kOperationTransmitDataDirect,
         kOperationTransmitPoll,
         kOperationWaitingForData,
-        kOperationTransmitOutOfBandFrame,
 #if OPENTHREAD_FTD
         kOperationTransmitDataIndirect,
 #if OPENTHREAD_CONFIG_MAC_CSL_TRANSMITTER_ENABLE
@@ -807,6 +791,7 @@ private:
     Error ConvertBeaconToActiveScanResult(const RxFrame *aBeaconFrame, ActiveScanResult &aResult);
     void  PerformEnergyScan(void);
     void  ReportEnergyScanResult(int8_t aRssi);
+    Error SignalNetworkNameChange(Error aError);
 
     void LogFrameRxFailure(const RxFrame *aFrame, Error aError) const;
     void LogFrameTxFailure(const TxFrame &aFrame, Error aError, uint8_t aRetryCount, bool aWillRetx) const;
@@ -819,7 +804,7 @@ private:
 #if OPENTHREAD_FTD && OPENTHREAD_CONFIG_MAC_CSL_TRANSMITTER_ENABLE
     void ProcessCsl(const RxFrame &aFrame, const Address &aSrcAddr);
 #endif
-#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_ENABLE
+#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE
     void ProcessEnhAckProbing(const RxFrame &aFrame, const Neighbor &aNeighbor);
 #endif
     static const char *OperationToString(Operation aOperation);
@@ -842,7 +827,6 @@ private:
 #endif
 #endif
     bool mPendingTransmitPoll : 1;
-    bool mPendingTransmitOobFrame : 1;
     bool mPendingWaitingForData : 1;
     bool mShouldTxPollBeforeData : 1;
     bool mRxOnWhenIdle : 1;
@@ -889,7 +873,6 @@ private:
     Links              mLinks;
     Tasklet            mOperationTask;
     TimerMilli         mTimer;
-    TxFrame *          mOobFrame;
     otMacCounters      mCounters;
     uint32_t           mKeyIdMode2FrameCounter;
     SuccessRateTracker mCcaSuccessRateTracker;

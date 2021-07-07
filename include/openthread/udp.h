@@ -161,6 +161,17 @@ otMessage *otUdpNewMessage(otInstance *aInstance, const otMessageSettings *aSett
 otError otUdpOpen(otInstance *aInstance, otUdpSocket *aSocket, otUdpReceive aCallback, void *aContext);
 
 /**
+ * Check if a UDP socket is open.
+ *
+ * @param[in]  aInstance  A pointer to an OpenThread instance.
+ * @param[in]  aSocket    A pointer to a UDP socket structure.
+ *
+ * @returns Whether the UDP socket is open.
+ *
+ */
+bool otUdpIsOpen(otInstance *aInstance, const otUdpSocket *aSocket);
+
+/**
  * Close a UDP/IPv6 socket.
  *
  * @param[in]  aInstance  A pointer to an OpenThread instance.
@@ -288,6 +299,18 @@ void otUdpForwardReceive(otInstance *        aInstance,
                          uint16_t            aPeerPort,
                          const otIp6Address *aPeerAddr,
                          uint16_t            aSockPort);
+
+/**
+ * Determines if the given UDP port is exclusively opened by OpenThread API.
+ *
+ * @param[in]  aInstance            A pointer to an OpenThread instance.
+ * @param[in]  port                 UDP port number to verify.
+ *
+ * @retval true    The port is being used exclusively by OpenThread.
+ * @retval false   The port is not used by any of the OpenThread API or is shared (e.g. is Backbone socket).
+ *
+ */
+bool otUdpIsPortInUse(otInstance *aInstance, uint16_t port);
 
 /**
  * @}

@@ -151,6 +151,7 @@ SOURCES_COMMON                                  = \
     api/srp_client_buffers_api.cpp                \
     api/srp_server_api.cpp                        \
     api/tasklet_api.cpp                           \
+    api/tcp_api.cpp                               \
     api/thread_api.cpp                            \
     api/thread_ftd_api.cpp                        \
     api/udp_api.cpp                               \
@@ -168,6 +169,7 @@ SOURCES_COMMON                                  = \
     coap/coap_secure.cpp                          \
     common/crc16.cpp                              \
     common/error.cpp                              \
+    common/heap_string.cpp                        \
     common/instance.cpp                           \
     common/logging.cpp                            \
     common/message.cpp                            \
@@ -236,6 +238,7 @@ SOURCES_COMMON                                  = \
     net/socket.cpp                                \
     net/srp_client.cpp                            \
     net/srp_server.cpp                            \
+    net/tcp6.cpp                                  \
     net/udp6.cpp                                  \
     radio/radio.cpp                               \
     radio/radio_callbacks.cpp                     \
@@ -384,6 +387,7 @@ HEADERS_COMMON                                  = \
     common/equatable.hpp                          \
     common/error.hpp                              \
     common/extension.hpp                          \
+    common/heap_string.hpp                        \
     common/instance.hpp                           \
     common/iterator_utils.hpp                     \
     common/linked_list.hpp                        \
@@ -496,7 +500,7 @@ HEADERS_COMMON                                  = \
     net/socket.hpp                                \
     net/srp_client.hpp                            \
     net/srp_server.hpp                            \
-    net/tcp.hpp                                   \
+    net/tcp6.hpp                                  \
     net/udp6.hpp                                  \
     openthread-core-config.h                      \
     radio/max_power_table.hpp                     \

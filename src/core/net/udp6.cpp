@@ -87,6 +87,11 @@ Error Udp::Socket::Open(otUdpReceive aHandler, void *aContext)
     return Get<Udp>().Open(*this, aHandler, aContext);
 }
 
+bool Udp::Socket::IsOpen(void) const
+{
+    return Get<Udp>().IsOpen(*this);
+}
+
 Error Udp::Socket::Bind(const SockAddr &aSockAddr, otNetifIdentifier aNetifIdentifier)
 {
     return Get<Udp>().Bind(*this, aSockAddr, aNetifIdentifier);
@@ -185,6 +190,8 @@ exit:
 Error Udp::Open(SocketHandle &aSocket, otUdpReceive aHandler, void *aContext)
 {
     Error error = kErrorNone;
+
+    OT_ASSERT(!IsOpen(aSocket));
 
     aSocket.GetSockName().Clear();
     aSocket.GetPeerName().Clear();
@@ -308,6 +315,8 @@ Error Udp::Close(SocketHandle &aSocket)
 {
     Error error = kErrorNone;
 
+    VerifyOrExit(IsOpen(aSocket));
+
 #if OPENTHREAD_CONFIG_PLATFORM_UDP_ENABLE
     error = otPlatUdpClose(&aSocket);
 #endif
@@ -371,6 +380,11 @@ exit:
     return error;
 }
 
+bool Udp::IsPortReserved(uint16_t aPort)
+{
+    return aPort == Tmf::kUdpPort || (kSrpServerPortMin <= aPort && aPort <= kSrpServerPortMax);
+}
+
 void Udp::AddSocket(SocketHandle &aSocket)
 {
     SuccessOrExit(mSockets.Add(aSocket));
@@ -407,8 +421,6 @@ exit:
 
 uint16_t Udp::GetEphemeralPort(void)
 {
-    uint16_t rval = mEphemeralPort;
-
     do
     {
         if (mEphemeralPort < kDynamicPortMax)
@@ -419,9 +431,9 @@ uint16_t Udp::GetEphemeralPort(void)
         {
             mEphemeralPort = kDynamicPortMin;
         }
-    } while (rval == Tmf::kUdpPort);
+    } while (IsPortReserved(mEphemeralPort));
 
-    return rval;
+    return mEphemeralPort;
 }
 
 Message *Udp::NewMessage(uint16_t aReserved, const Message::Settings &aSettings)
@@ -477,7 +489,7 @@ Error Udp::HandleMessage(Message &aMessage, MessageInfo &aMessageInfo)
     aMessageInfo.mSockPort = udpHeader.GetDestinationPort();
 
 #if OPENTHREAD_CONFIG_PLATFORM_UDP_ENABLE
-    VerifyOrExit(!ShouldUsePlatformUdp(aMessageInfo.mSockPort));
+    VerifyOrExit(!ShouldUsePlatformUdp(aMessageInfo.mSockPort) || IsPortInUse(aMessageInfo.mSockPort));
 #endif
 
     for (Receiver *receiver = mReceivers.GetHead(); receiver; receiver = receiver->GetNext())
@@ -525,6 +537,22 @@ void Udp::HandlePayload(Message &aMessage, MessageInfo &aMessageInfo)
 
 exit:
     return;
+}
+
+bool Udp::IsPortInUse(uint16_t aPort) const
+{
+    bool found = false;
+
+    for (const SocketHandle *socket = mSockets.GetHead(); socket != nullptr; socket = socket->GetNext())
+    {
+        if (socket->GetSockName().GetPort() == aPort)
+        {
+            found = true;
+            break;
+        }
+    }
+
+    return found;
 }
 
 bool Udp::ShouldUsePlatformUdp(uint16_t aPort) const

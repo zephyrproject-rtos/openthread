@@ -87,7 +87,6 @@ Mac::Mac(Instance &aInstance)
 #endif
 #endif
     , mPendingTransmitPoll(false)
-    , mPendingTransmitOobFrame(false)
     , mPendingWaitingForData(false)
     , mShouldTxPollBeforeData(false)
     , mRxOnWhenIdle(false)
@@ -120,7 +119,6 @@ Mac::Mac(Instance &aInstance)
     , mLinks(aInstance)
     , mOperationTask(aInstance, Mac::HandleOperationTask)
     , mTimer(aInstance, Mac::HandleTimer)
-    , mOobFrame(nullptr)
     , mKeyIdMode2FrameCounter(0)
     , mCcaSampleCount(0)
 #if OPENTHREAD_CONFIG_MULTI_RADIO
@@ -216,7 +214,6 @@ bool Mac::IsInTransmitState(void) const
 #endif
     case kOperationTransmitBeacon:
     case kOperationTransmitPoll:
-    case kOperationTransmitOutOfBandFrame:
         retval = true;
         break;
 
@@ -475,75 +472,47 @@ void Mac::SetSupportedChannelMask(const ChannelMask &aMask)
 
 Error Mac::SetNetworkName(const char *aNameString)
 {
-    // When setting Network Name from a string, we treat it as `NameData`
-    // with `kMaxSize + 1` chars. `NetworkName::Set(data)` will look
-    // for null char in the data (within its given size) to calculate
-    // the name's length and ensure that the name fits in `kMaxSize`
-    // chars. The `+ 1` ensures that a `aNameString` with length
-    // longer than `kMaxSize` is correctly rejected (returning error
-    // `kErrorInvalidArgs`).
-
-    Error    error;
-    NameData data(aNameString, NetworkName::kMaxSize + 1);
-
-    VerifyOrExit(IsValidUtf8String(aNameString), error = kErrorInvalidArgs);
-
-    error = SetNetworkName(data);
-
-exit:
-    return error;
+    return SignalNetworkNameChange(mNetworkName.Set(aNameString));
 }
 
 Error Mac::SetNetworkName(const NameData &aNameData)
 {
-    Error error = mNetworkName.Set(aNameData);
+    return SignalNetworkNameChange(mNetworkName.Set(aNameData));
+}
 
-    if (error == kErrorAlready)
+Error Mac::SignalNetworkNameChange(Error aError)
+{
+    switch (aError)
     {
+    case kErrorNone:
+        Get<Notifier>().Signal(kEventThreadNetworkNameChanged);
+        break;
+
+    case kErrorAlready:
         Get<Notifier>().SignalIfFirst(kEventThreadNetworkNameChanged);
-        error = kErrorNone;
-        ExitNow();
+        aError = kErrorNone;
+        break;
+
+    default:
+        break;
     }
 
-    SuccessOrExit(error);
-    Get<Notifier>().Signal(kEventThreadNetworkNameChanged);
-
-exit:
-    return error;
+    return aError;
 }
 
 #if (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
 Error Mac::SetDomainName(const char *aNameString)
 {
-    // When setting Domain Name from a string, we treat it as `NameData`
-    // with `kMaxSize + 1` chars. `DomainName::Set(data)` will look
-    // for null char in the data (within its given size) to calculate
-    // the name's length and ensure that the name fits in `kMaxSize`
-    // chars. The `+ 1` ensures that a `aNameString` with length
-    // longer than `kMaxSize` is correctly rejected (returning error
-    // `kErrorInvalidArgs`).
+    Error error = mDomainName.Set(aNameString);
 
-    Error    error;
-    NameData data(aNameString, DomainName::kMaxSize + 1);
-
-    VerifyOrExit(IsValidUtf8String(aNameString), error = kErrorInvalidArgs);
-
-    error = SetDomainName(data);
-
-exit:
-    return error;
+    return (error == kErrorAlready) ? kErrorNone : error;
 }
 
 Error Mac::SetDomainName(const NameData &aNameData)
 {
     Error error = mDomainName.Set(aNameData);
 
-    if (error == kErrorAlready)
-    {
-        error = kErrorNone;
-    }
-
-    return error;
+    return (error == kErrorAlready) ? kErrorNone : error;
 }
 #endif // (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
 
@@ -598,22 +567,6 @@ exit:
 }
 #endif
 #endif // OPENTHREAD_FTD
-
-Error Mac::RequestOutOfBandFrameTransmission(otRadioFrame *aOobFrame)
-{
-    Error error = kErrorNone;
-
-    VerifyOrExit(aOobFrame != nullptr, error = kErrorInvalidArgs);
-    VerifyOrExit(IsEnabled(), error = kErrorInvalidState);
-    VerifyOrExit(!mPendingTransmitOobFrame && (mOperation != kOperationTransmitOutOfBandFrame), error = kErrorAlready);
-
-    mOobFrame = static_cast<TxFrame *>(aOobFrame);
-
-    StartOperation(kOperationTransmitOutOfBandFrame);
-
-exit:
-    return error;
-}
 
 Error Mac::RequestDataPollTransmission(void)
 {
@@ -743,10 +696,6 @@ void Mac::StartOperation(Operation aOperation)
     case kOperationWaitingForData:
         mPendingWaitingForData = true;
         break;
-
-    case kOperationTransmitOutOfBandFrame:
-        mPendingTransmitOobFrame = true;
-        break;
     }
 
     if (mOperation == kOperationIdle)
@@ -767,7 +716,6 @@ void Mac::PerformNextOperation(void)
     if (!IsEnabled())
     {
         mPendingWaitingForData     = false;
-        mPendingTransmitOobFrame   = false;
         mPendingActiveScan         = false;
         mPendingEnergyScan         = false;
         mPendingTransmitBeacon     = false;
@@ -802,11 +750,6 @@ void Mac::PerformNextOperation(void)
         mOperation              = kOperationTransmitDataCsl;
     }
 #endif
-    else if (mPendingTransmitOobFrame)
-    {
-        mPendingTransmitOobFrame = false;
-        mOperation               = kOperationTransmitOutOfBandFrame;
-    }
     else if (mPendingActiveScan)
     {
         mPendingActiveScan = false;
@@ -877,7 +820,6 @@ void Mac::PerformNextOperation(void)
 #endif
 #endif
     case kOperationTransmitPoll:
-    case kOperationTransmitOutOfBandFrame:
         BeginTransmit();
         break;
 
@@ -1169,12 +1111,6 @@ void Mac::BeginTransmit(void)
 #endif
 #endif // OPENTHREAD_FTD
 
-    case kOperationTransmitOutOfBandFrame:
-        frame = &txFrames.GetBroadcastTxFrame();
-        frame->CopyFrom(*mOobFrame);
-        frame->SetIsSecurityProcessed(true);
-        break;
-
     default:
         OT_ASSERT(false);
         OT_UNREACHABLE_CODE(break);
@@ -1368,7 +1304,7 @@ void Mac::RecordFrameTransmitStatus(const TxFrame &aFrame,
     if ((aError == kErrorNone) && ackRequested && (aAckFrame != nullptr) && (neighbor != nullptr))
     {
         neighbor->GetLinkInfo().AddRss(aAckFrame->GetRssi());
-#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_ENABLE
+#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE
         neighbor->AggregateLinkMetrics(/* aSeriesId */ 0, aAckFrame->GetType(), aAckFrame->GetLqi(),
                                        aAckFrame->GetRssi());
         ProcessEnhAckProbing(*aAckFrame, *neighbor);
@@ -1610,13 +1546,6 @@ void Mac::HandleTransmitDone(TxFrame &aFrame, RxFrame *aAckFrame, Error aError)
         PerformNextOperation();
         break;
 #endif
-
-    case kOperationTransmitOutOfBandFrame:
-        // count Oob frames
-        mCounters.mTxOther++;
-        FinishOperation();
-        PerformNextOperation();
-        break;
 
     default:
         OT_ASSERT(false);
@@ -2054,7 +1983,7 @@ void Mac::HandleReceivedFrame(RxFrame *aFrame, Error aError)
     if (neighbor != nullptr)
     {
         neighbor->GetLinkInfo().AddRss(aFrame->GetRssi());
-#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_ENABLE
+#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE
         neighbor->AggregateLinkMetrics(/* aSeriesId */ 0, aFrame->GetType(), aFrame->GetLqi(), aFrame->GetRssi());
 #endif
 
@@ -2321,11 +2250,10 @@ const char *Mac::OperationToString(Operation aOperation)
         "TransmitDataDirect", // (4) kOperationTransmitDataDirect
         "TransmitPoll",       // (5) kOperationTransmitPoll
         "WaitingForData",     // (6) kOperationWaitingForData
-        "TransmitOobFrame",   // (7) kOperationTransmitOutOfBandFrame
 #if OPENTHREAD_FTD
-        "TransmitDataIndirect", // (8) kOperationTransmitDataIndirect
+        "TransmitDataIndirect", // (7) kOperationTransmitDataIndirect
 #if OPENTHREAD_CONFIG_MAC_CSL_TRANSMITTER_ENABLE
-        "TransmitDataCsl", // (9) kOperationTransmitDataCsl
+        "TransmitDataCsl", // (8) kOperationTransmitDataCsl
 #endif
 #endif
     };
@@ -2337,11 +2265,10 @@ const char *Mac::OperationToString(Operation aOperation)
     static_assert(kOperationTransmitDataDirect == 4, "kOperationTransmitDataDirect value is incorrect");
     static_assert(kOperationTransmitPoll == 5, "kOperationTransmitPoll value is incorrect");
     static_assert(kOperationWaitingForData == 6, "kOperationWaitingForData value is incorrect");
-    static_assert(kOperationTransmitOutOfBandFrame == 7, "kOperationTransmitOutOfBandFrame value is incorrect");
 #if OPENTHREAD_FTD
-    static_assert(kOperationTransmitDataIndirect == 8, "kOperationTransmitDataIndirect value is incorrect");
+    static_assert(kOperationTransmitDataIndirect == 7, "kOperationTransmitDataIndirect value is incorrect");
 #if OPENTHREAD_CONFIG_MAC_CSL_TRANSMITTER_ENABLE
-    static_assert(kOperationTransmitDataCsl == 9, "TransmitDataCsl value is incorrect");
+    static_assert(kOperationTransmitDataCsl == 8, "TransmitDataCsl value is incorrect");
 #endif
 #endif
 
@@ -2506,7 +2433,7 @@ exit:
 }
 #endif // OPENTHREAD_FTD && OPENTHREAD_CONFIG_MAC_CSL_TRANSMITTER_ENABLE
 
-#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_ENABLE
+#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE
 void Mac::ProcessEnhAckProbing(const RxFrame &aFrame, const Neighbor &aNeighbor)
 {
     enum
@@ -2529,7 +2456,7 @@ void Mac::ProcessEnhAckProbing(const RxFrame &aFrame, const Neighbor &aNeighbor)
 exit:
     return;
 }
-#endif // OPENTHREAD_CONFIG_MLE_LINK_METRICS_ENABLE
+#endif // OPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE
 
 } // namespace Mac
 } // namespace ot

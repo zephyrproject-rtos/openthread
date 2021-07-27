@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2020, The OpenThread Authors.
+ *  Copyright (c) 2021, The OpenThread Authors.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -26,40 +26,29 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 
-/**
- * @file
- *   This file implements the OpenThread Multi Radio Link APIs.
- */
+#include "platform-simulation.h"
 
-#include "openthread-core-config.h"
+#include <openthread/platform/infra_if.h>
 
-#if OPENTHREAD_CONFIG_MULTI_RADIO
-
-#include <openthread/multi_radio.h>
-
-#include "common/code_utils.hpp"
-#include "common/debug.hpp"
-#include "common/instance.hpp"
-#include "common/locator_getters.hpp"
-#include "thread/radio_selector.hpp"
-
-using namespace ot;
-
-otError otMultiRadioGetNeighborInfo(otInstance *              aInstance,
-                                    const otExtAddress *      aExtAddress,
-                                    otMultiRadioNeighborInfo *aNeighborInfo)
+#if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
+bool otPlatInfraIfHasAddress(uint32_t aInfraIfIndex, const otIp6Address *aAddress)
 {
-    Error     error    = kErrorNone;
-    Instance &instance = *static_cast<Instance *>(aInstance);
-    Neighbor *neighbor;
+    OT_UNUSED_VARIABLE(aInfraIfIndex);
+    OT_UNUSED_VARIABLE(aAddress);
 
-    neighbor = instance.Get<NeighborTable>().FindNeighbor(*static_cast<const Mac::ExtAddress *>(aExtAddress),
-                                                          Neighbor::kInStateAnyExceptInvalid);
-    VerifyOrExit(neighbor != nullptr, error = kErrorNotFound);
-
-    neighbor->PopulateMultiRadioInfo(*aNeighborInfo);
-
-exit:
-    return error;
+    return false;
 }
-#endif // OPENTHREAD_CONFIG_MULTI_RADIO
+
+otError otPlatInfraIfSendIcmp6Nd(uint32_t            aInfraIfIndex,
+                                 const otIp6Address *aDestAddress,
+                                 const uint8_t *     aBuffer,
+                                 uint16_t            aBufferLength)
+{
+    OT_UNUSED_VARIABLE(aInfraIfIndex);
+    OT_UNUSED_VARIABLE(aDestAddress);
+    OT_UNUSED_VARIABLE(aBuffer);
+    OT_UNUSED_VARIABLE(aBufferLength);
+
+    return OT_ERROR_FAILED;
+}
+#endif

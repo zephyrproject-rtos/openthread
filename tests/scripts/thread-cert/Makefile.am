@@ -153,13 +153,14 @@ EXTRA_DIST                                                         = \
     sniffer_transport.py                                             \
     test_anycast.py                                                  \
     test_coap.py                                                     \
+    test_coap_block.py                                               \
     test_coap_observe.py                                             \
     test_coaps.py                                                    \
-    test_coap_block.py                                               \
     test_common.py                                                   \
     test_crypto.py                                                   \
     test_dataset_updater.py                                          \
     test_diag.py                                                     \
+    test_dns_client_config_auto_start.py                             \
     test_dnssd.py                                                    \
     test_ipv6.py                                                     \
     test_ipv6_fragmentation.py                                       \
@@ -169,18 +170,23 @@ EXTRA_DIST                                                         = \
     test_mle.py                                                      \
     test_network_data.py                                             \
     test_network_layer.py                                            \
+    test_on_mesh_prefix.py                                           \
+    test_pbbr_aloc.py                                                \
     test_ping.py                                                     \
     test_reed_address_solicit_rejected.py                            \
     test_reset.py                                                    \
     test_route_table.py                                              \
     test_router_reattach.py                                          \
     test_service.py                                                  \
+    test_set_mliid.py                                                \
     test_srp_auto_start_mode.py                                      \
     test_srp_client_save_server_info.py                              \
     test_srp_lease.py                                                \
     test_srp_name_conflicts.py                                       \
     test_srp_register_single_service.py                              \
+    test_srp_server_reboot_port.py                                   \
     test_srp_sub_type.py                                             \
+    test_zero_len_external_route.py                                  \
     thread_cert.py                                                   \
     tlvs_parsing.py                                                  \
     thread_cert.py                                                   \
@@ -212,13 +218,14 @@ check_PROGRAMS                                                     = \
 check_SCRIPTS                                                      = \
     test_anycast.py                                                  \
     test_coap.py                                                     \
+    test_coap_block.py                                               \
     test_coap_observe.py                                             \
     test_coaps.py                                                    \
-    test_coap_block.py                                               \
     test_common.py                                                   \
     test_crypto.py                                                   \
     test_dataset_updater.py                                          \
     test_diag.py                                                     \
+    test_dns_client_config_auto_start.py                             \
     test_dnssd.py                                                    \
     test_ipv6.py                                                     \
     test_ipv6_fragmentation.py                                       \
@@ -228,6 +235,8 @@ check_SCRIPTS                                                      = \
     test_mle.py                                                      \
     test_network_data.py                                             \
     test_network_layer.py                                            \
+    test_on_mesh_prefix.py                                           \
+    test_pbbr_aloc.py                                                \
     test_ping.py                                                     \
     test_reed_address_solicit_rejected.py                            \
     test_reset.py                                                    \
@@ -239,7 +248,9 @@ check_SCRIPTS                                                      = \
     test_srp_lease.py                                                \
     test_srp_name_conflicts.py                                       \
     test_srp_register_single_service.py                              \
+    test_srp_server_reboot_port.py                                   \
     test_srp_sub_type.py                                             \
+    test_zero_len_external_route.py                                  \
     Cert_5_1_01_RouterAttach.py                                      \
     Cert_5_1_02_ChildAddressTimeout.py                               \
     Cert_5_1_03_RouterAddressReallocation.py                         \

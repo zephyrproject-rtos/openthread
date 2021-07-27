@@ -47,6 +47,9 @@
 #include <openthread/ip6.h>
 #include <openthread/link.h>
 #include <openthread/sntp.h>
+#if OPENTHREAD_CONFIG_TCP_ENABLE && OPENTHREAD_CONFIG_CLI_TCP_ENABLE
+#include <openthread/tcp.h>
+#endif
 #include <openthread/thread.h>
 #include <openthread/thread_ftd.h>
 #include <openthread/udp.h>
@@ -57,6 +60,7 @@
 #include "cli/cli_network_data.hpp"
 #include "cli/cli_srp_client.hpp"
 #include "cli/cli_srp_server.hpp"
+#include "cli/cli_tcp.hpp"
 #include "cli/cli_udp.hpp"
 #if OPENTHREAD_CONFIG_COAP_API_ENABLE
 #include "cli/cli_coap.hpp"
@@ -83,6 +87,9 @@ namespace ot {
  */
 namespace Cli {
 
+extern "C" void otCliPlatLogv(otLogLevel, otLogRegion, const char *, va_list);
+extern "C" void otCliPlatLogLine(otLogLevel, otLogRegion, const char *);
+
 /**
  * This class implements the CLI interpreter.
  *
@@ -97,7 +104,10 @@ class Interpreter
     friend class NetworkData;
     friend class SrpClient;
     friend class SrpServer;
+    friend class TcpExample;
     friend class UdpExample;
+    friend void otCliPlatLogv(otLogLevel, otLogRegion, const char *, va_list);
+    friend void otCliPlatLogLine(otLogLevel, otLogRegion, const char *);
 
 public:
     typedef Utils::CmdLineParser::Arg Arg;
@@ -610,6 +620,9 @@ private:
     otError ProcessThread(Arg aArgs[]);
     otError ProcessDataset(Arg aArgs[]);
     otError ProcessTxPower(Arg aArgs[]);
+#if OPENTHREAD_CONFIG_TCP_ENABLE && OPENTHREAD_CONFIG_CLI_TCP_ENABLE
+    otError ProcessTcp(Arg aArgs[]);
+#endif
     otError ProcessUdp(Arg aArgs[]);
     otError ProcessUnsecurePort(Arg aArgs[]);
     otError ProcessVersion(Arg aArgs[]);
@@ -712,6 +725,11 @@ private:
         static_cast<Interpreter *>(aContext)->HandleDiscoveryRequest(*aInfo);
     }
     void HandleDiscoveryRequest(const otThreadDiscoveryRequestInfo &aInfo);
+
+#if OPENTHREAD_CONFIG_CLI_LOG_INPUT_OUTPUT_ENABLE
+    bool IsLogging(void) const { return mIsLogging; }
+    void SetIsLogging(bool aIsLogging) { mIsLogging = aIsLogging; }
+#endif
 
     static constexpr Command sCommands[] = {
 #if OPENTHREAD_CONFIG_BORDER_AGENT_ENABLE
@@ -876,6 +894,9 @@ private:
         {"srp", &Interpreter::ProcessSrp},
 #endif
         {"state", &Interpreter::ProcessState},
+#if OPENTHREAD_CONFIG_TCP_ENABLE && OPENTHREAD_CONFIG_CLI_TCP_ENABLE
+        {"tcp", &Interpreter::ProcessTcp},
+#endif
         {"thread", &Interpreter::ProcessThread},
         {"txpower", &Interpreter::ProcessTxPower},
         {"udp", &Interpreter::ProcessUdp},
@@ -899,6 +920,10 @@ private:
     NetworkData mNetworkData;
     UdpExample  mUdp;
 
+#if OPENTHREAD_CONFIG_TCP_ENABLE && OPENTHREAD_CONFIG_CLI_TCP_ENABLE
+    TcpExample mTcp;
+#endif
+
 #if OPENTHREAD_CONFIG_COAP_API_ENABLE
     Coap mCoap;
 #endif
@@ -921,6 +946,12 @@ private:
 
 #if OPENTHREAD_CONFIG_SRP_SERVER_ENABLE
     SrpServer mSrpServer;
+#endif
+
+#if OPENTHREAD_CONFIG_CLI_LOG_INPUT_OUTPUT_ENABLE
+    char     mOutputString[OPENTHREAD_CONFIG_CLI_LOG_INPUT_OUTPUT_LOG_STRING_SIZE];
+    uint16_t mOutputLength;
+    bool     mIsLogging;
 #endif
 };
 

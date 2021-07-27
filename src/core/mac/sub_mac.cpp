@@ -71,7 +71,7 @@ SubMac::SubMac(Instance &aInstance)
     , mCslChannel(0)
     , mIsCslChannelSpecified(false)
     , mCslLastSync(0)
-    , mCslParentDrift(kCslWorstCrystalPpm)
+    , mCslParentAccuracy(kCslWorstCrystalPpm)
     , mCslParentUncert(kCslWorstUncertainty)
     , mCslState(kCslIdle)
     , mCslTimer(aInstance, SubMac::HandleCslTimer)
@@ -105,15 +105,15 @@ otRadioCaps SubMac::GetCaps(void) const
     caps |= OT_RADIO_CAPS_ENERGY_SCAN;
 #endif
 
-#if OPENTHREAD_CONFIG_MAC_SOFTWARE_TX_SECURITY_ENABLE
+#if OPENTHREAD_CONFIG_MAC_SOFTWARE_TX_SECURITY_ENABLE && (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
     caps |= OT_RADIO_CAPS_TRANSMIT_SEC;
 #endif
 
-#if OPENTHREAD_CONFIG_MAC_SOFTWARE_TX_TIMING_ENABLE
+#if OPENTHREAD_CONFIG_MAC_SOFTWARE_TX_TIMING_ENABLE && (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
     caps |= OT_RADIO_CAPS_TRANSMIT_TIMING;
 #endif
 
-#if OPENTHREAD_CONFIG_MAC_SOFTWARE_RX_TIMING_ENABLE
+#if OPENTHREAD_CONFIG_MAC_SOFTWARE_RX_TIMING_ENABLE && (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
     caps |= OT_RADIO_CAPS_RECEIVE_TIMING;
 #endif
 
@@ -1070,7 +1070,7 @@ void SubMac::GetCslWindowEdges(uint32_t &ahead, uint32_t &after)
         elapsed = curTime - mCslLastSync.GetValue();
     }
 
-    semiWindow = static_cast<uint32_t>(elapsed * (Get<Radio>().GetCslAccuracy() + mCslParentDrift) / 1000000);
+    semiWindow = static_cast<uint32_t>(elapsed * (Get<Radio>().GetCslAccuracy() + mCslParentAccuracy) / 1000000);
     semiWindow += mCslParentUncert * kUsPerUncertUnit;
 
     ahead = (semiWindow + kCslReceiveTimeAhead > semiPeriod) ? semiPeriod : semiWindow + kCslReceiveTimeAhead;

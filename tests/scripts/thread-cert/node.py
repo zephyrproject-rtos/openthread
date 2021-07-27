@@ -1010,6 +1010,10 @@ class NodeImpl:
         self.send_command(f'srp client service remove {instance_name} {service_name}')
         self._expect_done()
 
+    def srp_client_clear_service(self, instance_name, service_name):
+        self.send_command(f'srp client service clear {instance_name} {service_name}')
+        self._expect_done()
+
     def srp_client_get_services(self):
         cmd = 'srp client service'
         self.send_command(cmd)
@@ -1511,6 +1515,10 @@ class NodeImpl:
             if (segs[4] == '0' and segs[5] == 'ff' and segs[6] == 'fe00' and segs[7] == 'fc00'):
                 return addr
         return None
+
+    def get_mleid_iid(self):
+        ml_eid = ipaddress.IPv6Address(self.get_mleid())
+        return ml_eid.packed[8:].hex()
 
     def get_eidcaches(self):
         eidcaches = []
@@ -2476,6 +2484,32 @@ class NodeImpl:
 
     def send_proactive_backbone_notification(self, target: str, mliid: str, ltt: int):
         cmd = f'fake /b/ba {target} {mliid} {ltt}'
+        self.send_command(cmd)
+        self._expect_done()
+
+    def dns_get_config(self):
+        """
+        Returns the DNS config as a list of property dictionary (string key and string value).
+
+        Example output:
+        {
+            'Server': '[fd00:0:0:0:0:0:0:1]:1234'
+            'ResponseTimeout': '5000 ms'
+            'MaxTxAttempts': '2'
+            'RecursionDesired': 'no'
+        }
+        """
+        cmd = f'dns config'
+        self.send_command(cmd)
+        output = self._expect_command_output(cmd)
+        config = {}
+        for line in output:
+            k, v = line.split(': ')
+            config[k] = v
+        return config
+
+    def dns_set_config(self, config):
+        cmd = f'dns config {config}'
         self.send_command(cmd)
         self._expect_done()
 

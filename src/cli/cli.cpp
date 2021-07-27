@@ -82,6 +82,7 @@
 #include <openthread/platform/debug_uart.h>
 #endif
 
+#include "common/logging.hpp"
 #include "common/new.hpp"
 #include "common/string.hpp"
 #include "mac/channel_mask.hpp"
@@ -106,6 +107,9 @@ Interpreter::Interpreter(Instance *aInstance, otCliOutputCallback aCallback, voi
     , mDataset(*this)
     , mNetworkData(*this)
     , mUdp(*this)
+#if OPENTHREAD_CONFIG_TCP_ENABLE && OPENTHREAD_CONFIG_CLI_TCP_ENABLE
+    , mTcp(*this)
+#endif
 #if OPENTHREAD_CONFIG_COAP_API_ENABLE
     , mCoap(*this)
 #endif
@@ -123,6 +127,10 @@ Interpreter::Interpreter(Instance *aInstance, otCliOutputCallback aCallback, voi
 #endif
 #if OPENTHREAD_CONFIG_SRP_SERVER_ENABLE
     , mSrpServer(*this)
+#endif
+#if OPENTHREAD_CONFIG_CLI_LOG_INPUT_OUTPUT_ENABLE
+    , mOutputLength(0)
+    , mIsLogging(false)
 #endif
 {
 #if OPENTHREAD_FTD
@@ -611,7 +619,7 @@ otError Interpreter::ProcessDua(Arg aArgs[])
 
             if (iid != nullptr)
             {
-                OutputBytes(iid->mFields.m8, sizeof(otIp6InterfaceIdentifier));
+                OutputBytes(iid->mFields.m8);
                 OutputLine("");
             }
         }
@@ -1117,6 +1125,7 @@ otError Interpreter::ProcessCounters(Arg aArgs[])
 
     if (aArgs[0].IsEmpty())
     {
+        OutputLine("ip");
         OutputLine("mac");
         OutputLine("mle");
     }
@@ -1222,6 +1231,39 @@ otError Interpreter::ProcessCounters(Arg aArgs[])
         else if ((aArgs[1] == "reset") && aArgs[2].IsEmpty())
         {
             otThreadResetMleCounters(mInstance);
+        }
+        else
+        {
+            ExitNow(error = OT_ERROR_INVALID_ARGS);
+        }
+    }
+    else if (aArgs[0] == "ip")
+    {
+        if (aArgs[1].IsEmpty())
+        {
+            struct IpCounterName
+            {
+                const uint32_t otIpCounters::*mValuePtr;
+                const char *                  mName;
+            };
+
+            static const IpCounterName kCounterNames[] = {
+                {&otIpCounters::mTxSuccess, "TxSuccess"},
+                {&otIpCounters::mTxFailure, "TxFailed"},
+                {&otIpCounters::mRxSuccess, "RxSuccess"},
+                {&otIpCounters::mRxFailure, "RxFailed"},
+            };
+
+            const otIpCounters *ipCounters = otThreadGetIp6Counters(mInstance);
+
+            for (const IpCounterName &counter : kCounterNames)
+            {
+                OutputLine("%s: %d", counter.mName, ipCounters->*counter.mValuePtr);
+            }
+        }
+        else if ((aArgs[1] == "reset") && aArgs[2].IsEmpty())
+        {
+            otThreadResetIp6Counters(mInstance);
         }
         else
         {
@@ -1682,7 +1724,7 @@ otError Interpreter::ProcessEui64(Arg aArgs[])
     VerifyOrExit(aArgs[0].IsEmpty(), error = OT_ERROR_INVALID_ARGS);
 
     otLinkGetFactoryAssignedIeeeEui64(mInstance, &extAddress);
-    OutputBytes(extAddress.m8, OT_EXT_ADDRESS_SIZE);
+    OutputExtAddress(extAddress);
     OutputLine("");
 
 exit:
@@ -1695,8 +1737,7 @@ otError Interpreter::ProcessExtAddress(Arg aArgs[])
 
     if (aArgs[0].IsEmpty())
     {
-        const uint8_t *extAddress = reinterpret_cast<const uint8_t *>(otLinkGetExtendedAddress(mInstance));
-        OutputBytes(extAddress, OT_EXT_ADDRESS_SIZE);
+        OutputExtAddress(*otLinkGetExtendedAddress(mInstance));
         OutputLine("");
     }
     else
@@ -1755,8 +1796,7 @@ otError Interpreter::ProcessExtPanId(Arg aArgs[])
 
     if (aArgs[0].IsEmpty())
     {
-        const uint8_t *extPanId = reinterpret_cast<const uint8_t *>(otThreadGetExtendedPanId(mInstance));
-        OutputBytes(extPanId, OT_EXT_PAN_ID_SIZE);
+        OutputBytes(otThreadGetExtendedPanId(mInstance)->m8);
         OutputLine("");
     }
     else
@@ -4050,6 +4090,13 @@ exit:
     return error;
 }
 
+#if OPENTHREAD_CONFIG_TCP_ENABLE && OPENTHREAD_CONFIG_CLI_TCP_ENABLE
+otError Interpreter::ProcessTcp(Arg aArgs[])
+{
+    return mTcp.Process(aArgs);
+}
+#endif
+
 otError Interpreter::ProcessUdp(Arg aArgs[])
 {
     return mUdp.Process(aArgs);
@@ -4487,12 +4534,9 @@ otError Interpreter::ProcessDiag(Arg aArgs[])
     char    output[OPENTHREAD_CONFIG_DIAG_OUTPUT_BUFFER_SIZE];
 
     // all diagnostics related features are processed within diagnostics module
-    output[0]                  = '\0';
-    output[sizeof(output) - 1] = '\0';
-
     Arg::CopyArgsToStringArray(aArgs, args);
 
-    error = otDiagProcessCmd(mInstance, Arg::GetArgsLength(aArgs), args, output, sizeof(output) - 1);
+    error = otDiagProcessCmd(mInstance, Arg::GetArgsLength(aArgs), args, output, sizeof(output));
 
     OutputFormat("%s", output);
 
@@ -4509,6 +4553,10 @@ void Interpreter::ProcessLine(char *aBuf)
     OT_ASSERT(aBuf != nullptr);
 
     VerifyOrExit(StringLength(aBuf, kMaxLineLength) <= kMaxLineLength - 1, error = OT_ERROR_PARSE);
+
+#if OPENTHREAD_CONFIG_CLI_LOG_INPUT_OUTPUT_ENABLE
+    otLogNoteCli("Input: %s", aBuf);
+#endif
 
     error = Utils::CmdLineParser::ParseCmd(aBuf, args);
 
@@ -4877,7 +4925,98 @@ void Interpreter::OutputSpaces(uint8_t aCount)
 
 int Interpreter::OutputFormatV(const char *aFormat, va_list aArguments)
 {
-    return mOutputCallback(mOutputContext, aFormat, aArguments);
+    int rval;
+#if OPENTHREAD_CONFIG_CLI_LOG_INPUT_OUTPUT_ENABLE
+    va_list args;
+    int     charsWritten;
+    bool    truncated = false;
+
+    va_copy(args, aArguments);
+#endif
+
+    rval = mOutputCallback(mOutputContext, aFormat, aArguments);
+
+#if OPENTHREAD_CONFIG_CLI_LOG_INPUT_OUTPUT_ENABLE
+    VerifyOrExit(!IsLogging());
+
+    charsWritten = vsnprintf(&mOutputString[mOutputLength], sizeof(mOutputString) - mOutputLength, aFormat, args);
+
+    VerifyOrExit(charsWritten >= 0, mOutputLength = 0);
+
+    if (static_cast<uint32_t>(charsWritten) >= sizeof(mOutputString) - mOutputLength)
+    {
+        truncated     = true;
+        mOutputLength = sizeof(mOutputString) - 1;
+    }
+    else
+    {
+        mOutputLength += charsWritten;
+    }
+
+    while (true)
+    {
+        char *lineEnd = strchr(mOutputString, '\r');
+
+        if (lineEnd == nullptr)
+        {
+            break;
+        }
+
+        *lineEnd = '\0';
+
+        if (lineEnd > mOutputString)
+        {
+            otLogNoteCli("Output: %s", mOutputString);
+        }
+
+        lineEnd++;
+
+        while ((*lineEnd == '\n') || (*lineEnd == '\r'))
+        {
+            lineEnd++;
+        }
+
+        // Example of the pointers and lengths.
+        //
+        // - mOutputString = "hi\r\nmore"
+        // - mOutputLength = 8
+        // - lineEnd       = &mOutputString[4]
+        //
+        //
+        //   0    1    2    3    4    5    6    7    8    9
+        // +----+----+----+----+----+----+----+----+----+---
+        // | h  | i  | \r | \n | m  | o  | r  | e  | \0 |
+        // +----+----+----+----+----+----+----+----+----+---
+        //                       ^                   ^
+        //                       |                   |
+        //                    lineEnd    mOutputString[mOutputLength]
+        //
+        //
+        // New length is `&mOutputString[8] - &mOutputString[4] -> 4`.
+        //
+        // We move (newLen + 1 = 5) chars from `lineEnd` to start of
+        // `mOutputString` which will include the `\0` char.
+        //
+        // If `lineEnd` and `mOutputString[mOutputLength]` are the same
+        // the code works correctly as well  (new length set to zero and
+        // the `\0` is copied).
+
+        mOutputLength = static_cast<uint16_t>(&mOutputString[mOutputLength] - lineEnd);
+        memmove(mOutputString, lineEnd, mOutputLength + 1);
+    }
+
+    if (truncated)
+    {
+        otLogNoteCli("Output: %s ...", mOutputString);
+        mOutputLength = 0;
+    }
+
+exit:
+    va_end(args);
+
+#endif // OPENTHREAD_CONFIG_CLI_LOG_INPUT_OUTPUT_ENABLE
+
+    return rval;
 }
 
 void Interpreter::Initialize(otInstance *aInstance, otCliOutputCallback aCallback, void *aContext)
@@ -4927,8 +5066,20 @@ extern "C" void otCliPlatLogv(otLogLevel aLogLevel, otLogRegion aLogRegion, cons
 
     VerifyOrExit(Interpreter::IsInitialized());
 
+#if OPENTHREAD_CONFIG_CLI_LOG_INPUT_OUTPUT_ENABLE
+    // CLI output can be used for logging. The `IsLogging` flag is
+    // used to indicate whether it is being used for a CLI command
+    // output or for logging.
+    Interpreter::GetInterpreter().SetIsLogging(true);
+#endif
+
     Interpreter::GetInterpreter().OutputFormatV(aFormat, aArgs);
     Interpreter::GetInterpreter().OutputLine("");
+
+#if OPENTHREAD_CONFIG_CLI_LOG_INPUT_OUTPUT_ENABLE
+    Interpreter::GetInterpreter().SetIsLogging(false);
+#endif
+
 exit:
     return;
 }
@@ -4939,7 +5090,16 @@ extern "C" void otCliPlatLogLine(otLogLevel aLogLevel, otLogRegion aLogRegion, c
     OT_UNUSED_VARIABLE(aLogRegion);
 
     VerifyOrExit(Interpreter::IsInitialized());
+
+#if OPENTHREAD_CONFIG_CLI_LOG_INPUT_OUTPUT_ENABLE
+    Interpreter::GetInterpreter().SetIsLogging(true);
+#endif
+
     Interpreter::GetInterpreter().OutputLine(aLogLine);
+
+#if OPENTHREAD_CONFIG_CLI_LOG_INPUT_OUTPUT_ENABLE
+    Interpreter::GetInterpreter().SetIsLogging(false);
+#endif
 
 exit:
     return;

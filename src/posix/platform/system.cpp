@@ -140,7 +140,7 @@ otInstance *otSysInit(otPlatformConfig *aPlatformConfig)
 #if OPENTHREAD_CONFIG_PLATFORM_NETIF_ENABLE
     platformNetifInit(instance, aPlatformConfig->mInterfaceName);
 #elif OPENTHREAD_CONFIG_PLATFORM_UDP_ENABLE
-    ot::Posix::Udp::Init(instance, aPlatformConfig->mInterfaceName);
+    ot::Posix::Udp::Get().Init(instance, aPlatformConfig->mInterfaceName);
 #else
     gNetifName[0] = '\0';
 #endif
@@ -176,6 +176,10 @@ void otSysDeinit(void)
 
 #if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
     ot::Posix::InfraNetif::Get().Deinit();
+#endif
+
+#if OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE
+    platformBackboneDeinit();
 #endif
 }
 

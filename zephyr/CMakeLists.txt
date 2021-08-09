@@ -335,9 +335,6 @@ if(CONFIG_OPENTHREAD_COPROCESSOR_VENDOR_HOOK_SOURCE)
   set(OT_NCP_VENDOR_HOOK_SOURCE ${CONFIG_OPENTHREAD_COPROCESSOR_VENDOR_HOOK_SOURCE} CACHE STRING "NCP vendor hook source file name" FORCE)
 endif()
 
-string(REPLACE " " ";" OT_PARAM_LIST " ${CONFIG_OPENTHREAD_CUSTOM_PARAMETERS}")
-list(APPEND OT_PRIVATE_DEFINES ${OT_PARAM_LIST})
-
 # Zephyr logging options
 
 if(CONFIG_LOG_BACKEND_SPINEL)
@@ -352,8 +349,6 @@ add_definitions(
     -DOPENTHREAD_PROJECT_CORE_CONFIG_FILE="openthread-core-zephyr-config.h"
 )
 
-list(APPEND OT_PRIVATE_INCLUDES ${ZEPHYR_BASE}/subsys/net/lib/openthread/platform)
-
 # Need to specify build directory as well
 add_subdirectory(.. build)
 
@@ -364,6 +359,9 @@ foreach(target ${ALL_TARGETS})
   # into Zephyr will be built due to dependencies.
   set_property(TARGET ${target} PROPERTY EXCLUDE_FROM_ALL TRUE)
 endforeach()
+
+string(REPLACE " " ";" OT_PARAM_LIST " ${CONFIG_OPENTHREAD_CUSTOM_PARAMETERS}")
+target_compile_definitions(ot-config INTERFACE ${OT_PARAM_LIST})
 
 # Zephyr compiler options
 target_include_directories(ot-config INTERFACE

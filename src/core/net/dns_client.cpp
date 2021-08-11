@@ -579,7 +579,7 @@ Error Client::Start(void)
     Error error;
 
     SuccessOrExit(error = mSocket.Open(&Client::HandleUdpReceive, this));
-    SuccessOrExit(error = mSocket.Bind());
+    SuccessOrExit(error = mSocket.Bind(0, OT_NETIF_UNSPECIFIED));
 
 exit:
     return error;
@@ -745,8 +745,7 @@ exit:
 
 void Client::FreeQuery(Query &aQuery)
 {
-    mQueries.Dequeue(aQuery);
-    aQuery.Free();
+    mQueries.DequeueAndFree(aQuery);
 }
 
 void Client::SendQuery(Query &aQuery, QueryInfo &aInfo, bool aUpdateTimer)

@@ -140,6 +140,7 @@ SOURCES_COMMON                                  = \
     api/message_api.cpp                           \
     api/multi_radio_api.cpp                       \
     api/netdata_api.cpp                           \
+    api/netdata_publisher_api.cpp                 \
     api/netdiag_api.cpp                           \
     api/network_time_api.cpp                      \
     api/ping_sender_api.cpp                       \
@@ -272,6 +273,7 @@ SOURCES_COMMON                                  = \
     thread/network_data_leader_ftd.cpp            \
     thread/network_data_local.cpp                 \
     thread/network_data_notifier.cpp              \
+    thread/network_data_publisher.cpp             \
     thread/network_data_service.cpp               \
     thread/network_data_tlvs.cpp                  \
     thread/network_data_types.cpp                 \
@@ -378,6 +380,7 @@ HEADERS_COMMON                                  = \
     coap/coap_message.hpp                         \
     coap/coap_secure.hpp                          \
     common/arg_macros.hpp                         \
+    common/array.hpp                              \
     common/bit_vector.hpp                         \
     common/clearable.hpp                          \
     common/code_utils.hpp                         \
@@ -434,6 +437,7 @@ HEADERS_COMMON                                  = \
     config/logging.h                              \
     config/mac.h                                  \
     config/mle.h                                  \
+    config/netdata_publisher.h                    \
     config/openthread-core-config-check.h         \
     config/openthread-core-default-config.h       \
     config/parent_search.h                        \
@@ -537,6 +541,7 @@ HEADERS_COMMON                                  = \
     thread/network_data_leader_ftd.hpp            \
     thread/network_data_local.hpp                 \
     thread/network_data_notifier.hpp              \
+    thread/network_data_publisher.hpp             \
     thread/network_data_service.hpp               \
     thread/network_data_tlvs.hpp                  \
     thread/network_data_types.hpp                 \

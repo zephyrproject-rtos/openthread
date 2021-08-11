@@ -640,6 +640,13 @@ template <> inline NetworkData::Notifier &Instance::Get(void)
 }
 #endif
 
+#if OPENTHREAD_CONFIG_NETDATA_PUBLISHER_ENABLE
+template <> inline NetworkData::Publisher &Instance::Get(void)
+{
+    return mThreadNetif.mNetworkDataPublisher;
+}
+#endif
+
 template <> inline NetworkData::Service::Manager &Instance::Get(void)
 {
     return mThreadNetif.mNetworkDataServiceManager;
@@ -899,7 +906,7 @@ template <> inline DuaManager &Instance::Get(void)
 #endif
 
 #if OPENTHREAD_CONFIG_MLE_LINK_METRICS_INITIATOR_ENABLE || OPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE
-template <> inline LinkMetrics &Instance::Get(void)
+template <> inline LinkMetrics::LinkMetrics &Instance::Get(void)
 {
     return mThreadNetif.mLinkMetrics;
 }

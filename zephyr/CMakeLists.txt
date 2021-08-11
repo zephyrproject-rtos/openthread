@@ -241,6 +241,12 @@ else()
   set(OT_NEIGHBOR_DISCOVERY_AGENT OFF CACHE BOOL "Enable neighbor discovery agent support" FORCE)
 endif()
 
+if(CONFIG_OPENTHREAD_NETDATA_PUBLISHER)
+  set(OT_NETDATA_PUBLISHER ON CACHE BOOL "Enable Thread Network Data publisher" FORCE)
+else()
+  set(OT_NETDATA_PUBLISHER OFF CACHE BOOL "Enable Thread Network Data publisher" FORCE)
+endif()
+
 if(CONFIG_OPENTHREAD_PING_SENDER)
   set(OT_PING_SENDER ON CACHE BOOL "Enable ping sender support" FORCE)
 else()

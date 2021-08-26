@@ -81,6 +81,9 @@
 #if (OPENTHREAD_CONFIG_LOG_OUTPUT == OPENTHREAD_CONFIG_LOG_OUTPUT_DEBUG_UART) && OPENTHREAD_POSIX
 #include <openthread/platform/debug_uart.h>
 #endif
+#if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
+#include <openthread/platform/trel-udp6.h>
+#endif
 
 #include "common/logging.hpp"
 #include "common/new.hpp"
@@ -128,6 +131,9 @@ Interpreter::Interpreter(Instance *aInstance, otCliOutputCallback aCallback, voi
 #if OPENTHREAD_CONFIG_SRP_SERVER_ENABLE
     , mSrpServer(*this)
 #endif
+#if OPENTHREAD_CONFIG_HISTORY_TRACKER_ENABLE
+    , mHistory(*this)
+#endif
 #if OPENTHREAD_CONFIG_CLI_LOG_INPUT_OUTPUT_ENABLE
     , mOutputLength(0)
     , mIsLogging(false)
@@ -160,6 +166,35 @@ void Interpreter::OutputBytes(const uint8_t *aBytes, uint16_t aLength)
     {
         OutputFormat("%02x", aBytes[i]);
     }
+}
+
+const char *Interpreter::LinkModeToString(const otLinkModeConfig &aLinkMode, char (&aStringBuffer)[kLinkModeStringSize])
+{
+    char *flagsPtr = &aStringBuffer[0];
+
+    if (aLinkMode.mRxOnWhenIdle)
+    {
+        *flagsPtr++ = 'r';
+    }
+
+    if (aLinkMode.mDeviceType)
+    {
+        *flagsPtr++ = 'd';
+    }
+
+    if (aLinkMode.mNetworkData)
+    {
+        *flagsPtr++ = 'n';
+    }
+
+    if (flagsPtr == &aStringBuffer[0])
+    {
+        *flagsPtr++ = '-';
+    }
+
+    *flagsPtr = '\0';
+
+    return aStringBuffer;
 }
 
 void Interpreter::OutputEnabledDisabledStatus(bool aEnabled)
@@ -202,7 +237,11 @@ void Interpreter::OutputTableHeader(uint8_t aNumColumns, const char *const aTitl
     }
 
     OutputLine("|");
+    OutputTableSeperator(aNumColumns, aWidths);
+}
 
+void Interpreter::OutputTableSeperator(uint8_t aNumColumns, const uint8_t aWidths[])
+{
     for (uint8_t index = 0; index < aNumColumns; index++)
     {
         OutputFormat("+");
@@ -324,6 +363,13 @@ otError Interpreter::ProcessHelp(Arg aArgs[])
     return OT_ERROR_NONE;
 }
 
+#if OPENTHREAD_CONFIG_HISTORY_TRACKER_ENABLE
+otError Interpreter::ProcessHistory(Arg aArgs[])
+{
+    return mHistory.Process(aArgs);
+}
+#endif
+
 #if OPENTHREAD_CONFIG_BORDER_AGENT_ENABLE
 otError Interpreter::ProcessBorderAgent(Arg aArgs[])
 {
@@ -370,8 +416,30 @@ otError Interpreter::ProcessBorderRouting(Arg aArgs[])
     otError error = OT_ERROR_NONE;
     bool    enable;
 
-    SuccessOrExit(error = ParseEnableOrDisable(aArgs[0], enable));
-    error = otBorderRoutingSetEnabled(mInstance, enable);
+    if (ParseEnableOrDisable(aArgs[0], enable) == OT_ERROR_NONE)
+    {
+        SuccessOrExit(error = otBorderRoutingSetEnabled(mInstance, enable));
+    }
+    else if (aArgs[0] == "omrprefix")
+    {
+        otIp6Prefix omrPrefix;
+
+        SuccessOrExit(error = otBorderRoutingGetOmrPrefix(mInstance, &omrPrefix));
+        OutputIp6Prefix(omrPrefix);
+        OutputLine("");
+    }
+    else if (aArgs[0] == "onlinkprefix")
+    {
+        otIp6Prefix onLinkPrefix;
+
+        SuccessOrExit(error = otBorderRoutingGetOnLinkPrefix(mInstance, &onLinkPrefix));
+        OutputIp6Prefix(onLinkPrefix);
+        OutputLine("");
+    }
+    else
+    {
+        ExitNow(error = OT_ERROR_INVALID_COMMAND);
+    }
 
 exit:
     return error;
@@ -844,10 +912,12 @@ exit:
 #if OPENTHREAD_FTD
 otError Interpreter::ProcessChild(Arg aArgs[])
 {
-    otError     error = OT_ERROR_NONE;
-    otChildInfo childInfo;
-    uint16_t    childId;
-    bool        isTable;
+    otError          error = OT_ERROR_NONE;
+    otChildInfo      childInfo;
+    uint16_t         childId;
+    bool             isTable;
+    otLinkModeConfig linkMode;
+    char             linkModeString[kLinkModeStringSize];
 
     isTable = (aArgs[0] == "table");
 
@@ -914,32 +984,10 @@ otError Interpreter::ProcessChild(Arg aArgs[])
     OutputFormat("Ext Addr: ");
     OutputExtAddress(childInfo.mExtAddress);
     OutputLine("");
-    OutputFormat("Mode: ");
-
-    if (!(childInfo.mRxOnWhenIdle || childInfo.mFullThreadDevice || childInfo.mFullNetworkData))
-    {
-        OutputFormat("-");
-    }
-    else
-    {
-        if (childInfo.mRxOnWhenIdle)
-        {
-            OutputFormat("r");
-        }
-
-        if (childInfo.mFullThreadDevice)
-        {
-            OutputFormat("d");
-        }
-
-        if (childInfo.mFullNetworkData)
-        {
-            OutputFormat("n");
-        }
-    }
-
-    OutputLine("");
-
+    linkMode.mRxOnWhenIdle = childInfo.mRxOnWhenIdle;
+    linkMode.mDeviceType   = childInfo.mFullThreadDevice;
+    linkMode.mNetworkData  = childInfo.mFullThreadDevice;
+    OutputLine("Mode: %s", LinkModeToString(linkMode, linkModeString));
     OutputLine("Net Data: %d", childInfo.mNetworkDataVersion);
     OutputLine("Timeout: %d", childInfo.mTimeout);
     OutputLine("Age: %d", childInfo.mAge);
@@ -2641,32 +2689,9 @@ otError Interpreter::ProcessMode(Arg aArgs[])
 
     if (aArgs[0].IsEmpty())
     {
-        linkMode = otThreadGetLinkMode(mInstance);
+        char linkModeString[kLinkModeStringSize];
 
-        if (!(linkMode.mRxOnWhenIdle || linkMode.mDeviceType || linkMode.mNetworkData))
-        {
-            OutputFormat("-");
-        }
-        else
-        {
-            if (linkMode.mRxOnWhenIdle)
-            {
-                OutputFormat("r");
-            }
-
-            if (linkMode.mDeviceType)
-            {
-                OutputFormat("d");
-            }
-
-            if (linkMode.mNetworkData)
-            {
-                OutputFormat("n");
-            }
-        }
-
-        OutputLine("");
-
+        OutputLine("%s", LinkModeToString(otThreadGetLinkMode(mInstance), linkModeString));
         ExitNow();
     }
 
@@ -4004,34 +4029,7 @@ otError Interpreter::ProcessState(Arg aArgs[])
 
     if (aArgs[0].IsEmpty())
     {
-        switch (otThreadGetDeviceRole(mInstance))
-        {
-        case OT_DEVICE_ROLE_DISABLED:
-            OutputLine("disabled");
-            break;
-
-        case OT_DEVICE_ROLE_DETACHED:
-            OutputLine("detached");
-            break;
-
-        case OT_DEVICE_ROLE_CHILD:
-            OutputLine("child");
-            break;
-
-#if OPENTHREAD_FTD
-        case OT_DEVICE_ROLE_ROUTER:
-            OutputLine("router");
-            break;
-
-        case OT_DEVICE_ROLE_LEADER:
-            OutputLine("leader");
-            break;
-#endif
-
-        default:
-            OutputLine("invalid state");
-            break;
-        }
+        OutputLine("%s", otThreadDeviceRoleToString(otThreadGetDeviceRole(mInstance)));
     }
     else
     {
@@ -4549,6 +4547,21 @@ exit:
 }
 #endif
 
+#if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
+otError Interpreter::ProcessTrel(Arg aArgs[])
+{
+    otError error;
+    bool    enable;
+
+    SuccessOrExit(error = ParseEnableOrDisable(aArgs[0], enable));
+
+    error = otPlatTrelUdp6SetTestMode(mInstance, enable);
+
+exit:
+    return error;
+}
+#endif
+
 #if OPENTHREAD_CONFIG_DIAG_ENABLE
 otError Interpreter::ProcessDiag(Arg aArgs[])
 {
@@ -4641,6 +4654,15 @@ void Interpreter::OutputPrefix(const otMeshLocalPrefix &aPrefix)
 {
     OutputFormat("%x:%x:%x:%x::/64", (aPrefix.m8[0] << 8) | aPrefix.m8[1], (aPrefix.m8[2] << 8) | aPrefix.m8[3],
                  (aPrefix.m8[4] << 8) | aPrefix.m8[5], (aPrefix.m8[6] << 8) | aPrefix.m8[7]);
+}
+
+void Interpreter::OutputIp6Prefix(const otIp6Prefix &aPrefix)
+{
+    char string[OT_IP6_PREFIX_STRING_SIZE];
+
+    otIp6PrefixToString(&aPrefix, string, sizeof(string));
+
+    OutputFormat("%s", string);
 }
 
 #if OPENTHREAD_FTD || OPENTHREAD_CONFIG_TMF_NETWORK_DIAG_MTD_ENABLE

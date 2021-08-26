@@ -130,7 +130,7 @@ Mle::Mle(Instance &aInstance)
     mLeaderAloc.InitAsThreadOriginRealmLocalScope();
 
 #if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
-    for (Ip6::NetifUnicastAddress &serviceAloc : mServiceAlocs)
+    for (Ip6::Netif::UnicastAddress &serviceAloc : mServiceAlocs)
     {
         serviceAloc.InitAsThreadOriginRealmLocalScope();
         serviceAloc.GetAddress().GetIid().SetLocator(Mac::kShortAddrInvalid);
@@ -619,6 +619,12 @@ bool Mle::IsRouterOrLeader(void) const
 
 void Mle::SetStateDetached(void)
 {
+#if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
+    if (Get<Mac::Mac>().IsCslEnabled())
+    {
+        IgnoreError(Get<Radio>().EnableCsl(0, GetParent().GetRloc16(), &GetParent().GetExtAddress()));
+    }
+#endif
 #if OPENTHREAD_FTD && OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE
     Get<BackboneRouter::Local>().Reset();
 #endif
@@ -747,6 +753,10 @@ Error Mle::SetDeviceMode(DeviceMode aDeviceMode)
     VerifyOrExit(aDeviceMode.IsValid(), error = kErrorInvalidArgs);
     VerifyOrExit(mDeviceMode != aDeviceMode);
     mDeviceMode = aDeviceMode;
+
+#if OPENTHREAD_CONFIG_HISTORY_TRACKER_ENABLE
+    Get<Utils::HistoryTracker>().RecordNetworkInfo();
+#endif
 
 #if OPENTHREAD_CONFIG_OTNS_ENABLE
     Get<Utils::Otns>().EmitDeviceMode(mDeviceMode);
@@ -878,7 +888,7 @@ void Mle::ApplyMeshLocalPrefix(void)
 
 #if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
 
-    for (Ip6::NetifUnicastAddress &serviceAloc : mServiceAlocs)
+    for (Ip6::Netif::UnicastAddress &serviceAloc : mServiceAlocs)
     {
         if (serviceAloc.GetAddress().GetIid().GetLocator() != Mac::kShortAddrInvalid)
         {
@@ -911,22 +921,23 @@ void Mle::SetRloc16(uint16_t aRloc16)
     if (aRloc16 != oldRloc16)
     {
         otLogNoteMle("RLOC16 %04x -> %04x", oldRloc16, aRloc16);
-
-        // Clear cached CoAP with old RLOC source
-        if (oldRloc16 != Mac::kShortAddrInvalid)
-        {
-            Get<Tmf::Agent>().ClearRequests(mMeshLocal16.GetAddress());
-        }
     }
 
-    Get<ThreadNetif>().RemoveUnicastAddress(mMeshLocal16);
+    if (Get<ThreadNetif>().HasUnicastAddress(mMeshLocal16) &&
+        (mMeshLocal16.GetAddress().GetIid().GetLocator() != aRloc16))
+    {
+        Get<ThreadNetif>().RemoveUnicastAddress(mMeshLocal16);
+        Get<Tmf::Agent>().ClearRequests(mMeshLocal16.GetAddress());
+    }
 
     Get<Mac::Mac>().SetShortAddress(aRloc16);
     Get<Ip6::Mpl>().SetSeedId(aRloc16);
 
     if (aRloc16 != Mac::kShortAddrInvalid)
     {
-        // mesh-local 16
+        // We can always call `AddUnicastAddress(mMeshLocat16)` and if
+        // the address is already added, it will perform no action.
+
         mMeshLocal16.GetAddress().GetIid().SetLocator(aRloc16);
         Get<ThreadNetif>().AddUnicastAddress(mMeshLocal16);
 #if OPENTHREAD_FTD
@@ -1243,10 +1254,10 @@ bool Mle::HasUnregisteredAddress(void)
     // Checks whether there are any addresses in addition to the mesh-local
     // address that need to be registered.
 
-    for (const Ip6::NetifUnicastAddress *addr = Get<ThreadNetif>().GetUnicastAddresses(); addr; addr = addr->GetNext())
+    for (const Ip6::Netif::UnicastAddress &addr : Get<ThreadNetif>().GetUnicastAddresses())
     {
-        if (!addr->GetAddress().IsLinkLocal() && !IsRoutingLocator(addr->GetAddress()) &&
-            !IsAnycastLocator(addr->GetAddress()) && addr->GetAddress() != GetMeshLocal64())
+        if (!addr.GetAddress().IsLinkLocal() && !IsRoutingLocator(addr.GetAddress()) &&
+            !IsAnycastLocator(addr.GetAddress()) && addr.GetAddress() != GetMeshLocal64())
         {
             ExitNow(retval = true);
         }
@@ -1309,33 +1320,33 @@ Error Mle::AppendAddressRegistration(Message &aMessage, AddressRegistrationMode 
     }
 #endif // OPENTHREAD_CONFIG_DUA_ENABLE
 
-    for (const Ip6::NetifUnicastAddress *addr = Get<ThreadNetif>().GetUnicastAddresses(); addr; addr = addr->GetNext())
+    for (const Ip6::Netif::UnicastAddress &addr : Get<ThreadNetif>().GetUnicastAddresses())
     {
-        if (addr->GetAddress().IsLinkLocal() || IsRoutingLocator(addr->GetAddress()) ||
-            IsAnycastLocator(addr->GetAddress()) || addr->GetAddress() == GetMeshLocal64())
+        if (addr.GetAddress().IsLinkLocal() || IsRoutingLocator(addr.GetAddress()) ||
+            IsAnycastLocator(addr.GetAddress()) || addr.GetAddress() == GetMeshLocal64())
         {
             continue;
         }
 
 #if OPENTHREAD_CONFIG_DUA_ENABLE
         // Skip DUA that was already appended above.
-        if (addr->GetAddress() == domainUnicastAddress)
+        if (addr.GetAddress() == domainUnicastAddress)
         {
             continue;
         }
 #endif
 
-        if (Get<NetworkData::Leader>().GetContext(addr->GetAddress(), context) == kErrorNone)
+        if (Get<NetworkData::Leader>().GetContext(addr.GetAddress(), context) == kErrorNone)
         {
             // compressed entry
             entry.SetContextId(context.mContextId);
-            entry.SetIid(addr->GetAddress().GetIid());
+            entry.SetIid(addr.GetAddress().GetIid());
         }
         else
         {
             // uncompressed entry
             entry.SetUncompressed();
-            entry.SetIp6Address(addr->GetAddress());
+            entry.SetIp6Address(addr.GetAddress());
         }
 
         SuccessOrExit(error = aMessage.AppendBytes(&entry, entry.GetLength()));
@@ -1356,7 +1367,7 @@ Error Mle::AppendAddressRegistration(Message &aMessage, AddressRegistrationMode 
 #endif
     )
     {
-        for (const Ip6::NetifMulticastAddress &addr : Get<ThreadNetif>().IterateExternalMulticastAddresses())
+        for (const Ip6::Netif::MulticastAddress &addr : Get<ThreadNetif>().IterateExternalMulticastAddresses())
         {
 #if (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
             // For Thread 1.2 MED, skip multicast address with scope not
@@ -2197,7 +2208,11 @@ void Mle::ScheduleMessageTransmissionTimer(void)
     case kChildUpdateRequestActive:
 #if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
         // CSL transmitter may respond in next CSL cycle.
-        if (Get<Mac::Mac>().IsCslEnabled())
+        // This condition IsCslCapable() && !IsRxOnWhenIdle() is used instead of
+        // IsCslEnabled because during transitions SSED -> MED and MED -> SSED
+        // there is a delay in synchronisation of IsRxOnWhenIdle residing in MAC
+        // and in MLE, which causes below datapoll interval to be calculated incorrectly.
+        if (Get<Mac::Mac>().IsCslCapable() && !IsRxOnWhenIdle())
         {
             ExitNow(interval = Get<Mac::Mac>().GetCslPeriod() * kUsPerTenSymbols / 1000 +
                                static_cast<uint32_t>(kUnicastRetransmissionDelay));
@@ -2363,12 +2378,12 @@ Error Mle::SendChildUpdateRequest(void)
 
     if (!IsRxOnWhenIdle())
     {
+        Get<MeshForwarder>().SetRxOnWhenIdle(false);
 #if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
         Get<DataPollSender>().SetAttachMode(!Get<Mac::Mac>().IsCslEnabled());
 #else
         Get<DataPollSender>().SetAttachMode(true);
 #endif
-        Get<MeshForwarder>().SetRxOnWhenIdle(false);
     }
     else
     {
@@ -4406,11 +4421,11 @@ const char *Mle::MessageTypeActionToSuffixString(MessageType aType, MessageActio
 const char *Mle::RoleToString(DeviceRole aRole)
 {
     static const char *const kRoleStrings[] = {
-        "Disabled", // (0) kRoleDisabled
-        "Detached", // (1) kRoleDetached
-        "Child",    // (2) kRoleChild
-        "Router",   // (3) kRoleRouter
-        "Leader",   // (4) kRoleLeader
+        "disabled", // (0) kRoleDisabled
+        "detached", // (1) kRoleDetached
+        "child",    // (2) kRoleChild
+        "router",   // (3) kRoleRouter
+        "leader",   // (4) kRoleLeader
     };
 
     static_assert(kRoleDisabled == 0, "kRoleDisabled value is incorrect");
@@ -4419,7 +4434,7 @@ const char *Mle::RoleToString(DeviceRole aRole)
     static_assert(kRoleRouter == 3, "kRoleRouter value is incorrect");
     static_assert(kRoleLeader == 4, "kRoleLeader value is incorrect");
 
-    return kRoleStrings[aRole];
+    return (aRole <= OT_ARRAY_LENGTH(kRoleStrings)) ? kRoleStrings[aRole] : "invalid";
 }
 
 // LCOV_EXCL_START

@@ -268,7 +268,6 @@ class NetDataPublisher(thread_cert.TestCase):
         # MLE-EID address, then change to use specific address. Verify
         # that number of entries in network data is correct in each step
         # and that entries are switched correctly.
-
         num = 0
         for node in routers:
             node.netdata_publish_dnssrp_unicast_mleid(DNSSRP_PORT)
@@ -286,12 +285,23 @@ class NetDataPublisher(thread_cert.TestCase):
             self.verify_unicast_services(services)
 
         for node in routers:
+            node.srp_server_set_enabled(True)
+            self.simulator.go(WAIT_TIME)
+        self.assertEqual(sum(node.srp_server_get_state() == 'running' for node in routers),
+                         min(len(routers), DESIRED_NUM_DNSSRP_UNCIAST))
+        self.assertEqual(sum(node.srp_server_get_state() == 'stopped' for node in routers),
+                         max(len(routers) - DESIRED_NUM_DNSSRP_UNCIAST, 0))
+
+        for node in routers:
             node.netdata_unpublish_dnssrp()
             self.simulator.go(WAIT_TIME)
             num -= 1
             services = leader.get_services()
             self.assertEqual(len(services), min(num, DESIRED_NUM_DNSSRP_UNCIAST))
             self.verify_unicast_services(services)
+        for node in routers:
+            node.srp_server_set_enabled(False)
+            self.assertEqual(node.srp_server_get_state(), 'disabled')
 
         #---------------------------------------------------------------------------------
         # DNS/SRP entries: Verify publisher preference when removing
@@ -406,7 +416,7 @@ class NetDataPublisher(thread_cert.TestCase):
 
         for node in routers:
             node.netdata_publish_prefix(ON_MESH_PREFIX, ON_MESH_FLAGS, 'med')
-        self.simulator.go(WAIT_TIME)
+            self.simulator.go(WAIT_TIME)
         prefixes = leader.get_prefixes()
         self.check_num_of_prefixes(prefixes, 0, 1 + len(routers), 0)
         self.assertTrue(1 + len(routers) >= DESIRED_NUM_ON_MESH_PREFIX)

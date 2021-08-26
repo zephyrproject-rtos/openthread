@@ -50,6 +50,7 @@
 #include "common/equatable.hpp"
 #include "net/icmp6.hpp"
 #include "net/ip6.hpp"
+#include "thread/network_data_types.hpp"
 
 using ot::Encoding::BigEndian::HostSwap16;
 using ot::Encoding::BigEndian::HostSwap32;
@@ -238,6 +239,14 @@ public:
     void SetPreferredLifetime(uint32_t aPreferredLifetime) { mPreferredLifetime = HostSwap32(aPreferredLifetime); }
 
     /**
+     * THis method returns the preferred lifetime of the prefix in seconds.
+     *
+     * @returns  The preferred lifetime in seconds.
+     *
+     */
+    uint32_t GetPreferredLifetime(void) const { return HostSwap32(mPreferredLifetime); }
+
+    /**
      * This method sets the prefix.
      *
      * @param[in]  aPrefix  The prefix contained in this option.
@@ -261,7 +270,8 @@ public:
      */
     bool IsValid(void) const
     {
-        return (GetSize() == sizeof(*this)) && (mPrefixLength <= OT_IP6_ADDRESS_SIZE * CHAR_BIT);
+        return (GetSize() == sizeof(*this)) && (mPrefixLength <= OT_IP6_ADDRESS_SIZE * CHAR_BIT) &&
+               (GetPreferredLifetime() <= GetValidLifetime());
     }
 
 private:
@@ -290,6 +300,12 @@ class RouteInfoOption : public Option
 {
 public:
     /**
+     * This type represents a route preference.
+     *
+     */
+    typedef NetworkData::RoutePreference RoutePreference;
+
+    /**
      * This constructor initializes this option with zero prefix length.
      *
      */
@@ -301,7 +317,7 @@ public:
      * @param[in]  aPreference  The route preference.
      *
      */
-    void SetPreference(otRoutePreference aPreference);
+    void SetPreference(RoutePreference aPreference);
 
     /**
      * This method returns the route preference.
@@ -309,7 +325,7 @@ public:
      * @returns  The route preference.
      *
      */
-    otRoutePreference GetPreference(void) const;
+    RoutePreference GetPreference(void) const;
 
     /**
      * This method sets the lifetime of the route in seconds.
@@ -352,12 +368,8 @@ public:
     bool IsValid(void) const;
 
 private:
-    static constexpr uint8_t kPreferenceMask   = 0x18;
     static constexpr uint8_t kPreferenceOffset = 3;
-
-    static constexpr uint8_t kPreferenceLow  = 0x03;
-    static constexpr uint8_t kPreferenceMed  = 0x00;
-    static constexpr uint8_t kPreferenceHigh = 0x01;
+    static constexpr uint8_t kPreferenceMask   = 3 << kPreferenceOffset;
 
     uint8_t      mPrefixLength;  // The prefix length in bits.
     uint8_t      mReserved;      // The reserved field.

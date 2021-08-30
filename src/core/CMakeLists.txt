@@ -51,6 +51,7 @@ set(COMMON_SOURCES
     api/entropy_api.cpp
     api/error_api.cpp
     api/heap_api.cpp
+    api/history_tracker_api.cpp
     api/icmp6_api.cpp
     api/instance_api.cpp
     api/ip6_api.cpp
@@ -215,6 +216,7 @@ set(COMMON_SOURCES
     utils/child_supervision.cpp
     utils/flash.cpp
     utils/heap.cpp
+    utils/history_tracker.cpp
     utils/jam_detector.cpp
     utils/lookup_table.cpp
     utils/otns.cpp
@@ -241,3 +243,7 @@ endif()
 if(OT_RCP)
     include(radio.cmake)
 endif()
+
+set_property(SOURCE api/instance_api.cpp
+    APPEND PROPERTY COMPILE_DEFINITIONS "PACKAGE_VERSION=\"${OT_PACKAGE_VERSION}\""
+)

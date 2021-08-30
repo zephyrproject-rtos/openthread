@@ -95,6 +95,13 @@ public:
 
     class Host;
 
+    enum State : uint8_t
+    {
+        kStateDisabled = OT_SRP_SERVER_STATE_DISABLED,
+        kStateRunning  = OT_SRP_SERVER_STATE_RUNNING,
+        kStateStopped  = OT_SRP_SERVER_STATE_STOPPED,
+    };
+
     /**
      * This class implements a server-side SRP service.
      *
@@ -422,12 +429,12 @@ public:
         TimeMilli GetKeyExpireTime(void) const;
 
         /**
-         * This method returns the head of `Service` linked list associated with the host.
+         * This method returns the `Service` linked list associated with the host.
          *
-         * @returns A pointer to the head of `Service` linked list.
+         * @returns The `Service` linked list.
          *
          */
-        const Service *GetServices(void) const { return mServices.GetHead(); }
+        const LinkedList<Service> &GetServices(void) const { return mServices; }
 
         /**
          * This method finds the next matching service on the host.
@@ -466,7 +473,7 @@ public:
         void                        SetKey(Dns::Ecdsa256KeyRecord &aKey);
         void                        SetLease(uint32_t aLease) { mLease = aLease; }
         void                        SetKeyLease(uint32_t aKeyLease) { mKeyLease = aKeyLease; }
-        Service *                   GetServices(void) { return mServices.GetHead(); }
+        LinkedList<Service> &       GetServices(void) { return mServices; }
         Service *                   AddNewService(const char *aServiceName, const char *aInstanceName, bool aIsSubType);
         void                        RemoveService(Service *aService, bool aRetainName, bool aNotifyServiceHandler);
         void                        FreeAllServices(void);
@@ -601,6 +608,14 @@ public:
     bool IsRunning(void) const { return (mState == kStateRunning); }
 
     /**
+     * This method tells the state of the SRP server.
+     *
+     * @returns  An enum that represents the state of the server.
+     *
+     */
+    State GetState(void) const { return mState; }
+
+    /**
      * This method enables/disables the SRP server.
      *
      * @param[in]  aEnabled  A boolean to enable/disable the SRP server.
@@ -659,13 +674,6 @@ private:
     static constexpr uint32_t kDefaultMinKeyLease          = 3600u * 24;      // 1 day (in seconds).
     static constexpr uint32_t kDefaultMaxKeyLease          = 3600u * 24 * 14; // 14 days (in seconds).
     static constexpr uint32_t kDefaultEventsHandlerTimeout = OPENTHREAD_CONFIG_SRP_SERVER_SERVICE_UPDATE_TIMEOUT;
-
-    enum State : uint8_t
-    {
-        kStateDisabled,
-        kStateRunning,
-        kStateStopped,
-    };
 
     // This class includes metadata for processing a SRP update (register, deregister)
     // and sending DNS response to the client.

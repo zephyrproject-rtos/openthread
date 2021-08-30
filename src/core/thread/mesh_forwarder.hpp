@@ -58,6 +58,10 @@ namespace Mle {
 class DiscoverScanner;
 }
 
+namespace Utils {
+class HistoryTracker;
+}
+
 /**
  * @addtogroup core-mesh-forwarding
  *
@@ -154,6 +158,7 @@ class MeshForwarder : public InstanceLocator, private NonCopyable
     friend class IndirectSender;
     friend class Mle::DiscoverScanner;
     friend class TimeTicker;
+    friend class Utils::HistoryTracker;
 
 public:
     /**
@@ -457,7 +462,10 @@ private:
     void          HandleReceivedFrame(Mac::RxFrame &aFrame);
     Mac::TxFrame *HandleFrameRequest(Mac::TxFrames &aTxFrames);
     Neighbor *    UpdateNeighborOnSentFrame(Mac::TxFrame &aFrame, Error aError, const Mac::Address &aMacDest);
-    void          UpdateNeighborLinkFailures(Neighbor &aNeighbor, Error aError, bool aAllowNeighborRemove);
+    void          UpdateNeighborLinkFailures(Neighbor &aNeighbor,
+                                             Error     aError,
+                                             bool      aAllowNeighborRemove,
+                                             uint8_t   aFailLimit = Mle::kFailedRouterTransmissions);
     void          HandleSentFrame(Mac::TxFrame &aFrame, Error aError);
     void          UpdateSendMessage(Error aFrameTxError, Mac::Address &aMacDest, Neighbor *aNeighbor);
     void          RemoveMessageIfNoPendingTx(Message &aMessage);
@@ -503,15 +511,16 @@ private:
                               const Mac::Address &aMacDest,
                               bool                aIsSecure);
 
+    static Error ParseIp6UdpTcpHeader(const Message &aMessage,
+                                      Ip6::Header &  aIp6Header,
+                                      uint16_t &     aChecksum,
+                                      uint16_t &     aSourcePort,
+                                      uint16_t &     aDestPort);
+
 #if (OPENTHREAD_CONFIG_LOG_LEVEL >= OT_LOG_LEVEL_NOTE) && (OPENTHREAD_CONFIG_LOG_MAC == 1)
     const char *MessageActionToString(MessageAction aAction, Error aError);
     const char *MessagePriorityToString(const Message &aMessage);
 
-    Error ParseIp6UdpTcpHeader(const Message &aMessage,
-                               Ip6::Header &  aIp6Header,
-                               uint16_t &     aChecksum,
-                               uint16_t &     aSourcePort,
-                               uint16_t &     aDestPort);
 #if OPENTHREAD_FTD
     Error DecompressIp6UdpTcpHeader(const Message &     aMessage,
                                     uint16_t            aOffset,

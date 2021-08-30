@@ -37,6 +37,7 @@ set(COMMON_SOURCES
     cli_coap_secure.cpp
     cli_commissioner.cpp
     cli_dataset.cpp
+    cli_history.cpp
     cli_joiner.cpp
     cli_network_data.cpp
     cli_srp_client.cpp
@@ -52,3 +53,7 @@ endif()
 if(OT_MTD)
     include(mtd.cmake)
 endif()
+
+set_property(SOURCE cli_joiner.cpp
+    APPEND PROPERTY COMPILE_DEFINITIONS "PACKAGE_VERSION=\"${OT_PACKAGE_VERSION}\""
+)

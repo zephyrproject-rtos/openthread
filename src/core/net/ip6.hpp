@@ -287,7 +287,7 @@ public:
      * @returns A pointer to the selected IPv6 source address or nullptr if no source address was found.
      *
      */
-    const NetifUnicastAddress *SelectSourceAddress(MessageInfo &aMessageInfo);
+    const Netif::UnicastAddress *SelectSourceAddress(MessageInfo &aMessageInfo);
 
     /**
      * This method returns a reference to the send queue.
@@ -298,9 +298,11 @@ public:
     const PriorityQueue &GetSendQueue(void) const { return mSendQueue; }
 
     /**
-     * This static method converts an `IpProto` enumeration to a string.
+     * This static method converts an IP protocol number to a string.
      *
-     * @returns The string representation of an IP protocol enumeration.
+     * @param[in] aIpPorto  An IP protocol number.
+     *
+     * @returns The string representation of @p aIpProto.
      *
      */
     static const char *IpProtoToString(uint8_t aIpProto);
@@ -346,7 +348,8 @@ private:
     Error InsertMplOption(Message &aMessage, Header &aHeader, MessageInfo &aMessageInfo);
     Error RemoveMplOption(Message &aMessage);
     Error HandleOptions(Message &aMessage, Header &aHeader, bool aIsOutbound, bool &aReceive);
-    Error HandlePayload(Message &          aMessage,
+    Error HandlePayload(Header &           aIp6Header,
+                        Message &          aMessage,
                         MessageInfo &      aMessageInfo,
                         uint8_t            aIpProto,
                         Message::Ownership aMessageOwnership);

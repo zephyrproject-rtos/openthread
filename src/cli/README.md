@@ -52,6 +52,7 @@ Done
 - [factoryreset](#factoryreset)
 - [fake](#fake)
 - [fem](#fem)
+- [history](README_HISTORY.md)
 - [ifconfig](#ifconfig)
 - [ipaddr](#ipaddr)
 - [ipmaddr](#ipmaddr)
@@ -105,6 +106,7 @@ Done
 - [state](#state)
 - [srp](README_SRP.md)
 - [thread](#thread-start)
+- [trel](#trel-enable)
 - [txpower](#txpower)
 - [udp](README_UDP.md)
 - [unsecureport](#unsecureport-add-port)
@@ -353,6 +355,26 @@ Done
 
 ```bash
 > br disable
+Done
+```
+
+### br omrprefix
+
+Get the randomly generated off-mesh-routable prefix of the Border Router.
+
+```bash
+> br omrprefix
+fdfc:1ff5:1512:5622::/64
+Done
+```
+
+### br onlinkprefix
+
+Get the randomly generated on-link prefix of the Border Router.
+
+```bash
+> br onlinkprefix
+fd41:2650:a6f5:0::/64
 Done
 ```
 
@@ -2489,6 +2511,30 @@ Get the Thread Version number.
 ```bash
 > thread version
 2
+Done
+```
+
+### trel enable
+
+Enable TREL radio link.
+
+`OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE` is required.
+
+Note: TREL radio link can be enabled only when a valid TREL URL was specified.
+
+```bash
+> trel enable
+Done
+```
+
+### trel disable
+
+Disable TREL radio link.
+
+`OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE` is required.
+
+```bash
+> trel disable
 Done
 ```
 

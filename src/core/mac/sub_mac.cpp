@@ -78,16 +78,14 @@ SubMac::SubMac(Instance &aInstance)
 #endif
 {
     mExtAddress.Clear();
-    mPrevKey.Clear();
-    mCurrKey.Clear();
-    mNextKey.Clear();
 }
 
 otRadioCaps SubMac::GetCaps(void) const
 {
-    otRadioCaps caps = mRadioCaps;
+    otRadioCaps caps;
 
 #if OPENTHREAD_RADIO || OPENTHREAD_CONFIG_LINK_RAW_ENABLE
+    caps = mRadioCaps;
 
 #if OPENTHREAD_CONFIG_MAC_SOFTWARE_ACK_TIMEOUT_ENABLE
     caps |= OT_RADIO_CAPS_ACK_TIMEOUT;
@@ -831,11 +829,11 @@ void SubMac::SetState(State aState)
     }
 }
 
-void SubMac::SetMacKey(uint8_t    aKeyIdMode,
-                       uint8_t    aKeyId,
-                       const Key &aPrevKey,
-                       const Key &aCurrKey,
-                       const Key &aNextKey)
+void SubMac::SetMacKey(uint8_t            aKeyIdMode,
+                       uint8_t            aKeyId,
+                       const KeyMaterial &aPrevKey,
+                       const KeyMaterial &aCurrKey,
+                       const KeyMaterial &aNextKey)
 {
     switch (aKeyIdMode)
     {

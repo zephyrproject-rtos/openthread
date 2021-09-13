@@ -188,7 +188,7 @@ Error Mle::Disable(void)
 {
     Error error = kErrorNone;
 
-    Stop(false);
+    Stop(kKeepNetworkDatasets);
     SuccessOrExit(error = mSocket.Close());
     Get<ThreadNetif>().RemoveUnicastAddress(mLinkLocal64);
 
@@ -196,7 +196,7 @@ exit:
     return error;
 }
 
-Error Mle::Start(bool aAnnounceAttach)
+Error Mle::Start(StartMode aMode)
 {
     Error error = kErrorNone;
 
@@ -218,12 +218,12 @@ Error Mle::Start(bool aAnnounceAttach)
 
     Get<KeyManager>().Start();
 
-    if (!aAnnounceAttach)
+    if (aMode == kNormalAttach)
     {
         mReattachState = kReattachStart;
     }
 
-    if (aAnnounceAttach || (GetRloc16() == Mac::kShortAddrInvalid))
+    if ((aMode == kAnnounceAttach) || (GetRloc16() == Mac::kShortAddrInvalid))
     {
         IgnoreError(BecomeChild(kAttachAny));
     }
@@ -246,9 +246,9 @@ exit:
     return error;
 }
 
-void Mle::Stop(bool aClearNetworkDatasets)
+void Mle::Stop(StopMode aMode)
 {
-    if (aClearNetworkDatasets)
+    if (aMode == kUpdateNetworkDatasets)
     {
         Get<MeshCoP::ActiveDataset>().HandleDetach();
         Get<MeshCoP::PendingDataset>().HandleDetach();
@@ -1808,7 +1808,7 @@ void Mle::HandleAttachTimer(void)
     case kAttachStateAnnounce:
         if (shouldAnnounce && (GetNextAnnouceChannel(mAnnounceChannel) == kErrorNone))
         {
-            SendAnnounce(mAnnounceChannel, /* aOrphanAnnounce */ true);
+            SendAnnounce(mAnnounceChannel, kOrphanAnnounce);
             delay = mAnnounceDelay;
             break;
         }
@@ -1959,10 +1959,20 @@ void Mle::HandleDelayedResponseTimer(void)
         }
         else
         {
+            Error error = kErrorNone;
+
             mDelayedResponses.Dequeue(*message);
             metadata.RemoveFrom(*message);
 
-            if (SendMessage(*message, metadata.mDestination) == kErrorNone)
+            if (message->GetSubType() == Message::kSubTypeMleDataRequest)
+            {
+                error = AppendActiveTimestamp(*message);
+                error = (error == kErrorNone) ? AppendPendingTimestamp(*message) : error;
+            }
+
+            error = (error == kErrorNone) ? SendMessage(*message, metadata.mDestination) : error;
+
+            if (error == kErrorNone)
             {
                 Log(kMessageSend, kTypeGenericDelayed, metadata.mDestination);
 
@@ -2008,6 +2018,25 @@ void Mle::RemoveDelayedDataResponseMessage(void)
         }
 
         message = message->GetNext();
+    }
+}
+
+void Mle::RemoveDelayedDataRequestMessage(const Ip6::Address &aDestination)
+{
+    for (Message *message = mDelayedResponses.GetHead(); message != nullptr; message = message->GetNext())
+    {
+        DelayedResponseMetadata metadata;
+
+        metadata.ReadFrom(*message);
+
+        if (message->GetSubType() == Message::kSubTypeMleDataRequest && metadata.mDestination == aDestination)
+        {
+            mDelayedResponses.DequeueAndFree(*message);
+            Log(kMessageRemoveDelayed, kTypeDataRequest, metadata.mDestination);
+
+            // no more than one MLE Data Request for the destination in Delayed Message Queue.
+            break;
+        }
     }
 }
 
@@ -2150,11 +2179,12 @@ Error Mle::SendDataRequest(const Ip6::Address &aDestination,
     Error    error = kErrorNone;
     Message *message;
 
+    RemoveDelayedDataRequestMessage(aDestination);
+
     VerifyOrExit((message = NewMleMessage()) != nullptr, error = kErrorNoBufs);
+    message->SetSubType(Message::kSubTypeMleDataRequest);
     SuccessOrExit(error = AppendHeader(*message, kCommandDataRequest));
     SuccessOrExit(error = AppendTlvRequest(*message, aTlvs, aTlvsLength));
-    SuccessOrExit(error = AppendActiveTimestamp(*message));
-    SuccessOrExit(error = AppendPendingTimestamp(*message));
 
     if (aExtraTlvs != nullptr && aExtraTlvsLength > 0)
     {
@@ -2168,6 +2198,9 @@ Error Mle::SendDataRequest(const Ip6::Address &aDestination,
     }
     else
     {
+        SuccessOrExit(error = AppendActiveTimestamp(*message));
+        SuccessOrExit(error = AppendPendingTimestamp(*message));
+
         SuccessOrExit(error = SendMessage(*message, aDestination));
         Log(kMessageSend, kTypeDataRequest, aDestination);
 
@@ -2462,16 +2495,16 @@ exit:
     return error;
 }
 
-void Mle::SendAnnounce(uint8_t aChannel, bool aOrphanAnnounce)
+void Mle::SendAnnounce(uint8_t aChannel, AnnounceMode aMode)
 {
     Ip6::Address destination;
 
     destination.SetToLinkLocalAllNodesMulticast();
 
-    SendAnnounce(aChannel, aOrphanAnnounce, destination);
+    SendAnnounce(aChannel, destination, aMode);
 }
 
-void Mle::SendAnnounce(uint8_t aChannel, bool aOrphanAnnounce, const Ip6::Address &aDestination)
+void Mle::SendAnnounce(uint8_t aChannel, const Ip6::Address &aDestination, AnnounceMode aMode)
 {
     Error              error = kErrorNone;
     ChannelTlv         channel;
@@ -2489,18 +2522,19 @@ void Mle::SendAnnounce(uint8_t aChannel, bool aOrphanAnnounce, const Ip6::Addres
     channel.SetChannel(Get<Mac::Mac>().GetPanChannel());
     SuccessOrExit(error = channel.AppendTo(*message));
 
-    if (aOrphanAnnounce)
+    switch (aMode)
     {
+    case kOrphanAnnounce:
         activeTimestamp.Init();
         activeTimestamp.SetSeconds(0);
         activeTimestamp.SetTicks(0);
         activeTimestamp.SetAuthoritative(true);
-
         SuccessOrExit(error = activeTimestamp.AppendTo(*message));
-    }
-    else
-    {
+        break;
+
+    case kNormalAnnounce:
         SuccessOrExit(error = AppendActiveTimestamp(*message));
+        break;
     }
 
     SuccessOrExit(error = Tlv::Append<PanIdTlv>(*message, Get<Mac::Mac>().GetPanId()));
@@ -2675,21 +2709,21 @@ void Mle::HandleUdpReceive(void *aContext, otMessage *aMessage, const otMessageI
 
 void Mle::HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
-    Error           error = kErrorNone;
-    Header          header;
-    uint32_t        keySequence;
-    const Key *     mleKey;
-    uint32_t        frameCounter;
-    uint8_t         messageTag[kMleSecurityTagSize];
-    uint8_t         nonce[Crypto::AesCcm::kNonceSize];
-    Mac::ExtAddress extAddr;
-    Crypto::AesCcm  aesCcm;
-    uint16_t        mleOffset;
-    uint8_t         buf[64];
-    uint16_t        length;
-    uint8_t         tag[kMleSecurityTagSize];
-    uint8_t         command;
-    Neighbor *      neighbor;
+    Error              error = kErrorNone;
+    Header             header;
+    uint32_t           keySequence;
+    const KeyMaterial *mleKey;
+    uint32_t           frameCounter;
+    uint8_t            messageTag[kMleSecurityTagSize];
+    uint8_t            nonce[Crypto::AesCcm::kNonceSize];
+    Mac::ExtAddress    extAddr;
+    Crypto::AesCcm     aesCcm;
+    uint16_t           mleOffset;
+    uint8_t            buf[64];
+    uint16_t           length;
+    uint8_t            tag[kMleSecurityTagSize];
+    uint8_t            command;
+    Neighbor *         neighbor;
 
     otLogDebgMle("Receive UDP message");
 
@@ -3406,6 +3440,15 @@ void Mle::HandleParentResponse(const Message &aMessage, const Ip6::MessageInfo &
     SuccessOrExit(error = Tlv::FindTlv(aMessage, connectivity));
     VerifyOrExit(connectivity.IsValid(), error = kErrorParse);
 
+#if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
+    // CSL Accuracy
+    if (Tlv::FindTlv(aMessage, clockAccuracy) != kErrorNone)
+    {
+        clockAccuracy.SetCslClockAccuracy(kCslWorstCrystalPpm);
+        clockAccuracy.SetCslUncertainty(kCslWorstUncertainty);
+    }
+#endif
+
     // Share data with application, if requested.
     if (mParentResponseCb)
     {
@@ -3473,14 +3516,6 @@ void Mle::HandleParentResponse(const Message &aMessage, const Ip6::MessageInfo &
 
         // only consider partitions that are the same or better
         VerifyOrExit(compare >= 0);
-#endif
-
-#if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
-        if (Tlv::FindTlv(aMessage, clockAccuracy) != kErrorNone)
-        {
-            clockAccuracy.SetCslClockAccuracy(kCslWorstCrystalPpm);
-            clockAccuracy.SetCslUncertainty(kCslWorstUncertainty);
-        }
 #endif
 
         // only consider better parents if the partitions are the same
@@ -3944,10 +3979,10 @@ void Mle::HandleAnnounce(const Message &aMessage, const Ip6::MessageInfo &aMessa
     }
     else if (localTimestamp->Compare(timestamp) < 0)
     {
-        SendAnnounce(channel, false);
+        SendAnnounce(channel);
 
 #if OPENTHREAD_CONFIG_MLE_SEND_UNICAST_ANNOUNCE_RESPONSE
-        SendAnnounce(channel, false, aMessageInfo.GetPeerAddr());
+        SendAnnounce(channel, aMessageInfo.GetPeerAddr());
 #endif
     }
     else
@@ -4031,7 +4066,7 @@ void Mle::ProcessAnnounce(void)
 
     otLogNoteMle("Processing Announce - channel %d, panid 0x%02x", newChannel, newPanId);
 
-    Stop(/* aClearNetworkDatasets */ false);
+    Stop(kKeepNetworkDatasets);
 
     // Save the current/previous channel and pan-id
     mAlternateChannel   = Get<Mac::Mac>().GetPanChannel();
@@ -4041,7 +4076,7 @@ void Mle::ProcessAnnounce(void)
     IgnoreError(Get<Mac::Mac>().SetPanChannel(newChannel));
     Get<Mac::Mac>().SetPanId(newPanId);
 
-    IgnoreError(Start(/* aAnnounceAttach */ true));
+    IgnoreError(Start(kAnnounceAttach));
 }
 
 uint16_t Mle::GetNextHop(uint16_t aDestination) const

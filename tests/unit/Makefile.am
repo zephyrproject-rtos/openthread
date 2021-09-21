@@ -53,6 +53,7 @@ AM_CPPFLAGS                                                         = \
     -DOPENTHREAD_FTD=1                                                \
     -DOPENTHREAD_MTD=0                                                \
     -DOPENTHREAD_RADIO=0                                              \
+    -DOPENTHREAD_RADIO_CLI=0                                          \
     -DOPENTHREAD_SPINEL_CONFIG_OPENTHREAD_MESSAGE_ENABLE=1            \
     -I$(top_srcdir)/include                                           \
     -I$(top_srcdir)/src                                               \
@@ -113,6 +114,7 @@ check_PROGRAMS                                                     += \
     ot-test-child                                                     \
     ot-test-child-table                                               \
     ot-test-cmd-line-parser                                           \
+    ot-test-data                                                      \
     ot-test-dns                                                       \
     ot-test-ecdsa                                                     \
     ot-test-flash                                                     \
@@ -196,6 +198,9 @@ ot_test_child_table_SOURCES     = $(COMMON_SOURCES) test_child_table.cpp
 
 ot_test_cmd_line_parser_LDADD   = $(COMMON_LDADD)
 ot_test_cmd_line_parser_SOURCES = $(COMMON_SOURCES) test_cmd_line_parser.cpp
+
+ot_test_data_LDADD              = $(COMMON_LDADD)
+ot_test_data_SOURCES            = $(COMMON_SOURCES) test_data.cpp
 
 ot_test_dns_LDADD               = $(COMMON_LDADD)
 ot_test_dns_SOURCES             = $(COMMON_SOURCES) test_dns.cpp

@@ -62,6 +62,21 @@ LinkRaw::LinkRaw(Instance &aInstance)
     , mSubMac(aInstance.Get<SubMac>())
 #endif
 {
+    Init();
+}
+
+void LinkRaw::Init(void)
+{
+    mEnergyScanDoneCallback = nullptr;
+    mTransmitDoneCallback   = nullptr;
+    mReceiveDoneCallback    = nullptr;
+
+    mReceiveChannel      = OPENTHREAD_CONFIG_DEFAULT_CHANNEL;
+    mPanId               = kPanIdBroadcast;
+    mReceiveDoneCallback = nullptr;
+#if OPENTHREAD_RADIO
+    mSubMac.Init();
+#endif
 }
 
 Error LinkRaw::SetReceiveDone(otLinkRawReceiveDone aCallback)

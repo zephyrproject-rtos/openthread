@@ -39,6 +39,10 @@
 #define OPENTHREAD_RADIO 0
 #endif
 
+#ifndef OPENTHREAD_RADIO
+#define OPENTHREAD_RADIO_CLI 0
+#endif
+
 /**
  * @def OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
  *
@@ -118,6 +122,14 @@
  *
  */
 #define OPENTHREAD_CONFIG_NETDATA_PUBLISHER_ENABLE 1
+
+/**
+ * @def OPENTHREAD_CONFIG_TMF_ANYCAST_LOCATOR_ENABLE
+ *
+ * Define to 1 to enable TMF anycast locator functionality.
+ *
+ */
+#define OPENTHREAD_CONFIG_TMF_ANYCAST_LOCATOR_ENABLE 1
 
 /**
  * @def OPENTHREAD_CONFIG_LEGACY_ENABLE

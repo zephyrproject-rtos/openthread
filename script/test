@@ -56,6 +56,7 @@ build_simulation()
     local version="$1"
     local options=(
         "-DBUILD_TESTING=ON"
+        "-DOT_ANYCAST_LOCATOR=ON"
         "-DOT_DNS_CLIENT=ON"
         "-DOT_DNSSD_SERVER=ON"
         "-DOT_ECDSA=ON"
@@ -268,6 +269,7 @@ do_build_otbr_docker()
     local otdir
     local otbrdir
     local otbr_options=(
+        "-DOT_ANYCAST_LOCATOR=ON"
         "-DOT_COVERAGE=ON"
         "-DOT_DNS_CLIENT=ON"
         "-DOT_DUA=ON"
@@ -276,6 +278,7 @@ do_build_otbr_docker()
         "-DOT_SLAAC=ON"
         "-DOT_SRP_CLIENT=ON"
         "-DOT_TREL=OFF"
+        "-DOT_FULL_LOGS=ON"
         "-DOT_UPTIME=ON"
         "-DOTBR_DUA_ROUTING=ON"
         "-DCMAKE_CXX_FLAGS='-DOPENTHREAD_CONFIG_DNSSD_SERVER_BIND_UNSPECIFIED_NETIF=1'"

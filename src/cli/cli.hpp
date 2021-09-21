@@ -46,6 +46,7 @@
 #include <openthread/instance.h>
 #include <openthread/ip6.h>
 #include <openthread/link.h>
+#include <openthread/ping_sender.h>
 #include <openthread/sntp.h>
 #if OPENTHREAD_CONFIG_TCP_ENABLE && OPENTHREAD_CONFIG_CLI_TCP_ENABLE
 #include <openthread/tcp.h>
@@ -97,6 +98,7 @@ extern "C" void otCliPlatLogLine(otLogLevel, otLogRegion, const char *);
  */
 class Interpreter
 {
+#if OPENTHREAD_FTD || OPENTHREAD_MTD
     friend class Coap;
     friend class CoapSecure;
     friend class Commissioner;
@@ -108,6 +110,7 @@ class Interpreter
     friend class SrpServer;
     friend class TcpExample;
     friend class UdpExample;
+#endif
     friend void otCliPlatLogv(otLogLevel, otLogRegion, const char *, va_list);
     friend void otCliPlatLogLine(otLogLevel, otLogRegion, const char *);
 
@@ -337,6 +340,7 @@ private:
     };
 
     static constexpr uint32_t kNetworkDiagnosticTimeoutMsecs = 5000;
+    static constexpr uint32_t kLocateTimeoutMsecs            = 2500;
 
     struct Command
     {
@@ -444,9 +448,18 @@ private:
     static otError ParseRoute(Arg aArgs[], otExternalRouteConfig &aConfig);
 #endif
 
-    otError ProcessUserCommands(Arg aArgs[]);
+    // Process methods on FTD/MTD/RCP
+#if OPENTHREAD_CONFIG_DIAG_ENABLE
+    otError ProcessDiag(Arg aArgs[]);
+#endif
     otError ProcessHelp(Arg aArgs[]);
     otError ProcessHistory(Arg aArgs[]);
+    otError ProcessReset(Arg aArgs[]);
+    otError ProcessUserCommands(Arg aArgs[]);
+    otError ProcessVersion(Arg aArgs[]);
+
+    // Process methods only on FTD/MTD
+#if OPENTHREAD_FTD || OPENTHREAD_MTD
     otError ProcessCcaThreshold(Arg aArgs[]);
     otError ProcessBufferInfo(Arg aArgs[]);
     otError ProcessChannel(Arg aArgs[]);
@@ -504,9 +517,6 @@ private:
 #if OPENTHREAD_FTD
     otError ProcessDelayTimerMin(Arg aArgs[]);
 #endif
-#if OPENTHREAD_CONFIG_DIAG_ENABLE
-    otError ProcessDiag(Arg aArgs[]);
-#endif
     otError ProcessDiscover(Arg aArgs[]);
     otError ProcessDns(Arg aArgs[]);
 #if OPENTHREAD_FTD
@@ -554,6 +564,14 @@ private:
     otError ProcessLinkMetricsMgmt(Arg aArgs[]);
     otError ProcessLinkMetricsProbe(Arg aArgs[]);
     otError ParseLinkMetricsFlags(otLinkMetrics &aLinkMetrics, const Arg &aFlags);
+#endif
+#if OPENTHREAD_CONFIG_TMF_ANYCAST_LOCATOR_ENABLE
+    otError     ProcessLocate(Arg aArgs[]);
+    static void HandleLocateResult(void *              aContext,
+                                   otError             aError,
+                                   const otIp6Address *aMeshLocalAddress,
+                                   uint16_t            aRloc16);
+    void        HandleLocateResult(otError aError, const otIp6Address *aMeshLocalAddress, uint16_t aRloc16);
 #endif
 #if OPENTHREAD_FTD && OPENTHREAD_CONFIG_TMF_PROXY_MLR_ENABLE && OPENTHREAD_CONFIG_COMMISSIONER_ENABLE
     otError ProcessMlr(Arg aArgs[]);
@@ -632,7 +650,6 @@ private:
 #if OPENTHREAD_FTD
     otError ProcessReleaseRouterId(Arg aArgs[]);
 #endif
-    otError ProcessReset(Arg aArgs[]);
 #if OPENTHREAD_CONFIG_BORDER_ROUTER_ENABLE
     otError ProcessRoute(Arg aArgs[]);
     otError ProcessRouteAdd(Arg aArgs[]);
@@ -667,7 +684,6 @@ private:
 #if OPENTHREAD_CONFIG_UPTIME_ENABLE
     otError ProcessUptime(Arg aArgs[]);
 #endif
-    otError ProcessVersion(Arg aArgs[]);
 #if OPENTHREAD_CONFIG_MAC_FILTER_ENABLE
     otError ProcessMacFilter(Arg aArgs[]);
     void    PrintMacFilter(void);
@@ -692,7 +708,7 @@ private:
     static void HandleEnergyScanResult(otEnergyScanResult *aResult, void *aContext);
     static void HandleLinkPcapReceive(const otRadioFrame *aFrame, bool aIsTx, void *aContext);
 
-#if OPENTHREAD_FTD || OPENTHREAD_CONFIG_TMF_NETWORK_DIAG_MTD_ENABLE
+#if OPENTHREAD_FTD || (OPENTHREAD_MTD && OPENTHREAD_CONFIG_TMF_NETWORK_DIAG_MTD_ENABLE)
     void HandleDiagnosticGetResponse(otError aError, const otMessage *aMessage, const Ip6::MessageInfo *aMessageInfo);
     static void HandleDiagnosticGetResponse(otError              aError,
                                             otMessage *          aMessage,
@@ -771,6 +787,8 @@ private:
     }
     void HandleDiscoveryRequest(const otThreadDiscoveryRequestInfo &aInfo);
 
+#endif // OPENTHREAD_FTD || OPENTHREAD_MTD
+
 #if OPENTHREAD_CONFIG_CLI_LOG_INPUT_OUTPUT_ENABLE
     bool IsLogging(void) const { return mIsLogging; }
     void SetIsLogging(bool aIsLogging) { mIsLogging = aIsLogging; }
@@ -780,7 +798,10 @@ private:
     static void HandleTimer(Timer &aTimer);
     void        HandleTimer(void);
 
+    // Commands supported by radio:
+    // [diag, help, reset, version]
     static constexpr Command sCommands[] = {
+#if OPENTHREAD_FTD || OPENTHREAD_MTD
 #if OPENTHREAD_CONFIG_BORDER_AGENT_ENABLE
         {"ba", &Interpreter::ProcessBorderAgent},
 #endif
@@ -825,9 +846,11 @@ private:
 #if OPENTHREAD_FTD
         {"delaytimermin", &Interpreter::ProcessDelayTimerMin},
 #endif
+#endif // OPENTHREAD_FTD || OPENTHREAD_MTD
 #if OPENTHREAD_CONFIG_DIAG_ENABLE
         {"diag", &Interpreter::ProcessDiag},
 #endif
+#if OPENTHREAD_FTD || OPENTHREAD_MTD
         {"discover", &Interpreter::ProcessDiscover},
         {"dns", &Interpreter::ProcessDns},
 #if (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
@@ -847,7 +870,9 @@ private:
         {"fake", &Interpreter::ProcessFake},
 #endif
         {"fem", &Interpreter::ProcessFem},
+#endif // OPENTHREAD_FTD || OPENTHREAD_MTD
         {"help", &Interpreter::ProcessHelp},
+#if OPENTHREAD_FTD || OPENTHREAD_MTD
 #if OPENTHREAD_CONFIG_HISTORY_TRACKER_ENABLE
         {"history", &Interpreter::ProcessHistory},
 #endif
@@ -867,6 +892,9 @@ private:
 #endif
 #if OPENTHREAD_CONFIG_MLE_LINK_METRICS_INITIATOR_ENABLE
         {"linkmetrics", &Interpreter::ProcessLinkMetrics},
+#endif
+#if OPENTHREAD_CONFIG_TMF_ANYCAST_LOCATOR_ENABLE
+        {"locate", &Interpreter::ProcessLocate},
 #endif
         {"log", &Interpreter::ProcessLog},
         {"mac", &Interpreter::ProcessMac},
@@ -928,7 +956,9 @@ private:
 #if OPENTHREAD_FTD
         {"releaserouterid", &Interpreter::ProcessReleaseRouterId},
 #endif
+#endif // OPENTHREAD_FTD || OPENTHREAD_MTD
         {"reset", &Interpreter::ProcessReset},
+#if OPENTHREAD_FTD || OPENTHREAD_MTD
         {"rloc16", &Interpreter::ProcessRloc16},
 #if OPENTHREAD_CONFIG_BORDER_ROUTER_ENABLE
         {"route", &Interpreter::ProcessRoute},
@@ -965,6 +995,7 @@ private:
 #if OPENTHREAD_CONFIG_UPTIME_ENABLE
         {"uptime", &Interpreter::ProcessUptime},
 #endif
+#endif // OPENTHREAD_FTD || OPENTHREAD_MTD
         {"version", &Interpreter::ProcessVersion},
     };
 
@@ -977,6 +1008,10 @@ private:
     uint8_t             mUserCommandsLength;
     void *              mUserCommandsContext;
     bool                mCommandIsPending;
+
+    TimerMilliContext mTimer;
+
+#if OPENTHREAD_FTD || OPENTHREAD_MTD
 #if OPENTHREAD_CONFIG_SNTP_CLIENT_ENABLE
     bool mSntpQueryingInProgress;
 #endif
@@ -988,8 +1023,6 @@ private:
 #if OPENTHREAD_CONFIG_TCP_ENABLE && OPENTHREAD_CONFIG_CLI_TCP_ENABLE
     TcpExample mTcp;
 #endif
-
-    TimerMilliContext mTimer;
 
 #if OPENTHREAD_CONFIG_COAP_API_ENABLE
     Coap mCoap;
@@ -1018,6 +1051,7 @@ private:
 #if OPENTHREAD_CONFIG_HISTORY_TRACKER_ENABLE
     History mHistory;
 #endif
+#endif // OPENTHREAD_FTD || OPENTHREAD_MTD
 
 #if OPENTHREAD_CONFIG_CLI_LOG_INPUT_OUTPUT_ENABLE
     char     mOutputString[OPENTHREAD_CONFIG_CLI_LOG_INPUT_OUTPUT_LOG_STRING_SIZE];
@@ -1025,7 +1059,10 @@ private:
     bool     mIsLogging;
 #endif
 #if OPENTHREAD_CONFIG_PING_SENDER_ENABLE
-    bool mPingIsAsync;
+    bool mPingIsAsync : 1;
+#endif
+#if OPENTHREAD_CONFIG_TMF_ANYCAST_LOCATOR_ENABLE
+    bool mLocateInProgress : 1;
 #endif
 };
 

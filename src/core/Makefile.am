@@ -42,6 +42,10 @@ if OPENTHREAD_ENABLE_RADIO_ONLY
 lib_LIBRARIES                             += libopenthread-radio.a
 endif
 
+if OPENTHREAD_ENABLE_RADIO_CLI
+lib_LIBRARIES                             += libopenthread-radio-cli.a
+endif
+
 CPPFLAGS_COMMON                            = \
     -I$(top_srcdir)/include                  \
     $(OPENTHREAD_TARGET_DEFINES)             \
@@ -52,6 +56,15 @@ libopenthread_radio_a_CPPFLAGS             = \
     -DOPENTHREAD_MTD=0                       \
     -DOPENTHREAD_FTD=0                       \
     -DOPENTHREAD_RADIO=1                     \
+    -DOPENTHREAD_RADIO_CLI=0                 \
+    $(NULL)
+
+libopenthread_radio_cli_a_CPPFLAGS         = \
+    $(CPPFLAGS_COMMON)                       \
+    -DOPENTHREAD_MTD=0                       \
+    -DOPENTHREAD_FTD=0                       \
+    -DOPENTHREAD_RADIO=1                     \
+    -DOPENTHREAD_RADIO_CLI=1                 \
     $(NULL)
 
 libopenthread_ftd_a_CPPFLAGS               = \
@@ -254,6 +267,7 @@ SOURCES_COMMON                                  = \
     thread/address_resolver.cpp                   \
     thread/announce_begin_server.cpp              \
     thread/announce_sender.cpp                    \
+    thread/anycast_locator.cpp                    \
     thread/child_table.cpp                        \
     thread/csl_tx_scheduler.cpp                   \
     thread/discover_scanner.cpp                   \
@@ -306,14 +320,9 @@ SOURCES_COMMON                                  = \
     utils/srp_client_buffers.cpp                  \
     $(NULL)
 
-EXTRA_DIST                                 = \
-    common/extension_example.cpp             \
-    $(NULL)
-
-libopenthread_radio_a_SOURCES              = \
+RADIO_SOURCES_COMMON                       = \
     api/diags_api.cpp                        \
     api/error_api.cpp                        \
-    api/heap_api.cpp                         \
     api/instance_api.cpp                     \
     api/link_raw_api.cpp                     \
     api/logging_api.cpp                      \
@@ -345,6 +354,18 @@ libopenthread_radio_a_SOURCES              = \
     utils/parse_cmdline.cpp                  \
     $(NULL)
 
+EXTRA_DIST                                 = \
+    common/extension_example.cpp             \
+    $(NULL)
+
+libopenthread_radio_a_SOURCES              = \
+    $(RADIO_SOURCES_COMMON)                  \
+    $(NULL)
+
+libopenthread_radio_cli_a_SOURCES          = \
+    $(RADIO_SOURCES_COMMON)                  \
+    $(NULL)
+
 libopenthread_mtd_a_SOURCES                = \
     $(SOURCES_COMMON)                        \
     $(NULL)
@@ -373,6 +394,10 @@ nodist_libopenthread_radio_a_SOURCES       = \
     vendor_extension_temp.cpp                \
     $(NULL)
 
+nodist_libopenthread_radio_cli_a_SOURCES   = \
+    vendor_extension_temp.cpp                \
+    $(NULL)
+
 endif # OPENTHREAD_ENABLE_VENDOR_EXTENSION
 
 HEADERS_COMMON                                  = \
@@ -389,11 +414,13 @@ HEADERS_COMMON                                  = \
     coap/coap_secure.hpp                          \
     common/arg_macros.hpp                         \
     common/array.hpp                              \
+    common/as_core_type.hpp                       \
     common/bit_vector.hpp                         \
     common/clearable.hpp                          \
     common/code_utils.hpp                         \
     common/const_cast.hpp                         \
     common/crc16.hpp                              \
+    common/data.hpp                               \
     common/debug.hpp                              \
     common/encoding.hpp                           \
     common/equatable.hpp                          \
@@ -527,6 +554,7 @@ HEADERS_COMMON                                  = \
     thread/address_resolver.hpp                   \
     thread/announce_begin_server.hpp              \
     thread/announce_sender.hpp                    \
+    thread/anycast_locator.hpp                    \
     thread/child_mask.hpp                         \
     thread/child_table.hpp                        \
     thread/csl_tx_scheduler.hpp                   \

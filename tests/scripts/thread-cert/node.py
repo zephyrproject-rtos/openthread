@@ -39,7 +39,7 @@ import time
 import traceback
 import unittest
 from ipaddress import IPv6Address, IPv6Network
-from typing import Union, Dict, Optional, List
+from typing import Union, Dict, Optional, List, Any
 
 import pexpect
 import pexpect.popen_spawn
@@ -59,6 +59,7 @@ class OtbrDocker:
     _docker_proc = None
 
     def __init__(self, nodeid: int, **kwargs):
+        self.verbose = int(float(os.getenv('VERBOSE', 0)))
         try:
             self._docker_name = config.OTBR_DOCKER_NAME_PREFIX + str(nodeid)
             self._prepare_ot_rcp_sim(nodeid)
@@ -137,6 +138,8 @@ class OtbrDocker:
 
         cmd = f'docker exec -i {self._docker_name} ot-ctl'
         self.pexpect = pexpect.popen_spawn.PopenSpawn(cmd, timeout=30)
+        if self.verbose:
+            self.pexpect.logfile_read = sys.stdout.buffer
 
         # Add delay to ensure that the process is ready to receive commands.
         timeout = 0.4
@@ -716,6 +719,10 @@ class NodeImpl:
         self.thread_stop()
         self.interface_down()
 
+    def set_log_level(self, level: int):
+        self.send_command(f'log level {level}')
+        self._expect_done()
+
     def interface_up(self):
         self.send_command('ifconfig up')
         self._expect_done()
@@ -799,6 +806,23 @@ class NodeImpl:
         states = ['disabled', 'running', 'stopped']
         self.send_command('srp server state')
         return self._expect_result(states)
+
+    def srp_server_get_addr_mode(self):
+        modes = [r'unicast', r'anycast']
+        self.send_command(f'srp server addrmode')
+        return self._expect_result(modes)
+
+    def srp_server_set_addr_mode(self, mode):
+        self.send_command(f'srp server addrmode {mode}')
+        self._expect_done()
+
+    def srp_server_get_anycast_seq_num(self):
+        self.send_command(f'srp server seqnum')
+        return int(self._expect_result(r'\d+'))
+
+    def srp_server_set_anycast_seq_num(self, seqnum):
+        self.send_command(f'srp server seqnum {seqnum}')
+        self._expect_done()
 
     def srp_server_set_enabled(self, enable):
         cmd = f'srp server {"enable" if enable else "disable"}'
@@ -1057,6 +1081,22 @@ class NodeImpl:
         keys = [key_value[0] for key_value in key_values]
         values = [key_value[1].strip('"') for key_value in key_values]
         return dict(zip(keys, values))
+
+    def locate(self, anycast_addr):
+        cmd = 'locate ' + anycast_addr
+        self.send_command(cmd)
+        self.simulator.go(5)
+        return self._parse_locate_result(self._expect_command_output(cmd)[0])
+
+    def _parse_locate_result(self, line: str):
+        """Parse anycast locate result as list of ml-eid and rloc16.
+
+           Example output for input
+           'fd00:db8:0:0:acf9:9d0:7f3c:b06e 0xa800'
+
+           [ 'fd00:db8:0:0:acf9:9d0:7f3c:b06e', '0xa800' ]
+        """
+        return line.split(' ')
 
     def enable_backbone_router(self):
         cmd = 'bbr enable'
@@ -1555,6 +1595,63 @@ class NodeImpl:
         self.send_command(cmd)
         self._expect_done()
 
+    def get_child_table(self) -> Dict[int, Dict[str, Any]]:
+        """Get the table of attached children."""
+        cmd = 'child table'
+        self.send_command(cmd)
+        output = self._expect_command_output(cmd)
+
+        #
+        # Example output:
+        # | ID  | RLOC16 | Timeout    | Age        | LQ In | C_VN |R|D|N|Ver|CSL|QMsgCnt| Extended MAC     |
+        # +-----+--------+------------+------------+-------+------+-+-+-+---+---+-------+------------------+
+        # |   1 | 0xc801 |        240 |         24 |     3 |  131 |1|0|0|  3| 0 |     0 | 4ecede68435358ac |
+        # |   2 | 0xc802 |        240 |          2 |     3 |  131 |0|0|0|  3| 1 |     0 | a672a601d2ce37d8 |
+        # Done
+        #
+
+        headers = self.__split_table_row(output[0])
+
+        table = {}
+        for line in output[2:]:
+            line = line.strip()
+            if not line:
+                continue
+
+            fields = self.__split_table_row(line)
+            col = lambda colname: self.__get_table_col(colname, headers, fields)
+
+            id = int(col("ID"))
+            r, d, n = int(col("R")), int(col("D")), int(col("N"))
+            mode = f'{"r" if r else ""}{"d" if d else ""}{"n" if n else ""}'
+
+            table[int(id)] = {
+                'id': int(id),
+                'rloc16': int(col('RLOC16'), 16),
+                'timeout': int(col('Timeout')),
+                'age': int(col('Age')),
+                'lq_in': int(col('LQ In')),
+                'c_vn': int(col('C_VN')),
+                'mode': mode,
+                'extaddr': col('Extended MAC'),
+                'ver': int(col('Ver')),
+                'csl': bool(int(col('CSL'))),
+                'qmsgcnt': int(col('QMsgCnt')),
+            }
+
+        return table
+
+    def __split_table_row(self, row: str) -> List[str]:
+        if not (row.startswith('|') and row.endswith('|')):
+            raise ValueError(row)
+
+        fields = row.split('|')
+        fields = [x.strip() for x in fields[1:-1]]
+        return fields
+
+    def __get_table_col(self, colname: str, headers: List[str], fields: List[str]) -> str:
+        return fields[headers.index(colname)]
+
     def __getOmrAddress(self):
         prefixes = [prefix.split('::')[0] for prefix in self.get_prefixes()]
         omr_addrs = []
@@ -1875,6 +1972,9 @@ class NodeImpl:
     def reset(self):
         self.send_command('reset')
         time.sleep(self.RESET_DELAY)
+
+        if self.is_otbr:
+            self.set_log_level(5)
 
     def set_router_selection_jitter(self, jitter):
         cmd = 'routerselectionjitter %d' % jitter
@@ -3120,6 +3220,7 @@ class OtbrNode(LinuxHost, NodeImpl, OtbrDocker):
 
     def start(self):
         self._setup_sysctl()
+        self.set_log_level(5)
         super().start()
 
 

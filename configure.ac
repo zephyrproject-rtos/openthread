@@ -543,6 +543,30 @@ AC_MSG_RESULT(${enable_radio_only})
 AM_CONDITIONAL([OPENTHREAD_ENABLE_RADIO_ONLY], [test "${enable_radio_only}" = "yes"])
 
 #
+# Radio Cli Library
+#
+
+AC_MSG_CHECKING([whether to build radio-cli library])
+AC_ARG_ENABLE(radio-cli,
+    [AS_HELP_STRING([--enable-radio-cli], [Build radio-cli library @<:@default=no@:>@.])],
+    [
+        case "${enableval}" in
+
+        no|yes)
+            enable_radio_cli=${enableval}
+            ;;
+
+        *)
+            AC_MSG_ERROR([Invalid value ${enable_radio_cli} for --enable-radio-cli])
+            ;;
+        esac
+    ],
+    [enable_radio_cli=no])
+
+AC_MSG_RESULT(${enable_radio_cli})
+AM_CONDITIONAL([OPENTHREAD_ENABLE_RADIO_CLI], [test "${enable_radio_cli}" = "yes"])
+
+#
 # whether to build executables
 #
 
@@ -613,21 +637,6 @@ AC_ARG_ENABLE(ncp,
 
 AC_MSG_RESULT(${enable_ncp})
 AM_CONDITIONAL([OPENTHREAD_ENABLE_NCP], [test "${enable_ncp}" = "yes"])
-
-#
-# Udev - udev library to use for POSIX NCP
-#
-
-AC_ARG_WITH([udev],
-    AS_HELP_STRING([--with-udev], [Use udev library for monitoring tty events]))
-
-AS_IF([test "x$with_udev" = "xyes"], [
-    AC_CHECK_LIB([udev], [udev_new])
-    AC_CHECK_HEADER([libudev.h])
-])
-
-AS_IF([test "x$ac_cv_lib_udev_udev_new" == "xno" || test "x$ac_cv_header_libudev_h" == "xno"],
-    [AC_MSG_ERROR([--with-udev was given, but test for udev failed])])
 
 #
 # Readline - readline library to use for POSIX CLI

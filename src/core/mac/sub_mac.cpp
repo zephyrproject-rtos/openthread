@@ -52,42 +52,56 @@ namespace Mac {
 SubMac::SubMac(Instance &aInstance)
     : InstanceLocator(aInstance)
     , mRadioCaps(Get<Radio>().GetCaps())
-    , mState(kStateDisabled)
-    , mCsmaBackoffs(0)
-    , mTransmitRetries(0)
-    , mShortAddress(kShortAddrInvalid)
-    , mRxOnWhenBackoff(true)
-    , mEnergyScanMaxRssi(kInvalidRssiValue)
-    , mEnergyScanEndTime(0)
     , mTransmitFrame(Get<Radio>().GetTransmitBuffer())
     , mCallbacks(aInstance)
     , mPcapCallback(nullptr)
     , mPcapCallbackContext(nullptr)
-    , mFrameCounter(0)
-    , mKeyId(0)
     , mTimer(aInstance, SubMac::HandleTimer)
 #if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
-    , mCslPeriod(0)
-    , mCslChannel(0)
-    , mIsCslChannelSpecified(false)
-    , mCslLastSync(0)
     , mCslParentAccuracy(kCslWorstCrystalPpm)
     , mCslParentUncert(kCslWorstUncertainty)
-    , mCslState(kCslIdle)
     , mCslTimer(aInstance, SubMac::HandleCslTimer)
 #endif
 {
+    Init();
+}
+
+void SubMac::Init(void)
+{
+    mState           = kStateDisabled;
+    mCsmaBackoffs    = 0;
+    mTransmitRetries = 0;
+    mShortAddress    = kShortAddrInvalid;
     mExtAddress.Clear();
+    mRxOnWhenBackoff   = true;
+    mEnergyScanMaxRssi = kInvalidRssiValue;
+    mEnergyScanEndTime = Time{0};
+
     mPrevKey.Clear();
     mCurrKey.Clear();
     mNextKey.Clear();
+
+    mFrameCounter = 0;
+    mKeyId        = 0;
+    mTimer.Stop();
+
+#if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
+    mCslPeriod             = 0;
+    mCslChannel            = 0;
+    mIsCslChannelSpecified = false;
+    mCslSampleTime         = TimeMicro{0};
+    mCslLastSync           = TimeMicro{0};
+    mCslState              = kCslIdle;
+    mCslTimer.Stop();
+#endif
 }
 
 otRadioCaps SubMac::GetCaps(void) const
 {
-    otRadioCaps caps = mRadioCaps;
+    otRadioCaps caps;
 
 #if OPENTHREAD_RADIO || OPENTHREAD_CONFIG_LINK_RAW_ENABLE
+    caps = mRadioCaps;
 
 #if OPENTHREAD_CONFIG_MAC_SOFTWARE_ACK_TIMEOUT_ENABLE
     caps |= OT_RADIO_CAPS_ACK_TIMEOUT;
@@ -831,11 +845,11 @@ void SubMac::SetState(State aState)
     }
 }
 
-void SubMac::SetMacKey(uint8_t    aKeyIdMode,
-                       uint8_t    aKeyId,
-                       const Key &aPrevKey,
-                       const Key &aCurrKey,
-                       const Key &aNextKey)
+void SubMac::SetMacKey(uint8_t            aKeyIdMode,
+                       uint8_t            aKeyId,
+                       const KeyMaterial &aPrevKey,
+                       const KeyMaterial &aCurrKey,
+                       const KeyMaterial &aNextKey)
 {
     switch (aKeyIdMode)
     {

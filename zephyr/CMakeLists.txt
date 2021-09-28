@@ -337,6 +337,12 @@ else()
   set(OT_UDP_FORWARD OFF CACHE BOOL "Enable UDP forward feature" FORCE)
 endif()
 
+if(CONFIG_OPENTHREAD_UPTIME)
+  set(OT_UPTIME ON CACHE BOOL "Enable support for tracking OpenThread instance's uptime" FORCE)
+else()
+  set(OT_UPTIME OFF CACHE BOOL "Enable support for tracking OpenThread instance's uptime" FORCE)
+endif()
+
 if(CONFIG_OPENTHREAD_OTNS)
   set(OT_OTNS ON CACHE BOOL "Enable OTNS support" FORCE)
 else()

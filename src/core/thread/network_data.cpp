@@ -47,13 +47,6 @@
 namespace ot {
 namespace NetworkData {
 
-NetworkData::NetworkData(Instance &aInstance, Type aType)
-    : InstanceLocator(aInstance)
-    , mType(aType)
-{
-    mLength = 0;
-}
-
 Error NetworkData::GetNetworkData(bool aStable, uint8_t *aData, uint8_t &aDataLength) const
 {
     Error error = kErrorNone;
@@ -565,27 +558,25 @@ const PrefixTlv *NetworkData::FindPrefix(const uint8_t *aPrefix,
     return prefixTlv;
 }
 
-const ServiceTlv *NetworkData::FindService(uint32_t         aEnterpriseNumber,
-                                           const uint8_t *  aServiceData,
-                                           uint8_t          aServiceDataLength,
-                                           ServiceMatchMode aServiceMatchMode) const
+const ServiceTlv *NetworkData::FindService(uint32_t           aEnterpriseNumber,
+                                           const ServiceData &aServiceData,
+                                           ServiceMatchMode   aServiceMatchMode) const
 {
-    return FindService(aEnterpriseNumber, aServiceData, aServiceDataLength, aServiceMatchMode, mTlvs, mLength);
+    return FindService(aEnterpriseNumber, aServiceData, aServiceMatchMode, mTlvs, mLength);
 }
 
-const ServiceTlv *NetworkData::FindService(uint32_t         aEnterpriseNumber,
-                                           const uint8_t *  aServiceData,
-                                           uint8_t          aServiceDataLength,
-                                           ServiceMatchMode aServiceMatchMode,
-                                           const uint8_t *  aTlvs,
-                                           uint8_t          aTlvsLength)
+const ServiceTlv *NetworkData::FindService(uint32_t           aEnterpriseNumber,
+                                           const ServiceData &aServiceData,
+                                           ServiceMatchMode   aServiceMatchMode,
+                                           const uint8_t *    aTlvs,
+                                           uint8_t            aTlvsLength)
 {
     TlvIterator       tlvIterator(aTlvs, aTlvsLength);
     const ServiceTlv *serviceTlv;
 
     while ((serviceTlv = tlvIterator.Iterate<ServiceTlv>()) != nullptr)
     {
-        if (MatchService(*serviceTlv, aEnterpriseNumber, aServiceData, aServiceDataLength, aServiceMatchMode))
+        if (MatchService(*serviceTlv, aEnterpriseNumber, aServiceData, aServiceMatchMode))
         {
             break;
         }
@@ -594,11 +585,10 @@ const ServiceTlv *NetworkData::FindService(uint32_t         aEnterpriseNumber,
     return serviceTlv;
 }
 
-const ServiceTlv *NetworkData::FindNextService(const ServiceTlv *aPrevServiceTlv,
-                                               uint32_t          aEnterpriseNumber,
-                                               const uint8_t *   aServiceData,
-                                               uint8_t           aServiceDataLength,
-                                               ServiceMatchMode  aServiceMatchMode) const
+const ServiceTlv *NetworkData::FindNextService(const ServiceTlv * aPrevServiceTlv,
+                                               uint32_t           aEnterpriseNumber,
+                                               const ServiceData &aServiceData,
+                                               ServiceMatchMode   aServiceMatchMode) const
 {
     const uint8_t *tlvs;
     uint8_t        length;
@@ -614,32 +604,38 @@ const ServiceTlv *NetworkData::FindNextService(const ServiceTlv *aPrevServiceTlv
         length = static_cast<uint8_t>((mTlvs + mLength) - tlvs);
     }
 
-    return FindService(aEnterpriseNumber, aServiceData, aServiceDataLength, aServiceMatchMode, tlvs, length);
+    return FindService(aEnterpriseNumber, aServiceData, aServiceMatchMode, tlvs, length);
 }
 
-bool NetworkData::MatchService(const ServiceTlv &aServiceTlv,
-                               uint32_t          aEnterpriseNumber,
-                               const uint8_t *   aServiceData,
-                               uint8_t           aServiceDataLength,
-                               ServiceMatchMode  aServiceMatchMode)
+const ServiceTlv *NetworkData::FindNextThreadService(const ServiceTlv * aPrevServiceTlv,
+                                                     const ServiceData &aServiceData,
+                                                     ServiceMatchMode   aServiceMatchMode) const
 {
-    bool match = false;
+    return FindNextService(aPrevServiceTlv, ServiceTlv::kThreadEnterpriseNumber, aServiceData, aServiceMatchMode);
+}
 
-    VerifyOrExit(aServiceTlv.GetEnterpriseNumber() == aEnterpriseNumber &&
-                 aServiceTlv.GetServiceDataLength() >= aServiceDataLength);
+bool NetworkData::MatchService(const ServiceTlv & aServiceTlv,
+                               uint32_t           aEnterpriseNumber,
+                               const ServiceData &aServiceData,
+                               ServiceMatchMode   aServiceMatchMode)
+{
+    bool        match = false;
+    ServiceData serviceData;
+
+    VerifyOrExit(aServiceTlv.GetEnterpriseNumber() == aEnterpriseNumber);
+
+    aServiceTlv.GetServiceData(serviceData);
 
     switch (aServiceMatchMode)
     {
     case kServiceExactMatch:
-        VerifyOrExit(aServiceTlv.GetServiceDataLength() == aServiceDataLength);
-        OT_FALL_THROUGH;
+        match = (serviceData == aServiceData);
+        break;
 
     case kServicePrefixMatch:
-        VerifyOrExit(memcmp(aServiceTlv.GetServiceData(), aServiceData, aServiceDataLength) == 0);
+        match = serviceData.StartsWith(aServiceData);
         break;
     }
-
-    match = true;
 
 exit:
     return match;
@@ -693,7 +689,10 @@ void NetworkData::RemoveTlv(NetworkDataTlv *aTlv)
     NetworkData::RemoveTlv(mTlvs, mLength, aTlv);
 }
 
-Error NetworkData::SendServerDataNotification(uint16_t aRloc16, Coap::ResponseHandler aHandler, void *aContext)
+Error NetworkData::SendServerDataNotification(uint16_t              aRloc16,
+                                              bool                  aAppendNetDataTlv,
+                                              Coap::ResponseHandler aHandler,
+                                              void *                aContext)
 {
     Error            error   = kErrorNone;
     Coap::Message *  message = nullptr;
@@ -704,7 +703,7 @@ Error NetworkData::SendServerDataNotification(uint16_t aRloc16, Coap::ResponseHa
     SuccessOrExit(error = message->InitAsConfirmablePost(UriPath::kServerData));
     SuccessOrExit(error = message->SetPayloadMarker());
 
-    if (mType == kTypeLocal)
+    if (aAppendNetDataTlv)
     {
         ThreadTlv tlv;
         tlv.SetType(ThreadTlv::kThreadNetworkData);

@@ -400,8 +400,14 @@ target_compile_definitions(ot-config INTERFACE
     $<TARGET_PROPERTY:zephyr_interface,INTERFACE_COMPILE_DEFINITIONS>
 )
 
+# Openthread can use minimal libc, which requires autoconf.h
+# (specifically CONFIG_ARM and friends). autoconf.h can't be included
+# through openthread-*-config.h because openthread third-party
+# libraries do not include this header. So we add the defines to all
+# OpenThread files through the gcc flag -imacros instead.
 target_compile_options(ot-config INTERFACE
     $<TARGET_PROPERTY:zephyr_interface,INTERFACE_COMPILE_OPTIONS> -fno-builtin
+    -imacros ${AUTOCONF_H}
 )
 
 # Openthread depends on errno.h, which includes errno_private.h in minimal libc.

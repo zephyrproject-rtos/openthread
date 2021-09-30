@@ -35,9 +35,11 @@
 #define AES_ECB_HPP_
 
 #include "openthread-core-config.h"
-#include <mbedtls/aes.h>
+
 #include <openthread/platform/crypto.h>
 
+#include "common/code_utils.hpp"
+#include "crypto/context_size.hpp"
 #include "crypto/storage.hpp"
 
 namespace ot {
@@ -89,13 +91,8 @@ public:
     void Encrypt(const uint8_t aInput[kBlockSize], uint8_t aOutput[kBlockSize]);
 
 private:
-    union AesEcbContext
-    {
-        uint32_t            mKeyRef;
-        mbedtls_aes_context mContext;
-    };
-
-    AesEcbContext mContext;
+    otCryptoContext mContext;
+    OT_DEFINE_ALIGNED_VAR(mContextStorage, kAesContextSize, uint64_t);
 };
 
 /**

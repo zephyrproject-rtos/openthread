@@ -122,6 +122,25 @@ void otNcpSpiInit(otInstance *aInstance);
 otError otNcpStreamWrite(int aStreamId, const uint8_t *aDataPtr, int aDataLen);
 
 /**
+ * @brief Send RedNodeBus event to the host via a specific stream.
+ *
+ * This function attempts to send the given RedNodeBus event to the host.
+ *
+ * The write either is accepted in its entirety or rejected.
+ * Partial writes are not attempted.
+ *
+ * @param[in]  aDataPtr   A pointer to the data to send on the stream.
+ *                        If aDataLen is non-zero, this param MUST NOT be NULL.
+ * @param[in]  aDataLen   The number of bytes of data from aDataPtr to send.
+ *
+ * @retval OT_ERROR_NONE         The data was queued for delivery to the host.
+ * @retval OT_ERROR_BUSY         There are not enough resources to complete this
+ *                               request. This is usually a temporary condition.
+ * @retval OT_ERROR_INVALID_ARGS The given aStreamId was invalid.
+ */
+otError otNcpRnlRnbStreamWrite(const uint8_t *aDataPtr, int aDataLen);
+
+/**
  * Writes OpenThread Log using `otNcpStreamWrite`.
  *
  * @param[in]  aLogLevel   The log level.

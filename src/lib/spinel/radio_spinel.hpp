@@ -741,14 +741,48 @@ public:
      */
     otError SetChannelMaxTransmitPower(uint8_t aChannel, int8_t aPower);
 
+    /**
+     * This method returns the radio RNL RNB sw version.
+     *
+     * @returns A pointer to the radio RNL RNB sw version.
+     *
+     */
+    const char *RnlRnbGetVersion(void) const { return mRnlRnbVersion; }
+
+    /**
+     * This method returns the radio RNL RNB status.
+     *
+     * @param[in]  rnbStatus            rnbStatus.
+     * @param[in]  rnbStatusLength      rnbStatusLength.
+     *
+     * @retval  OT_ERROR_NONE           Successfully updated schema.
+     * @retval  OT_ERROR_INVALID_ARGS   Invalid input arguments.
+     *
+     */
+    otError RnlRnbGetStatus(void *rnbStatus, uint16_t *rnbStatusLength);
+
+    /**
+     * This method sends a RNL RNB request.
+     *
+     * @param[in]  rnbRequest           rnbRequest.
+     * @param[in]  rnbRequestLength     rnbRequestLength.
+     *
+     * @retval  OT_ERROR_NONE           Successfully accepted association request.
+     * @retval  OT_ERROR_INVALID_ARGS   Invalid input arguments.
+     *
+     */
+    otError RnlRnbSendRequest(void *rnbRequest, const uint16_t rnbRequestLength);
+
 private:
     enum
     {
-        kMaxSpinelFrame        = SpinelInterface::kMaxFrameSize,
-        kMaxWaitTime           = 2000, ///< Max time to wait for response in milliseconds.
-        kVersionStringSize     = 128,  ///< Max size of version string.
-        kCapsBufferSize        = 100,  ///< Max buffer size used to store `SPINEL_PROP_CAPS` value.
-        kChannelMaskBufferSize = 32,   ///< Max buffer size used to store `SPINEL_PROP_PHY_CHAN_SUPPORTED` value.
+        kMaxSpinelFrame          = SpinelInterface::kMaxFrameSize,
+        kMaxWaitTime             = 2000, ///< Max time to wait for response in milliseconds.
+        kVersionStringSize       = 128,  ///< Max size of version string.
+        kRnlRnbVersionStringSize = 128,  ///< Max size of RNL RNB version string.
+        kRnlRnrVersionStringSize = 128,  ///< Max size of RNL RNR version string.
+        kCapsBufferSize          = 100,  ///< Max buffer size used to store `SPINEL_PROP_CAPS` value.
+        kChannelMaskBufferSize   = 32,   ///< Max buffer size used to store `SPINEL_PROP_PHY_CHAN_SUPPORTED` value.
     };
 
     enum State
@@ -956,6 +990,7 @@ private:
     int8_t       mRxSensitivity;
     otError      mTxError;
     char         mVersion[kVersionStringSize];
+    char         mRnlRnbVersion[kRnlRnbVersionStringSize];
     otExtAddress mIeeeEui64;
 
     State mState;

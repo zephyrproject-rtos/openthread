@@ -68,6 +68,7 @@
 #if OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE
 #include "cli/cli_coap_secure.hpp"
 #endif
+#include "cli/cli_rnl_rnb.hpp"
 
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
@@ -106,6 +107,7 @@ class Interpreter
     friend class SrpServer;
     friend class TcpExample;
     friend class UdpExample;
+    friend class RnlRnb;
     friend void otCliPlatLogv(otLogLevel, otLogRegion, const char *, va_list);
     friend void otCliPlatLogLine(otLogLevel, otLogRegion, const char *);
 
@@ -641,6 +643,7 @@ private:
 #if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
     otError ProcessMacSend(Arg aArgs[]);
 #endif
+    otError ProcessRnlRnb(Arg aArgs[]);
 
 #if OPENTHREAD_CONFIG_PING_SENDER_ENABLE
     static void HandlePingReply(const otPingSenderReply *aReply, void *aContext);
@@ -876,6 +879,7 @@ private:
 #endif
         {"reset", &Interpreter::ProcessReset},
         {"rloc16", &Interpreter::ProcessRloc16},
+        {"rnb", &Interpreter::ProcessRnlRnb},
 #if OPENTHREAD_CONFIG_BORDER_ROUTER_ENABLE
         {"route", &Interpreter::ProcessRoute},
 #endif
@@ -957,6 +961,8 @@ private:
     uint16_t mOutputLength;
     bool     mIsLogging;
 #endif
+
+    RnlRnb  mRnlRnb;
 };
 
 // Specializations of `FormatStringFor<ValueType>()`

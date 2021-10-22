@@ -217,6 +217,7 @@ RadioSpinel<InterfaceType, ProcessContextType>::RadioSpinel(void)
     , mRadioTimeOffset(0)
 {
     mVersion[0] = '\0';
+    mRnlRnbVersion[0] = '\0';
 }
 
 template <typename InterfaceType, typename ProcessContextType>
@@ -244,6 +245,7 @@ void RadioSpinel<InterfaceType, ProcessContextType>::Init(bool aResetRadio,
 
     SuccessOrExit(error = CheckSpinelVersion());
     SuccessOrExit(error = Get(SPINEL_PROP_NCP_VERSION, SPINEL_DATATYPE_UTF8_S, mVersion, sizeof(mVersion)));
+    SuccessOrExit(error = Get(SPINEL_PROP_VENDOR_RNL_RNB_VERSION, SPINEL_DATATYPE_UTF8_S, mRnlRnbVersion, sizeof(mRnlRnbVersion)));
     SuccessOrExit(error = Get(SPINEL_PROP_HWADDR, SPINEL_DATATYPE_EUI64_S, mIeeeEui64.m8));
 
     if (!IsRcp(supportsRcpApiVersion))
@@ -833,7 +835,18 @@ void RadioSpinel<InterfaceType, ProcessContextType>::HandleValueIs(spinel_prop_k
     otError        error = OT_ERROR_NONE;
     spinel_ssize_t unpacked;
 
-    if (aKey == SPINEL_PROP_STREAM_RAW)
+    if (aKey == SPINEL_PROP_VENDOR_RNL_RNB_RAW_EVENT)
+    {
+        char         logStream[OPENTHREAD_CONFIG_NCP_SPINEL_LOG_MAX_SIZE + 1];
+        unsigned int len = sizeof(logStream);
+
+        unpacked = spinel_datatype_unpack_in_place(aBuffer, aLength, SPINEL_DATATYPE_DATA_S, logStream, &len);
+        assert(len < sizeof(logStream));
+        VerifyOrExit(unpacked > 0, error = OT_ERROR_PARSE);
+        logStream[len] = '\0';
+        otLogInfoPlat("RCP RNL RNB EVENT => %s", logStream);
+    }
+    else if (aKey == SPINEL_PROP_STREAM_RAW)
     {
         SuccessOrExit(error = ParseRadioFrame(mRxRadioFrame, aBuffer, aLength, unpacked));
         RadioReceive();
@@ -2391,6 +2404,45 @@ otError RadioSpinel<InterfaceType, ProcessContextType>::GetRadioRegion(uint16_t 
     error = Get(SPINEL_PROP_PHY_REGION_CODE, SPINEL_DATATYPE_UINT16_S, aRegionCode);
 
 exit:
+    return error;
+}
+
+template <typename InterfaceType, typename ProcessContextType>
+otError RadioSpinel<InterfaceType, ProcessContextType>::RnlRnbGetStatus(void *rnbStatus, uint16_t *rnbStatusLength)
+{
+    otError         error  = OT_ERROR_NONE;
+    uint8_t        *data   = (uint8_t*) rnbStatus;
+    spinel_ssize_t  length = 0;
+
+    SuccessOrDie(Get(SPINEL_PROP_VENDOR_RNL_RNB_RAW_STATUS, SPINEL_DATATYPE_UINT16_S, data, rnbStatusLength));
+
+    length = static_cast<spinel_size_t>(*rnbStatusLength);
+
+    while (length > 0)
+    {
+        spinel_ssize_t unpacked;
+
+        unpacked = spinel_datatype_unpack(data, length, SPINEL_DATATYPE_UINT8_S, data);
+        VerifyOrExit(unpacked > 0, error = OT_ERROR_FAILED);
+
+        data += unpacked;
+        length -= static_cast<spinel_size_t>(unpacked);
+    }
+
+exit:
+    return error;
+}
+
+template <typename InterfaceType, typename ProcessContextType>
+otError RadioSpinel<InterfaceType, ProcessContextType>::RnlRnbSendRequest(void *rnbRequest, const uint16_t rnbRequestLength)
+{
+    spinel_size_t length = static_cast<spinel_size_t>(rnbRequestLength);
+    otError error;
+
+    error = Request(SPINEL_CMD_VENDOR_RNL_RNB_SEND_REQUEST, SPINEL_PROP_VENDOR_RNL_RNB_RAW_REQUEST,
+                    SPINEL_DATATYPE_DATA_WLEN_S,
+                    rnbRequest, &length);
+
     return error;
 }
 

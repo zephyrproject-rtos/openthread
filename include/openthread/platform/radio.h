@@ -1104,6 +1104,43 @@ otError otPlatRadioConfigureEnhAckProbing(otInstance *        aInstance,
                                           const otExtAddress *aExtAddress);
 
 /**
+ * Get the radio RNL RNB version.
+ *
+ * @param[in]  aInstance   The OpenThread instance structure.
+ *
+ * @returns A pointer to the OpenThread radio RNL RNB version.
+ *
+ */
+const char *otPlatRadioRnlRnbGetVersion(otInstance *aInstance);
+
+/**
+ * Get the radio RNL RNB status.
+ *
+ * @param[in]  aInstance            The OpenThread instance structure.
+ * @param[in]  rnbStatus            The RedNodeBus status instance structure.
+ * @param[in]  rnbStatusLength      The RedNodeBus status length.
+ *
+ * @retval  OT_ERROR_NONE           Successfully updated schema.
+ * @retval  OT_ERROR_INVALID_ARGS   Invalid input arguments.
+ *
+ */
+otError otPlatRadioRnlRnbGetStatus(otInstance *aInstance, void *rnbStatus, uint16_t *rnbStatusLength);
+
+/**
+ * OpenThread calls this method to send a RedNodeBus request.
+ *
+ * @param[in]  aInstance            The OpenThread instance structure.
+ * @param[in]  rnbRequest           The RedNodeBus request instance structure.
+ * @param[in]  rnbRequestLength     The RedNodeBus request length.
+ *
+ * @retval  OT_ERROR_INVALID_ARGS   @p rnbEvent is nullptr.
+ * @retval  OT_ERROR_FAILED         Other platform specific errors.
+ * @retval  OT_ERROR_NONE           Successfully got RedNodeBus event.
+ *
+ */
+otError otPlatRadioRnlRnbSendRequest(otInstance *aInstance, void *rnbRequest, const uint16_t rnbRequestLength);
+
+/**
  * @}
  *
  */

@@ -2571,6 +2571,19 @@ otError otNcpStreamWrite(int aStreamId, const uint8_t *aDataPtr, int aDataLen)
     return error;
 }
 
+otError otNcpRnlRnbStreamWrite(const uint8_t *aDataPtr, int aDataLen)
+{
+    otError           error = OT_ERROR_INVALID_STATE;
+    ot::Ncp::NcpBase *ncp   = ot::Ncp::NcpBase::GetNcpInstance();
+
+    if (ncp != nullptr)
+    {
+        error = ncp->StreamWrite(SPINEL_PROP_VENDOR_RNL_RNB_RAW_EVENT, aDataPtr, aDataLen);
+    }
+
+    return error;
+}
+
 #if (OPENTHREAD_CONFIG_LOG_OUTPUT == OPENTHREAD_CONFIG_LOG_OUTPUT_APP)
 
 extern "C" void otPlatLog(otLogLevel aLogLevel, otLogRegion aLogRegion, const char *aFormat, ...)

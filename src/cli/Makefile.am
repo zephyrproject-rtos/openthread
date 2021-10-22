@@ -151,6 +151,7 @@ SOURCES_COMMON =                      \
     cli_srp_server.cpp                \
     cli_tcp.cpp                       \
     cli_udp.cpp                       \
+    cli_rnl_rnb.cpp                   \
     $(NULL)
 
 libopenthread_cli_ftd_a_SOURCES =     \
@@ -175,6 +176,7 @@ noinst_HEADERS                      = \
     cli_tcp.hpp                       \
     cli_udp.hpp                       \
     x509_cert_key.hpp                 \
+    cli_rnl_rnb.hpp                   \
     $(NULL)
 
 if OPENTHREAD_BUILD_COVERAGE

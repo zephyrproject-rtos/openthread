@@ -625,3 +625,21 @@ otError otPlatRadioReceiveAt(otInstance *aInstance, uint8_t aChannel, uint32_t a
     OT_UNUSED_VARIABLE(aDuration);
     return OT_ERROR_NOT_IMPLEMENTED;
 }
+
+const char *otPlatRadioRnlRnbGetVersion(otInstance *aInstance)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    return sRadioSpinel.RnlRnbGetVersion();
+}
+
+otError otPlatRadioRnlRnbGetStatus(otInstance *aInstance, void *rnbStatus, uint16_t *rnbStatusLength)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    return sRadioSpinel.RnlRnbGetStatus(rnbStatus, rnbStatusLength);
+}
+
+otError otPlatRadioRnlRnbSendRequest(otInstance *aInstance, void *rnbRequest, const uint16_t rnbRequestLength)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    return sRadioSpinel.RnlRnbSendRequest(rnbRequest, rnbRequestLength);
+}

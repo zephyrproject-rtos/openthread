@@ -43,6 +43,7 @@ set(COMMON_SOURCES
     cli_srp_server.cpp
     cli_tcp.cpp
     cli_udp.cpp
+    cli_rnl_rnb.cpp
 )
 
 if(OT_FTD)

@@ -132,6 +132,7 @@ Interpreter::Interpreter(Instance *aInstance, otCliOutputCallback aCallback, voi
     , mOutputLength(0)
     , mIsLogging(false)
 #endif
+    , mRnlRnb(*this)
 {
 #if OPENTHREAD_FTD
     otThreadSetDiscoveryRequestCallback(mInstance, &Interpreter::HandleDiscoveryRequest, this);
@@ -4566,6 +4567,11 @@ otError Interpreter::ProcessDiag(Arg aArgs[])
     return error;
 }
 #endif
+
+otError Interpreter::ProcessRnlRnb(Arg aArgs[])
+{
+    return mRnlRnb.Process(aArgs);
+}
 
 void Interpreter::ProcessLine(char *aBuf)
 {

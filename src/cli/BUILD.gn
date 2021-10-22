@@ -52,6 +52,8 @@ openthread_cli_sources = [
   "cli_udp.cpp",
   "cli_udp.hpp",
   "x509_cert_key.hpp",
+  "cli_rnl_rnb.cpp",
+  "cli_rnl_rnb.hpp",
 ]
 
 config("cli_config") {

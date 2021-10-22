@@ -654,6 +654,40 @@ public:
                 ((kChannelMin == aCslChannel) || ((kChannelMin < aCslChannel) && (aCslChannel <= kChannelMax))));
     }
 
+    /**
+     * This method gets the radio RNL RNB version.
+     *
+     * @returns A pointer to the OpenThread radio RNL RNB version.
+     *
+     */
+    const char *RnlRnbGetVersion(void);
+
+    /**
+     * This method gets the radio RNL RNB status.
+     *
+     * @param[in] rnbStatus          rnbStatus.
+     * @param[in] rnbStatusLength    rnbStatusLength.
+     *
+     * @retval kErrorNone            Successfully updated the RNL RNB schema.
+     * @retval kErrorInvalidArgs     Input arguments are not valid.
+     * @retval kErrorNotImplemented  Not Implemented.
+     *
+     */
+    Error RnlRnbGetStatus(void *rnbStatus, uint16_t *rnbStatusLength);
+
+    /**
+     * This method sends a RNL RNB association response.
+     *
+     * @param[in] rnbRequest         rnbRequest.
+     * @param[in] rnbRequestLength   rnbRequestLength.
+     *
+     * @retval kErrorNone            Successfully updated the RNL RNB schema.
+     * @retval kErrorInvalidArgs     Input arguments are not valid.
+     * @retval kErrorNotImplemented  Not Implemented.
+     *
+     */
+    Error RnlRnbSendRequest(void *rnbRequest, const uint16_t rnbRequestLength);
+
 private:
     otInstance *GetInstancePtr(void) { return reinterpret_cast<otInstance *>(&InstanceLocator::GetInstance()); }
 

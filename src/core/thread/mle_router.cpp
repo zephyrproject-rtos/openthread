@@ -70,6 +70,7 @@ MleRouter::MleRouter(Instance &aInstance)
     , mLeaderWeight(kLeaderWeight)
 #if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
     , mPreferredLeaderPartitionId(0)
+    , mCcmEnabled(false)
 #endif
     , mRouterEligible(true)
     , mAddressSolicitPending(false)
@@ -122,7 +123,11 @@ bool MleRouter::IsRouterEligible(void) const
 #else
     if (secPolicy.mCommercialCommissioningEnabled)
     {
+#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
+        VerifyOrExit(mCcmEnabled || secPolicy.mNonCcmRoutersEnabled);
+#else
         VerifyOrExit(secPolicy.mNonCcmRoutersEnabled);
+#endif
     }
     if (!secPolicy.mRoutersEnabled)
     {
@@ -2255,7 +2260,8 @@ void MleRouter::HandleChildIdRequest(const Message &         aMessage,
     switch (Tlv::Find<ActiveTimestampTlv>(aMessage, timestamp))
     {
     case kErrorNone:
-        needsActiveDatasetTlv = (Get<MeshCoP::ActiveDataset>().Compare(timestamp) != 0);
+        needsActiveDatasetTlv =
+            (MeshCoP::Timestamp::Compare(&timestamp, Get<MeshCoP::ActiveDataset>().GetTimestamp()) != 0);
         break;
     case kErrorNotFound:
         break;
@@ -2268,7 +2274,8 @@ void MleRouter::HandleChildIdRequest(const Message &         aMessage,
     switch (Tlv::Find<PendingTimestampTlv>(aMessage, timestamp))
     {
     case kErrorNone:
-        needsPendingDatasetTlv = (Get<MeshCoP::PendingDataset>().Compare(timestamp) != 0);
+        needsPendingDatasetTlv =
+            (MeshCoP::Timestamp::Compare(&timestamp, Get<MeshCoP::PendingDataset>().GetTimestamp()) != 0);
         break;
     case kErrorNotFound:
         break;
@@ -2733,7 +2740,7 @@ void MleRouter::HandleDataRequest(const Message &         aMessage,
     switch (Tlv::Find<ActiveTimestampTlv>(aMessage, timestamp))
     {
     case kErrorNone:
-        if (Get<MeshCoP::ActiveDataset>().Compare(timestamp) == 0)
+        if (MeshCoP::Timestamp::Compare(&timestamp, Get<MeshCoP::ActiveDataset>().GetTimestamp()) == 0)
         {
             break;
         }
@@ -2752,7 +2759,7 @@ void MleRouter::HandleDataRequest(const Message &         aMessage,
     switch (Tlv::Find<PendingTimestampTlv>(aMessage, timestamp))
     {
     case kErrorNone:
-        if (Get<MeshCoP::PendingDataset>().Compare(timestamp) == 0)
+        if (MeshCoP::Timestamp::Compare(&timestamp, Get<MeshCoP::PendingDataset>().GetTimestamp()) == 0)
         {
             break;
         }

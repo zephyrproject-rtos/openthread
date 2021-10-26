@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2016, The OpenThread Authors.
+ *  Copyright (c) 2021, The OpenThread Authors.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -28,57 +28,14 @@
 
 /**
  * @file
- *   This file implements HMAC SHA-256.
+ * @brief
+ *   This file includes posix-specific system methods.
  */
 
-#include "hmac_sha256.hpp"
-#include "common/debug.hpp"
-#include "common/error.hpp"
-#include "common/message.hpp"
-
-namespace ot {
-namespace Crypto {
-
-HmacSha256::HmacSha256(void)
-{
-    mContext.mContext     = mContextStorage;
-    mContext.mContextSize = sizeof(mContextStorage);
-
-    SuccessOrAssert(otPlatCryptoHmacSha256Init(&mContext));
-}
-
-HmacSha256::~HmacSha256(void)
-{
-    SuccessOrAssert(otPlatCryptoHmacSha256Deinit(&mContext));
-}
-
-void HmacSha256::Start(const Key &aKey)
-{
-    SuccessOrAssert(otPlatCryptoHmacSha256Start(&mContext, &aKey));
-}
-
-void HmacSha256::Update(const void *aBuf, uint16_t aBufLength)
-{
-    SuccessOrAssert(otPlatCryptoHmacSha256Update(&mContext, aBuf, aBufLength));
-}
-
-void HmacSha256::Finish(Hash &aHash)
-{
-    SuccessOrAssert(otPlatCryptoHmacSha256Finish(&mContext, aHash.m8, Hash::kSize));
-}
-
-void HmacSha256::Update(const Message &aMessage, uint16_t aOffset, uint16_t aLength)
-{
-    Message::Chunk chunk;
-
-    aMessage.GetFirstChunk(aOffset, aLength, chunk);
-
-    while (chunk.GetLength() > 0)
-    {
-        Update(chunk.GetBytes(), chunk.GetLength());
-        aMessage.GetNextChunk(aLength, chunk);
-    }
-}
-
-} // namespace Crypto
-} // namespace ot
+/*
+ * This method returns if the system will run in dry-run mode.
+ *
+ * @returns  If the system runs in dry-run mode.
+ *
+ */
+bool IsSystemDryRun(void);

@@ -1114,19 +1114,6 @@ otError otPlatRadioConfigureEnhAckProbing(otInstance *        aInstance,
 const char *otPlatRadioRnlRnbGetVersion(otInstance *aInstance);
 
 /**
- * Get the radio RNL RNB status.
- *
- * @param[in]  aInstance            The OpenThread instance structure.
- * @param[in]  rnbStatus            The RedNodeBus status instance structure.
- * @param[in]  rnbStatusLength      The RedNodeBus status length.
- *
- * @retval  OT_ERROR_NONE           Successfully updated schema.
- * @retval  OT_ERROR_INVALID_ARGS   Invalid input arguments.
- *
- */
-otError otPlatRadioRnlRnbGetStatus(otInstance *aInstance, void *rnbStatus, uint16_t *rnbStatusLength);
-
-/**
  * OpenThread calls this method to send a RedNodeBus request.
  *
  * @param[in]  aInstance            The OpenThread instance structure.

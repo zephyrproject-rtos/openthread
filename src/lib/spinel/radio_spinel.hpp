@@ -750,18 +750,6 @@ public:
     const char *RnlRnbGetVersion(void) const { return mRnlRnbVersion; }
 
     /**
-     * This method returns the radio RNL RNB status.
-     *
-     * @param[in]  rnbStatus            rnbStatus.
-     * @param[in]  rnbStatusLength      rnbStatusLength.
-     *
-     * @retval  OT_ERROR_NONE           Successfully updated schema.
-     * @retval  OT_ERROR_INVALID_ARGS   Invalid input arguments.
-     *
-     */
-    otError RnlRnbGetStatus(void *rnbStatus, uint16_t *rnbStatusLength);
-
-    /**
      * This method sends a RNL RNB request.
      *
      * @param[in]  rnbRequest           rnbRequest.

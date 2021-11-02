@@ -663,19 +663,6 @@ public:
     const char *RnlRnbGetVersion(void);
 
     /**
-     * This method gets the radio RNL RNB status.
-     *
-     * @param[in] rnbStatus          rnbStatus.
-     * @param[in] rnbStatusLength    rnbStatusLength.
-     *
-     * @retval kErrorNone            Successfully updated the RNL RNB schema.
-     * @retval kErrorInvalidArgs     Input arguments are not valid.
-     * @retval kErrorNotImplemented  Not Implemented.
-     *
-     */
-    Error RnlRnbGetStatus(void *rnbStatus, uint16_t *rnbStatusLength);
-
-    /**
      * This method sends a RNL RNB association response.
      *
      * @param[in] rnbRequest         rnbRequest.

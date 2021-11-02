@@ -632,12 +632,6 @@ const char *otPlatRadioRnlRnbGetVersion(otInstance *aInstance)
     return sRadioSpinel.RnlRnbGetVersion();
 }
 
-otError otPlatRadioRnlRnbGetStatus(otInstance *aInstance, void *rnbStatus, uint16_t *rnbStatusLength)
-{
-    OT_UNUSED_VARIABLE(aInstance);
-    return sRadioSpinel.RnlRnbGetStatus(rnbStatus, rnbStatusLength);
-}
-
 otError otPlatRadioRnlRnbSendRequest(otInstance *aInstance, void *rnbRequest, const uint16_t rnbRequestLength)
 {
     OT_UNUSED_VARIABLE(aInstance);

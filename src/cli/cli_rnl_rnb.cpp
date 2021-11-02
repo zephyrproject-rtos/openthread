@@ -82,33 +82,6 @@ otError RnlRnb::ProcessVersion(Arg aArgs[])
     return error;
 }
 
-otError RnlRnb::ProcessStatus(Arg aArgs[])
-{
-    otError error;
-    uint16_t receiveLength;
-    char hexString[2*OPENTHREAD_CONFIG_CLI_MAX_LINE_LENGTH+1];
-    char *ptr = hexString;
-
-    if (aArgs[0].IsEmpty())
-    {
-        SuccessOrExit(error = otPlatRadioRnlRnbGetStatus(mInterpreter.mInstance, mReceiveBuffer, &receiveLength));
-
-        for (uint8_t i=0; i<receiveLength; i++)
-        {
-            ptr += sprintf(ptr, "%02X", mReceiveBuffer[i]);
-        }
-
-        mInterpreter.OutputLine("%s", hexString);
-    }
-    else
-    {
-        error = OT_ERROR_INVALID_ARGS;
-    }
-
-exit:
-    return error;
-}
-
 otError RnlRnb::ProcessSendRequest(Arg aArgs[])
 {
     otError error = OT_ERROR_INVALID_ARGS;

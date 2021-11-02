@@ -78,13 +78,11 @@ private:
 
     otError ProcessHelp(Arg aArgs[]);
     otError ProcessVersion(Arg aArgs[]);
-    otError ProcessStatus(Arg aArgs[]);
     otError ProcessSendRequest(Arg aArgs[]);
 
     static constexpr Command sCommands[] = {
         {"help", &RnlRnb::ProcessHelp},
         {"sendrequest", &RnlRnb::ProcessSendRequest},
-        {"status", &RnlRnb::ProcessStatus},
         {"version", &RnlRnb::ProcessVersion},
     };
 

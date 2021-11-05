@@ -1125,7 +1125,7 @@ const char *otPlatRadioRnlRnbGetVersion(otInstance *aInstance);
  * @retval  OT_ERROR_NONE           Successfully got RedNodeBus event.
  *
  */
-otError otPlatRadioRnlRnbSendRequest(otInstance *aInstance, void *rnbRequest, const uint16_t rnbRequestLength);
+otError otPlatRadioRnlRnbSendRequest(otInstance *aInstance, const void *rnbRequest, const uint16_t rnbRequestLength);
 
 /**
  * @}

@@ -314,7 +314,7 @@ OT_TOOL_WEAK const char *otPlatRadioRnlRnbGetVersion(otInstance *aInstance)
     return nullptr;
 }
 
-OT_TOOL_WEAK Error otPlatRadioRnlRnbSendRequest(otInstance *aInstance, void *rnbRequest, const uint16_t rnbRequestLength)
+OT_TOOL_WEAK Error otPlatRadioRnlRnbSendRequest(otInstance *aInstance, const void *rnbRequest, const uint16_t rnbRequestLength)
 {
     OT_UNUSED_VARIABLE(aInstance);
     OT_UNUSED_VARIABLE(rnbRequest);

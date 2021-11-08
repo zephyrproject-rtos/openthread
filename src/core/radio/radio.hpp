@@ -673,7 +673,7 @@ public:
      * @retval kErrorNotImplemented  Not Implemented.
      *
      */
-    Error RnlRnbSendRequest(void *rnbRequest, const uint16_t rnbRequestLength);
+    Error RnlRnbSendRequest(const void *rnbRequest, const uint16_t rnbRequestLength);
 
 private:
     otInstance *GetInstancePtr(void) { return reinterpret_cast<otInstance *>(&InstanceLocator::GetInstance()); }

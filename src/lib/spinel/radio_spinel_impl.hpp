@@ -2408,7 +2408,7 @@ exit:
 }
 
 template <typename InterfaceType, typename ProcessContextType>
-otError RadioSpinel<InterfaceType, ProcessContextType>::RnlRnbSendRequest(void *rnbRequest, const uint16_t rnbRequestLength)
+otError RadioSpinel<InterfaceType, ProcessContextType>::RnlRnbSendRequest(const void *rnbRequest, const uint16_t rnbRequestLength)
 {
     spinel_size_t length = static_cast<spinel_size_t>(rnbRequestLength);
     otError error;

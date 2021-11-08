@@ -759,7 +759,7 @@ public:
      * @retval  OT_ERROR_INVALID_ARGS   Invalid input arguments.
      *
      */
-    otError RnlRnbSendRequest(void *rnbRequest, const uint16_t rnbRequestLength);
+    otError RnlRnbSendRequest(const void *rnbRequest, const uint16_t rnbRequestLength);
 
 private:
     enum

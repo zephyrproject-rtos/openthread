@@ -53,6 +53,8 @@
 #include <openthread/ip6.h>
 #include <openthread/srp_server.h>
 
+#include "common/array.hpp"
+#include "common/as_core_type.hpp"
 #include "common/clearable.hpp"
 #include "common/heap_string.hpp"
 #include "common/linked_list.hpp"
@@ -96,6 +98,18 @@ class Server : public InstanceLocator, private NonCopyable
     friend class Service;
     friend class Host;
     friend class Dns::ServiceDiscovery::Server;
+
+    enum RetainName : bool
+    {
+        kDeleteName = false,
+        kRetainName = true,
+    };
+
+    enum NotifyMode : bool
+    {
+        kDoNotNotifyServiceHandler = false,
+        kNotifyServiceHandler      = true,
+    };
 
 public:
     static constexpr uint16_t kUdpPortMin = OPENTHREAD_CONFIG_SRP_SERVER_UDP_PORT_MIN; ///< The reserved min port.
@@ -407,13 +421,13 @@ public:
          *
          * @param[out]  aAddressesNum  The number of the addresses.
          *
-         * @returns  A pointer to the addresses array.
+         * @returns  A pointer to the addresses array or `nullptr` if no addresses.
          *
          */
         const Ip6::Address *GetAddresses(uint8_t &aAddressesNum) const
         {
-            aAddressesNum = mAddressesNum;
-            return mAddresses;
+            aAddressesNum = mAddresses.GetLength();
+            return mAddresses.Front();
         }
 
         /**
@@ -492,40 +506,38 @@ public:
         bool Matches(const char *aFullName) const { return (mFullName == aFullName); }
 
     private:
-        static constexpr uint16_t kMaxAddressesNum = OPENTHREAD_CONFIG_SRP_SERVER_MAX_ADDRESSES_NUM;
+        static constexpr uint16_t kMaxAddresses = OPENTHREAD_CONFIG_SRP_SERVER_MAX_ADDRESSES_NUM;
 
         static Host *New(Instance &aInstance);
 
         explicit Host(Instance &aInstance);
-        void                        Free(void);
-        Error                       SetFullName(const char *aFullName);
-        void                        SetKey(Dns::Ecdsa256KeyRecord &aKey);
-        void                        SetLease(uint32_t aLease) { mLease = aLease; }
-        void                        SetKeyLease(uint32_t aKeyLease) { mKeyLease = aKeyLease; }
-        LinkedList<Service> &       GetServices(void) { return mServices; }
-        Service *                   AddNewService(const char *aServiceName, const char *aInstanceName, bool aIsSubType);
-        void                        RemoveService(Service *aService, bool aRetainName, bool aNotifyServiceHandler);
-        void                        FreeAllServices(void);
-        void                        FreeUnusedServiceDescriptions(void);
-        void                        ClearResources(void);
-        Error                       MergeServicesAndResourcesFrom(Host &aHost);
-        Error                       AddIp6Address(const Ip6::Address &aIp6Address);
+        void                 Free(void);
+        Error                SetFullName(const char *aFullName);
+        void                 SetKey(Dns::Ecdsa256KeyRecord &aKey);
+        void                 SetLease(uint32_t aLease) { mLease = aLease; }
+        void                 SetKeyLease(uint32_t aKeyLease) { mKeyLease = aKeyLease; }
+        LinkedList<Service> &GetServices(void) { return mServices; }
+        Service *            AddNewService(const char *aServiceName, const char *aInstanceName, bool aIsSubType);
+        void                 RemoveService(Service *aService, RetainName aRetainName, NotifyMode aNotifyServiceHandler);
+        void                 FreeAllServices(void);
+        void                 FreeUnusedServiceDescriptions(void);
+        void                 ClearResources(void);
+        Error                MergeServicesAndResourcesFrom(Host &aHost);
+        Error                AddIp6Address(const Ip6::Address &aIp6Address);
         Service::Description *      FindServiceDescription(const char *aInstanceName);
         const Service::Description *FindServiceDescription(const char *aInstanceName) const;
         Service *                   FindService(const char *aServiceName, const char *aInstanceName);
         const Service *             FindService(const char *aServiceName, const char *aInstanceName) const;
 
-        HeapString   mFullName;
-        Ip6::Address mAddresses[kMaxAddressesNum];
-        uint8_t      mAddressesNum;
-        Host *       mNext;
-
-        Dns::Ecdsa256KeyRecord           mKey;
-        uint32_t                         mLease;    // The LEASE time in seconds.
-        uint32_t                         mKeyLease; // The KEY-LEASE time in seconds.
-        TimeMilli                        mTimeLastUpdate;
-        LinkedList<Service>              mServices;
-        LinkedList<Service::Description> mServiceDescriptions;
+        Host *                             mNext;
+        HeapString                         mFullName;
+        Array<Ip6::Address, kMaxAddresses> mAddresses;
+        Dns::Ecdsa256KeyRecord             mKey;
+        uint32_t                           mLease;    // The LEASE time in seconds.
+        uint32_t                           mKeyLease; // The KEY-LEASE time in seconds.
+        TimeMilli                          mTimeLastUpdate;
+        LinkedList<Service>                mServices;
+        LinkedList<Service::Description>   mServiceDescriptions;
     };
 
     /**
@@ -846,7 +858,7 @@ private:
 
     void        HandleUpdate(const Dns::UpdateHeader &aDnsHeader, Host &aHost, const Ip6::MessageInfo &aMessageInfo);
     void        AddHost(Host &aHost);
-    void        RemoveHost(Host *aHost, bool aRetainName, bool aNotifyServiceHandler);
+    void        RemoveHost(Host *aHost, RetainName aRetainName, NotifyMode aNotifyServiceHandler);
     bool        HasNameConflictsWith(Host &aHost) const;
     void        SendResponse(const Dns::UpdateHeader &   aHeader,
                              Dns::UpdateHeader::Response aResponseCode,
@@ -889,6 +901,13 @@ private:
 };
 
 } // namespace Srp
+
+DefineCoreType(otSrpServerLeaseConfig, Srp::Server::LeaseConfig);
+DefineCoreType(otSrpServerHost, Srp::Server::Host);
+DefineCoreType(otSrpServerService, Srp::Server::Service);
+DefineMapEnum(otSrpServerState, Srp::Server::State);
+DefineMapEnum(otSrpServerAddressMode, Srp::Server::AddressMode);
+
 } // namespace ot
 
 #endif // OPENTHREAD_CONFIG_SRP_SERVER_ENABLE

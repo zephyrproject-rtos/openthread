@@ -34,6 +34,7 @@
 
 #if OPENTHREAD_FTD
 
+#include "common/as_core_type.hpp"
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
 #include "common/encoding.hpp"
@@ -213,6 +214,10 @@ Error MleRouter::BecomeLeader(void)
     Router * router;
     uint32_t partitionId;
     uint8_t  leaderId;
+#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
+    uint8_t minRouterId;
+    uint8_t maxRouterId;
+#endif
 
     VerifyOrExit(!Get<MeshCoP::ActiveDataset>().IsPartiallyComplete(), error = kErrorInvalidState);
     VerifyOrExit(!IsDisabled(), error = kErrorInvalidState);
@@ -227,8 +232,20 @@ Error MleRouter::BecomeLeader(void)
     partitionId = Random::NonCrypto::GetUint32();
 #endif
 
-    leaderId = IsRouterIdValid(mPreviousRouterId) ? mPreviousRouterId
+#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
+    mRouterTable.GetRouterIdRange(minRouterId, maxRouterId);
+    if (IsRouterIdValid(mPreviousRouterId) && minRouterId <= mPreviousRouterId && mPreviousRouterId <= maxRouterId)
+    {
+        leaderId = mPreviousRouterId;
+    }
+    else
+    {
+        leaderId = Random::NonCrypto::GetUint8InRange(minRouterId, maxRouterId + 1);
+    }
+#else
+    leaderId    = IsRouterIdValid(mPreviousRouterId) ? mPreviousRouterId
                                                   : Random::NonCrypto::GetUint8InRange(0, kMaxRouterId + 1);
+#endif
 
     SetLeaderData(partitionId, mLeaderWeight, leaderId);
 
@@ -1592,6 +1609,8 @@ void MleRouter::HandleParentRequest(const Message &aMessage, const Ip6::MessageI
     Challenge       challenge;
     Router *        leader;
     Child *         child;
+    uint8_t         modeBitmask;
+    DeviceMode      mode;
 
     Log(kMessageReceive, kTypeParentRequest, aMessageInfo.GetPeerAddr());
 
@@ -1668,6 +1687,12 @@ void MleRouter::HandleParentRequest(const Message &aMessage, const Ip6::MessageI
 #if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
         child->SetTimeSyncEnabled(Tlv::Find<TimeRequestTlv>(aMessage, nullptr, 0) == kErrorNone);
 #endif
+        if (Tlv::Find<ModeTlv>(aMessage, modeBitmask) == kErrorNone)
+        {
+            mode.Set(modeBitmask);
+            child->SetDeviceMode(mode);
+            child->SetVersion(static_cast<uint8_t>(version));
+        }
     }
     else if (TimerMilli::GetNow() - child->GetLastHeard() < kParentRequestRouterTimeout - kParentRequestDuplicateMargin)
     {
@@ -1943,7 +1968,7 @@ void MleRouter::SendParentResponse(Child *aChild, const Challenge &aChallenge, b
     }
 #endif
 #if OPENTHREAD_CONFIG_MAC_CSL_TRANSMITTER_ENABLE
-    if (!aChild->IsRxOnWhenIdle())
+    if (aChild->IsThreadVersionCslCapable())
     {
         SuccessOrExit(error = AppendCslClockAccuracy(*message));
     }
@@ -2511,6 +2536,8 @@ void MleRouter::HandleChildUpdateRequest(const Message &aMessage, const Ip6::Mes
         if (Tlv::Find<CslTimeoutTlv>(aMessage, cslTimeout) == kErrorNone)
         {
             child->SetCslTimeout(cslTimeout);
+            // MUST include CSL accuracy TLV when request includes CSL timeout
+            tlvs[tlvslength++] = Tlv::kCslClockAccuracy;
         }
 
         if (Tlv::FindTlv(aMessage, cslChannel) == kErrorNone)
@@ -2916,7 +2943,7 @@ void MleRouter::HandleDiscoveryRequest(const Message &aMessage, const Ip6::Messa
         {
             otThreadDiscoveryRequestInfo info;
 
-            aMessageInfo.GetPeerAddr().GetIid().ConvertToExtAddress(*static_cast<Mac::ExtAddress *>(&info.mExtAddress));
+            aMessageInfo.GetPeerAddr().GetIid().ConvertToExtAddress(AsCoreType(&info.mExtAddress));
             info.mVersion  = discoveryRequest.GetVersion();
             info.mIsJoiner = discoveryRequest.IsJoiner();
 
@@ -3251,6 +3278,15 @@ void MleRouter::SendChildUpdateResponse(Child *                 aChild,
         case Tlv::kLinkFrameCounter:
             SuccessOrExit(error = AppendLinkFrameCounter(*message));
             break;
+
+#if OPENTHREAD_CONFIG_MAC_CSL_TRANSMITTER_ENABLE
+        case Tlv::kCslClockAccuracy:
+            if (!aChild->IsRxOnWhenIdle())
+            {
+                SuccessOrExit(error = AppendCslClockAccuracy(*message));
+            }
+            break;
+#endif
         }
     }
 
@@ -3670,8 +3706,8 @@ void MleRouter::HandleAddressSolicitResponse(void *               aContext,
                                              const otMessageInfo *aMessageInfo,
                                              Error                aResult)
 {
-    static_cast<MleRouter *>(aContext)->HandleAddressSolicitResponse(
-        static_cast<Coap::Message *>(aMessage), static_cast<const Ip6::MessageInfo *>(aMessageInfo), aResult);
+    static_cast<MleRouter *>(aContext)->HandleAddressSolicitResponse(AsCoapMessagePtr(aMessage),
+                                                                     AsCoreTypePtr(aMessageInfo), aResult);
 }
 
 void MleRouter::HandleAddressSolicitResponse(Coap::Message *         aMessage,
@@ -3778,8 +3814,7 @@ bool MleRouter::IsExpectedToBecomeRouterSoon(void) const
 
 void MleRouter::HandleAddressSolicit(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
-    static_cast<MleRouter *>(aContext)->HandleAddressSolicit(*static_cast<Coap::Message *>(aMessage),
-                                                             *static_cast<const Ip6::MessageInfo *>(aMessageInfo));
+    static_cast<MleRouter *>(aContext)->HandleAddressSolicit(AsCoapMessage(aMessage), AsCoreType(aMessageInfo));
 }
 
 void MleRouter::HandleAddressSolicit(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
@@ -3905,8 +3940,7 @@ exit:
 
 void MleRouter::HandleAddressRelease(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
-    static_cast<MleRouter *>(aContext)->HandleAddressRelease(*static_cast<Coap::Message *>(aMessage),
-                                                             *static_cast<const Ip6::MessageInfo *>(aMessageInfo));
+    static_cast<MleRouter *>(aContext)->HandleAddressRelease(AsCoapMessage(aMessage), AsCoreType(aMessageInfo));
 }
 
 void MleRouter::HandleAddressRelease(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo)

@@ -1289,6 +1289,10 @@ class NodeImpl:
         self.send_command('extpanid %s' % extpanid)
         self._expect_done()
 
+    def get_extpanid(self):
+        self.send_command('extpanid')
+        return self._expect_result('[0-9a-fA-F]{16}')
+
     def get_joiner_id(self):
         self.send_command('joiner id')
         return self._expect_result('[0-9a-fA-F]{16}')
@@ -1922,12 +1926,30 @@ class NodeImpl:
 
         self._expect('Conflict:', timeout=timeout)
 
-    def scan(self, result=1):
+    def scan(self, result=1, timeout=10):
         self.send_command('scan')
 
+        self.simulator.go(timeout)
+
         if result == 1:
-            return self._expect_results(
-                r'\|\s(\S+)\s+\|\s(\S+)\s+\|\s([0-9a-fA-F]{4})\s\|\s([0-9a-fA-F]{16})\s\|\s(\d+)')
+            networks = []
+            for line in self._expect_command_output()[2:]:
+                _, J, networkname, extpanid, panid, extaddr, channel, dbm, lqi, _ = map(str.strip, line.split('|'))
+                J = bool(int(J))
+                panid = int(panid, 16)
+                channel, dbm, lqi = map(int, (channel, dbm, lqi))
+
+                networks.append({
+                    'joinable': J,
+                    'networkname': networkname,
+                    'extpanid': extpanid,
+                    'panid': panid,
+                    'extaddr': extaddr,
+                    'channel': channel,
+                    'dbm': dbm,
+                    'lqi': lqi,
+                })
+            return networks
 
     def ping(self, ipaddr, num_responses=1, size=8, timeout=5, count=1, interval=1, hoplimit=64, interface=None):
         args = f'{ipaddr} {size} {count} {interval} {hoplimit} {timeout}'
@@ -2513,12 +2535,12 @@ class NodeImpl:
             payload += tlv.to_hex()
         self.commissioner_mgmtset(self.bytes_to_hex_str(payload))
 
-    def udp_start(self, local_ipaddr, local_port):
+    def udp_start(self, local_ipaddr, local_port, bind_unspecified=False):
         cmd = 'udp open'
         self.send_command(cmd)
         self._expect_done()
 
-        cmd = 'udp bind %s %s' % (local_ipaddr, local_port)
+        cmd = 'udp bind %s %s %s' % ("-u" if bind_unspecified else "", local_ipaddr, local_port)
         self.send_command(cmd)
         self._expect_done()
 
@@ -2932,6 +2954,17 @@ class NodeImpl:
 
         return rxtx_list
 
+    def set_router_id_range(self, min_router_id: int, max_router_id: int):
+        cmd = f'routeridrange {min_router_id} {max_router_id}'
+        self.send_command(cmd)
+        self._expect_command_output()
+
+    def get_router_id_range(self):
+        cmd = 'routeridrange'
+        self.send_command(cmd)
+        line = self._expect_command_output()[0]
+        return [int(item) for item in line.split()]
+
 
 class Node(NodeImpl, OtCli):
     pass
@@ -3091,35 +3124,37 @@ class LinuxHost():
         The return value is a dict with the same key/values of srp_server_get_service
         except that we don't have a `deleted` field here.
         """
+        host_name_file = self.bash('mktemp')[0].strip()
+        service_data_file = self.bash('mktemp')[0].strip()
 
-        self.bash(f'dns-sd -Z {name} local. > /tmp/{name} 2>&1 &')
+        self.bash(f'dns-sd -Z {name} local. > {service_data_file} 2>&1 &')
         time.sleep(timeout)
 
         full_service_name = f'{instance}.{name}'
         # When hostname is unspecified, extract hostname from browse result
         if host_name is None:
-            for line in self.bash(f'cat /tmp/{name}', encoding='raw_unicode_escape'):
+            for line in self.bash(f'cat {service_data_file}', encoding='raw_unicode_escape'):
                 elements = line.split()
                 if len(elements) >= 6 and elements[0] == full_service_name and elements[1] == 'SRV':
                     host_name = elements[5].split('.')[0]
                     break
 
         assert (host_name is not None)
-        self.bash(f'dns-sd -G v6 {host_name}.local. > /tmp/{host_name} 2>&1 &')
+        self.bash(f'dns-sd -G v6 {host_name}.local. > {host_name_file} 2>&1 &')
         time.sleep(timeout)
 
         self.bash('pkill dns-sd')
         addresses = []
         service = {}
 
-        logging.debug(self.bash(f'cat /tmp/{host_name}', encoding='raw_unicode_escape'))
-        logging.debug(self.bash(f'cat /tmp/{name}', encoding='raw_unicode_escape'))
+        logging.debug(self.bash(f'cat {host_name_file}', encoding='raw_unicode_escape'))
+        logging.debug(self.bash(f'cat {service_data_file}', encoding='raw_unicode_escape'))
 
         # example output in the host file:
         # Timestamp     A/R Flags if Hostname                               Address                                     TTL
         # 9:38:09.274  Add     23 48 my-host.local.                         2001:0000:0000:0000:0000:0000:0000:0002%<0>  120
         #
-        for line in self.bash(f'cat /tmp/{host_name}', encoding='raw_unicode_escape'):
+        for line in self.bash(f'cat {host_name_file}', encoding='raw_unicode_escape'):
             elements = line.split()
             fullname = f'{host_name}.local.'
             if fullname not in elements:
@@ -3135,7 +3170,7 @@ class LinuxHost():
         #
         is_txt = False
         txt = ''
-        for line in self.bash(f'cat /tmp/{name}', encoding='raw_unicode_escape'):
+        for line in self.bash(f'cat {service_data_file}', encoding='raw_unicode_escape'):
             elements = line.split()
             if len(elements) >= 2 and elements[0] == full_service_name and elements[1] == 'TXT':
                 is_txt = True
@@ -3216,9 +3251,6 @@ class OtbrNode(LinuxHost, NodeImpl, OtbrDocker):
 
     def __repr__(self):
         return f'Otbr<{self.nodeid}>'
-
-    def get_addrs(self) -> List[str]:
-        return super().get_addrs() + self.get_ether_addrs()
 
     def start(self):
         self._setup_sysctl()

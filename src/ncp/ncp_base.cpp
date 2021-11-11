@@ -43,9 +43,6 @@
 #include <openthread/network_time.h>
 #include <openthread/platform/misc.h>
 #include <openthread/platform/radio.h>
-#if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
-#include <openthread/platform/trel-udp6.h>
-#endif
 
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
@@ -2544,18 +2541,34 @@ exit:
 }
 #endif
 
-#if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
-template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_DEBUG_TREL_TEST_MODE_ENABLE>(void)
+#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_INITIATOR_ENABLE || OPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE
+otError NcpBase::DecodeLinkMetrics(otLinkMetrics *aMetrics, bool aAllowPduCount)
 {
-    return mEncoder.WriteBool(mTrelTestModeEnable);
-}
+    otError error   = OT_ERROR_NONE;
+    uint8_t metrics = 0;
 
-template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_DEBUG_TREL_TEST_MODE_ENABLE>(void)
-{
-    otError error = OT_ERROR_NONE;
+    SuccessOrExit(error = mDecoder.ReadUint8(metrics));
 
-    SuccessOrExit(error = mDecoder.ReadBool(mTrelTestModeEnable));
-    error = otPlatTrelUdp6SetTestMode(mInstance, mTrelTestModeEnable);
+    if (metrics & SPINEL_THREAD_LINK_METRIC_PDU_COUNT)
+    {
+        VerifyOrExit(aAllowPduCount, error = OT_ERROR_INVALID_ARGS);
+        aMetrics->mPduCount = true;
+    }
+
+    if (metrics & SPINEL_THREAD_LINK_METRIC_LQI)
+    {
+        aMetrics->mLqi = true;
+    }
+
+    if (metrics & SPINEL_THREAD_LINK_METRIC_LINK_MARGIN)
+    {
+        aMetrics->mLinkMargin = true;
+    }
+
+    if (metrics & SPINEL_THREAD_LINK_METRIC_RSSI)
+    {
+        aMetrics->mRssi = true;
+    }
 
 exit:
     return error;

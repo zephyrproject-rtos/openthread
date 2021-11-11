@@ -36,6 +36,7 @@
 
 #include "openthread-core-config.h"
 
+#include "common/as_core_type.hpp"
 #include "common/clearable.hpp"
 #include "common/locator.hpp"
 #include "common/non_copyable.hpp"
@@ -517,6 +518,10 @@ private:
                                       uint16_t &     aSourcePort,
                                       uint16_t &     aDestPort);
 
+#if OPENTHREAD_FTD && OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE
+    otError ForwardDuaToBackboneLink(Message &aMessage, const Ip6::Address &aDst);
+#endif
+
 #if (OPENTHREAD_CONFIG_LOG_LEVEL >= OT_LOG_LEVEL_NOTE) && (OPENTHREAD_CONFIG_LOG_MAC == 1)
     const char *MessageActionToString(MessageAction aAction, Error aError);
     const char *MessagePriorityToString(const Message &aMessage);
@@ -593,6 +598,8 @@ private:
  * @}
  *
  */
+
+DefineCoreType(otThreadLinkInfo, ThreadLinkInfo);
 
 } // namespace ot
 

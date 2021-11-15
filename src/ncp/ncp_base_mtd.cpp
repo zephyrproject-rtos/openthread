@@ -66,6 +66,9 @@
 #if OPENTHREAD_CONFIG_SRP_CLIENT_BUFFERS_ENABLE
 #include <openthread/srp_client_buffers.h>
 #endif
+#if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
+#include <openthread/platform/trel-udp6.h>
+#endif
 
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
@@ -212,38 +215,6 @@ exit:
 }
 
 #if OPENTHREAD_CONFIG_MLE_LINK_METRICS_INITIATOR_ENABLE
-otError NcpBase::DecodeLinkMetrics(otLinkMetrics *aMetrics, bool aAllowPduCount)
-{
-    otError error   = OT_ERROR_NONE;
-    uint8_t metrics = 0;
-
-    SuccessOrExit(error = mDecoder.ReadUint8(metrics));
-
-    if (metrics & SPINEL_THREAD_LINK_METRIC_PDU_COUNT)
-    {
-        VerifyOrExit(aAllowPduCount, error = OT_ERROR_INVALID_ARGS);
-        aMetrics->mPduCount = true;
-    }
-
-    if (metrics & SPINEL_THREAD_LINK_METRIC_LQI)
-    {
-        aMetrics->mLqi = true;
-    }
-
-    if (metrics & SPINEL_THREAD_LINK_METRIC_LINK_MARGIN)
-    {
-        aMetrics->mLinkMargin = true;
-    }
-
-    if (metrics & SPINEL_THREAD_LINK_METRIC_RSSI)
-    {
-        aMetrics->mRssi = true;
-    }
-
-exit:
-    return error;
-}
-
 otError NcpBase::EncodeLinkMetricsValues(const otLinkMetricsValues *aMetricsValues)
 {
     otError error = OT_ERROR_NONE;
@@ -3152,7 +3123,7 @@ template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_THREAD_LINK_METRICS_Q
 
     SuccessOrExit(error = mDecoder.ReadIp6Address(address));
     SuccessOrExit(error = mDecoder.ReadUint8(seriesId));
-    SuccessOrExit(error = DecodeLinkMetrics(&linkMetrics, true));
+    SuccessOrExit(error = DecodeLinkMetrics(&linkMetrics, /* aAllowPduCount */ true));
 
     error =
         otLinkMetricsQuery(mInstance, &address, seriesId, &linkMetrics, &NcpBase::HandleLinkMetricsReport_Jump, this);
@@ -3187,7 +3158,7 @@ template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_THREAD_LINK_METRICS_M
 
     SuccessOrExit(error = mDecoder.ReadIp6Address(address));
     SuccessOrExit(error = mDecoder.ReadUint8(controlFlags));
-    SuccessOrExit(error = DecodeLinkMetrics(&linkMetrics, false));
+    SuccessOrExit(error = DecodeLinkMetrics(&linkMetrics, /* aAllowPduCount */ false));
 
     error = otLinkMetricsConfigEnhAckProbing(mInstance, &address, static_cast<otLinkMetricsEnhAckFlags>(controlFlags),
                                              controlFlags ? &linkMetrics : nullptr,
@@ -3211,7 +3182,7 @@ template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_THREAD_LINK_METRICS_M
     SuccessOrExit(error = mDecoder.ReadUint8(seriesId));
     SuccessOrExit(error = mDecoder.ReadUint8(types));
 
-    SuccessOrExit(error = DecodeLinkMetrics(&linkMetrics, true));
+    SuccessOrExit(error = DecodeLinkMetrics(&linkMetrics, /* aAllowPduCount */ true));
 
     if (types & SPINEL_THREAD_FRAME_TYPE_MLE_LINK_PROBE)
     {
@@ -4071,6 +4042,24 @@ exit:
 #endif
 
 #endif // OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE
+
+#if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
+template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_DEBUG_TREL_TEST_MODE_ENABLE>(void)
+{
+    return mEncoder.WriteBool(mTrelTestModeEnable);
+}
+
+template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_DEBUG_TREL_TEST_MODE_ENABLE>(void)
+{
+    otError error = OT_ERROR_NONE;
+
+    SuccessOrExit(error = mDecoder.ReadBool(mTrelTestModeEnable));
+    error = otPlatTrelUdp6SetTestMode(mInstance, mTrelTestModeEnable);
+
+exit:
+    return error;
+}
+#endif
 
 #if OPENTHREAD_CONFIG_LEGACY_ENABLE
 

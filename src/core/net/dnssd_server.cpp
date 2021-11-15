@@ -35,6 +35,7 @@
 
 #if OPENTHREAD_CONFIG_DNSSD_SERVER_ENABLE
 
+#include "common/as_core_type.hpp"
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
 #include "common/instance.hpp"
@@ -109,8 +110,7 @@ void Server::Stop(void)
 
 void Server::HandleUdpReceive(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
-    static_cast<Server *>(aContext)->HandleUdpReceive(*static_cast<Message *>(aMessage),
-                                                      *static_cast<const Ip6::MessageInfo *>(aMessageInfo));
+    static_cast<Server *>(aContext)->HandleUdpReceive(AsCoreType(aMessage), AsCoreType(aMessageInfo));
 }
 
 void Server::HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
@@ -488,17 +488,25 @@ Error Server::AppendTxtRecord(Message &         aMessage,
                               uint32_t          aTtl,
                               NameCompressInfo &aCompressInfo)
 {
-    Error     error = kErrorNone;
-    TxtRecord txtRecord;
+    Error         error = kErrorNone;
+    TxtRecord     txtRecord;
+    const uint8_t kEmptyTxt = 0;
 
     SuccessOrExit(error = AppendInstanceName(aMessage, aInstanceName, aCompressInfo));
 
     txtRecord.Init();
     txtRecord.SetTtl(aTtl);
-    txtRecord.SetLength(aTxtLength);
+    txtRecord.SetLength(aTxtLength > 0 ? aTxtLength : sizeof(kEmptyTxt));
 
     SuccessOrExit(error = aMessage.Append(txtRecord));
-    error = aMessage.AppendBytes(aTxtData, aTxtLength);
+    if (aTxtLength > 0)
+    {
+        error = aMessage.AppendBytes(aTxtData, aTxtLength);
+    }
+    else
+    {
+        error = aMessage.Append(kEmptyTxt);
+    }
 
 exit:
     return error;
@@ -918,7 +926,7 @@ void Server::AnswerQuery(QueryTransaction &                aQuery,
         {
             for (uint8_t i = 0; i < aInstanceInfo.mAddressNum; i++)
             {
-                const Ip6::Address &address = static_cast<const Ip6::Address &>(aInstanceInfo.mAddresses[i]);
+                const Ip6::Address &address = AsCoreType(&aInstanceInfo.mAddresses[i]);
 
                 OT_ASSERT(!address.IsUnspecified() && !address.IsLinkLocal() && !address.IsMulticast() &&
                           !address.IsLoopback());
@@ -946,7 +954,7 @@ void Server::AnswerQuery(QueryTransaction &aQuery, const char *aHostFullName, co
     {
         for (uint8_t i = 0; i < aHostInfo.mAddressNum; i++)
         {
-            const Ip6::Address &address = static_cast<const Ip6::Address &>(aHostInfo.mAddresses[i]);
+            const Ip6::Address &address = AsCoreType(&aHostInfo.mAddresses[i]);
 
             OT_ASSERT(!address.IsUnspecified() && !address.IsMulticast() && !address.IsLinkLocal() &&
                       !address.IsLoopback());

@@ -849,7 +849,7 @@ otError Interpreter::ProcessCcm(Arg aArgs[])
 
     VerifyOrExit(!aArgs[0].IsEmpty(), error = OT_ERROR_INVALID_COMMAND);
 
-    SuccessOrExit(error = ParseEnableOrDisable(aArgs[1], enable));
+    SuccessOrExit(error = ParseEnableOrDisable(aArgs[0], enable));
     otThreadSetCcmEnabled(GetInstancePtr(), enable);
 
 exit:
@@ -1536,9 +1536,8 @@ otError Interpreter::ProcessDns(Arg aArgs[])
         {
             const otDnsQueryConfig *defaultConfig = otDnsClientGetDefaultConfig(GetInstancePtr());
 
-            OutputFormat("Server: [");
-            OutputIp6Address(defaultConfig->mServerSockAddr.mAddress);
-            OutputLine("]:%d", defaultConfig->mServerSockAddr.mPort);
+            OutputFormat("Server: ");
+            OutputSockAddrLine(defaultConfig->mServerSockAddr);
             OutputLine("ResponseTimeout: %u ms", defaultConfig->mResponseTimeout);
             OutputLine("MaxTxAttempts: %u", defaultConfig->mMaxTxAttempts);
             OutputLine("RecursionDesired: %s",
@@ -3222,6 +3221,31 @@ exit:
 otError Interpreter::ProcessParentPriority(Arg aArgs[])
 {
     return ProcessGetSet(aArgs, otThreadGetParentPriority, otThreadSetParentPriority);
+}
+#endif
+
+#if OPENTHREAD_FTD && OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
+otError Interpreter::ProcessRouterIdRange(Arg *aArgs)
+{
+    uint8_t minRouterId;
+    uint8_t maxRouterId;
+    otError error = OT_ERROR_NONE;
+
+    if (aArgs[0].IsEmpty())
+    {
+        otThreadGetRouterIdRange(GetInstancePtr(), &minRouterId, &maxRouterId);
+        OutputLine("%d %d", minRouterId, maxRouterId);
+    }
+    else
+    {
+        SuccessOrExit(error = aArgs[0].ParseAsUint8(minRouterId));
+        SuccessOrExit(error = aArgs[1].ParseAsUint8(maxRouterId));
+        VerifyOrExit(aArgs[2].IsEmpty(), error = OT_ERROR_INVALID_ARGS);
+        SuccessOrExit(error = otThreadSetRouterIdRange(GetInstancePtr(), minRouterId, maxRouterId));
+    }
+
+exit:
+    return error;
 }
 #endif
 

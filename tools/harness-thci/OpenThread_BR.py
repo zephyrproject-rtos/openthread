@@ -34,9 +34,9 @@ import logging
 import re
 import sys
 import time
+import ipaddress
 
 import serial
-from GRLLibs.UtilityModules.ModuleHelper import ModuleHelper
 from IThci import IThci
 from THCI.OpenThread import OpenThreadTHCI, watched, API
 
@@ -153,6 +153,13 @@ class SerialHandle:
             raise Exception('login fail')
 
         self.bash('stty cols 256')
+
+    def log(self, fmt, *args):
+        try:
+            msg = fmt % args
+            print('%s - %s - %s' % (self.port, time.strftime('%b %d %H:%M:%S'), msg))
+        except Exception:
+            pass
 
     def close(self):
         self.__handle.close()
@@ -304,6 +311,8 @@ class OpenThread_BR(OpenThreadTHCI, IThci):
     def _deviceAfterReset(self):
         self.__dumpSyslog()
         self.__truncateSyslog()
+        if not self.IsHost:
+            self.bash('sudo service otbr-agent restart')
 
     @API
     def setupHost(self, setDua=False):
@@ -345,11 +354,18 @@ class OpenThread_BR(OpenThreadTHCI, IThci):
         if interface == 1:
             ifname = 'eth0'
         else:
-            print('invalid interface')
-            return
+            raise AssertionError('Invalid interface set to send UDP: {} '
+                                 'Available interface options: 0 - Thread; 1 - Ethernet'.format(interface))
+        cmd = 'sudo /home/pi/reference-device/send_udp.py %s %s %s %s' % (ifname, dst, port, payload)
+        print(cmd)
+        self.bash(cmd)
 
-        cmd = 'sudo /home/pi/ot-br-posix/script/reference-device/send_udp.py %s %s %s %s' % (ifname, dst, port,
-                                                                                             payload)
+    @API
+    def mldv2_query(self):
+        ifname = 'eth0'
+        dst = 'ff02::1'
+
+        cmd = 'sudo /home/pi/reference-device/send_mld_query.py %s %s' % (ifname, dst)
         print(cmd)
         self.bash(cmd)
 
@@ -465,14 +481,18 @@ class OpenThread_BR(OpenThreadTHCI, IThci):
                 continue
 
             addr = line[1].split('/')[0]
-            addr = ModuleHelper.GetFullIpv6Address(addr).lower()
+            addr = str(ipaddress.IPv6Address(addr.decode()).exploded)
             globalAddrs.append(addr)
 
         if not filterByPrefix:
             return globalAddrs[0]
         else:
+            if filterByPrefix[-2:] != '::':
+                filterByPrefix = '%s::' % filterByPrefix
+            prefix = ipaddress.IPv6Network((filterByPrefix + '/64').decode())
             for fullIp in globalAddrs:
-                if fullIp.startswith(filterByPrefix):
+                address = ipaddress.IPv6Address(fullIp.decode())
+                if address in prefix:
                     return fullIp
 
     def _cliReadLine(self):
@@ -524,7 +544,7 @@ interface eth0
         AdvAutonomous on;
         AdvRouterAddr on;
     };
-    
+
     prefix fd00:7d03:7d03:7d03::/64
     {
         AdvOnLink on;
@@ -586,3 +606,50 @@ EOF"
         output = self.bash_unwatched('sudo grep "otbr-agent" /var/log/syslog')
         for line in output:
             self.log('%s', line)
+
+    @API
+    def mdns_query(self, dst='ff02::fb', service='_meshcop._udp.local', addrs_blacklist=[]):
+        print('mdns_query %s %s %s' % (dst, service, addrs_blacklist))
+
+        result = self.bash('dig -p 5353 @%s %s ptr +time=2 +retry=2' % (dst, service))
+        responses = ' '.join(result).split(';; ANSWER SECTION:')
+
+        # Remove responses from unwanted devices
+        for response in responses:
+            if not set(response.split()).isdisjoint(set(addrs_blacklist)):
+                break
+
+        # Records patterns:
+        # raspberrypi-2.local.	10	IN	AAAA	fe80::81:46ff:fe0d:bfe.43684
+        # OpenThread_BorderRouter._meshcop._udp.local. 10\tIN SRV 0 0 49153 raspberrypi.local.
+        try:
+            addr = response.split('AAAA\tfe80')[1].split(' ')[0]
+            addr = 'fe80%s%%eth0' % addr
+        except Exception:
+            raise Exception('Unable to find the DUT address in the mDNS response')
+        try:
+            port = int(response.split('IN SRV')[1].split(' ')[3])
+        except Exception:
+            raise Exception('Unable to find the DUT port in the mDNS response')
+
+        return (addr, port)
+
+    # Override powerDown
+    @API
+    def powerDown(self):
+        print('powerDown')
+        self.bash('sudo service otbr-agent stop')
+        super(OpenThread_BR, self).powerDown()
+
+    # Override powerUp
+    @API
+    def powerUp(self):
+        print('powerUp')
+        self.bash('sudo service otbr-agent start')
+        super(OpenThread_BR, self).powerUp()
+
+    # Override forceSetSlaac
+    @API
+    def forceSetSlaac(self, slaacAddress):
+        print('forceSetSlaac %s' % slaacAddress)
+        self.bash('sudo ip -6 addr add %s/64 dev wpan0' % slaacAddress)

@@ -38,6 +38,7 @@
 
 #include <openthread/thread_ftd.h>
 
+#include "common/as_core_type.hpp"
 #include "common/clearable.hpp"
 #include "common/equatable.hpp"
 #include "common/linked_list.hpp"
@@ -563,6 +564,14 @@ public:
      *
      */
     bool IsThreadVersion1p2(void) const { return mState != kStateInvalid && mVersion == OT_THREAD_VERSION_1_2; }
+
+    /**
+     * This method indicates whether Thread version supports CSL.
+     *
+     * @returns TRUE if CSL is supported, FALSE otherwise.
+     *
+     */
+    bool IsThreadVersionCslCapable(void) const { return IsThreadVersion1p2() && !IsRxOnWhenIdle(); }
 
     /**
      * This method indicates whether Enhanced Keep-Alive is supported or not.
@@ -1454,6 +1463,12 @@ private:
     uint8_t mCslClockUncertainty; ///< Scheduling uncertainty, in units of 10 us.
 #endif
 };
+
+DefineCoreType(otNeighborInfo, Neighbor::Info);
+#if OPENTHREAD_FTD
+DefineCoreType(otChildInfo, Child::Info);
+#endif
+DefineCoreType(otRouterInfo, Router::Info);
 
 } // namespace ot
 

@@ -675,6 +675,32 @@ public:
      */
     otError GetRadioRegion(uint16_t *aRegionCode);
 
+#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE
+    /**
+     * Enable/disable or update Enhanced-ACK Based Probing in radio for a specific Initiator.
+     *
+     * After Enhanced-ACK Based Probing is configured by a specific Probing Initiator, the Enhanced-ACK sent to that
+     * node should include Vendor-Specific IE containing Link Metrics data. This method informs the radio to start/stop
+     * to collect Link Metrics data and include Vendor-Specific IE that containing the data in Enhanced-ACK sent to that
+     * Probing Initiator.
+     *
+     * @param[in]  aLinkMetrics   This parameter specifies what metrics to query. Per spec 4.11.3.4.4.6, at most 2
+     *                            metrics can be specified. The probing would be disabled if @p aLinkMetrics is
+     *                            bitwise 0.
+     * @param[in]  aShortAddress  The short address of the Probing Initiator.
+     * @param[in]  aExtAddress    The extended source address of the Probing Initiator. @p aExtAddress MUST NOT be
+     *                            nullptr.
+     *
+     * @retval  OT_ERROR_NONE            Successfully configured the Enhanced-ACK Based Probing.
+     * @retval  OT_ERROR_INVALID_ARGS    @p aExtAddress is nullptr.
+     * @retval  OT_ERROR_NOT_FOUND       The Initiator indicated by @p aShortAddress is not found when trying to clear.
+     * @retval  OT_ERROR_NO_BUFS         No more Initiator can be supported.
+     */
+    otError ConfigureEnhAckProbing(otLinkMetrics        aLinkMetrics,
+                                   const otShortAddress aShortAddress,
+                                   const otExtAddress & aExtAddress);
+#endif
+
     /**
      * This method checks whether the spinel interface is radio-only.
      *
@@ -741,45 +767,6 @@ public:
      *
      */
     otError SetChannelMaxTransmitPower(uint8_t aChannel, int8_t aPower);
-
-private:
-    enum
-    {
-        kMaxSpinelFrame        = SpinelInterface::kMaxFrameSize,
-        kMaxWaitTime           = 2000, ///< Max time to wait for response in milliseconds.
-        kVersionStringSize     = 128,  ///< Max size of version string.
-        kCapsBufferSize        = 100,  ///< Max buffer size used to store `SPINEL_PROP_CAPS` value.
-        kChannelMaskBufferSize = 32,   ///< Max buffer size used to store `SPINEL_PROP_PHY_CHAN_SUPPORTED` value.
-    };
-
-    enum State
-    {
-        kStateDisabled,     ///< Radio is disabled.
-        kStateSleep,        ///< Radio is sleep.
-        kStateReceive,      ///< Radio is in receive mode.
-        kStateTransmitting, ///< Frame passed to radio for transmission, waiting for done event from radio.
-        kStateTransmitDone, ///< Radio indicated frame transmission is done.
-    };
-
-    typedef otError (RadioSpinel::*ResponseHandler)(const uint8_t *aBuffer, uint16_t aLength);
-
-    static void HandleReceivedFrame(void *aContext);
-
-    otError CheckSpinelVersion(void);
-    otError CheckRadioCapabilities(void);
-    otError CheckRcpApiVersion(bool aSupportsRcpApiVersion);
-
-    /**
-     * This method triggers a state transfer of the state machine.
-     *
-     */
-    void ProcessRadioStateMachine(void);
-
-    /**
-     * This method processes the frame queue.
-     *
-     */
-    void ProcessFrameQueue(void);
 
     /**
      * This method tries to retrieve a spinel property from OpenThread transceiver.
@@ -857,6 +844,56 @@ private:
      */
     otError Remove(spinel_prop_key_t aKey, const char *aFormat, ...);
 
+    /**
+     * This method tries to reset the co-processor.
+     *
+     * @prarm[in] aResetType    The reset type, SPINEL_RESET_PLATFORM or SPINEL_RESET_STACK.
+     *
+     * @retval  OT_ERROR_NONE               Successfully removed item from the property.
+     * @retval  OT_ERROR_BUSY               Failed due to another operation is on going.
+     *
+     */
+    otError SendReset(uint8_t aResetType);
+
+private:
+    enum
+    {
+        kMaxSpinelFrame        = SpinelInterface::kMaxFrameSize,
+        kMaxWaitTime           = 2000, ///< Max time to wait for response in milliseconds.
+        kVersionStringSize     = 128,  ///< Max size of version string.
+        kCapsBufferSize        = 100,  ///< Max buffer size used to store `SPINEL_PROP_CAPS` value.
+        kChannelMaskBufferSize = 32,   ///< Max buffer size used to store `SPINEL_PROP_PHY_CHAN_SUPPORTED` value.
+    };
+
+    enum State
+    {
+        kStateDisabled,     ///< Radio is disabled.
+        kStateSleep,        ///< Radio is sleep.
+        kStateReceive,      ///< Radio is in receive mode.
+        kStateTransmitting, ///< Frame passed to radio for transmission, waiting for done event from radio.
+        kStateTransmitDone, ///< Radio indicated frame transmission is done.
+    };
+
+    typedef otError (RadioSpinel::*ResponseHandler)(const uint8_t *aBuffer, uint16_t aLength);
+
+    static void HandleReceivedFrame(void *aContext);
+
+    otError CheckSpinelVersion(void);
+    otError CheckRadioCapabilities(void);
+    otError CheckRcpApiVersion(bool aSupportsRcpApiVersion);
+
+    /**
+     * This method triggers a state transfer of the state machine.
+     *
+     */
+    void ProcessRadioStateMachine(void);
+
+    /**
+     * This method processes the frame queue.
+     *
+     */
+    void ProcessFrameQueue(void);
+
     spinel_tid_t GetNextTid(void);
     void         FreeTid(spinel_tid_t tid) { mCmdTidsInUse &= ~(1 << tid); }
 
@@ -878,12 +915,11 @@ private:
                                         const char *      aFormat,
                                         va_list           aArgs);
     otError WaitResponse(void);
-    otError SendReset(void);
-    otError SendCommand(uint32_t          command,
-                        spinel_prop_key_t key,
-                        spinel_tid_t      tid,
-                        const char *      pack_format,
-                        va_list           args);
+    otError SendCommand(uint32_t          aCommand,
+                        spinel_prop_key_t aKey,
+                        spinel_tid_t      aTid,
+                        const char *      aFormat,
+                        va_list           aArgs);
     otError ParseRadioFrame(otRadioFrame &aFrame, const uint8_t *aBuffer, uint16_t aLength, spinel_ssize_t &aUnpacked);
     otError ThreadDatasetHandler(const uint8_t *aBuffer, uint16_t aLength);
 

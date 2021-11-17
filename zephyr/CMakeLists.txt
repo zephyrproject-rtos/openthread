@@ -455,6 +455,14 @@ list(APPEND ot_libs openthread-mtd)
 endif()
 endif()
 
+if(CONFIG_OPENTHREAD_SETTINGS_RAM)
+  target_compile_options(openthread-platform-utils PRIVATE
+    $<TARGET_PROPERTY:zephyr_interface,INTERFACE_COMPILE_OPTIONS> -fno-builtin)
+  add_dependencies(openthread-platform-utils syscall_list_h_target)
+
+  list(APPEND ot_libs openthread-platform-utils-static)
+endif()
+
 zephyr_link_libraries(${ot_libs})
 
 endif()

@@ -855,6 +855,21 @@ otError Interpreter::ProcessCcm(Arg aArgs[])
 exit:
     return error;
 }
+
+otError Interpreter::ProcessThreadVersionCheck(Arg aArgs[])
+{
+    otError error = OT_ERROR_NONE;
+    bool    enable;
+
+    VerifyOrExit(!aArgs[0].IsEmpty(), error = OT_ERROR_INVALID_COMMAND);
+
+    SuccessOrExit(error = ParseEnableOrDisable(aArgs[0], enable));
+    otThreadSetThreadVersionCheckEnabled(GetInstancePtr(), enable);
+
+exit:
+    return error;
+}
+
 #endif
 
 otError Interpreter::ProcessChannel(Arg aArgs[])
@@ -2041,9 +2056,33 @@ exit:
     return error;
 }
 
+const char *Interpreter::AddressOriginToString(uint8_t aOrigin)
+{
+    static const char *const kOriginStrings[4] = {
+        "thread", // 0, OT_ADDRESS_ORIGIN_THREAD
+        "slaac",  // 1, OT_ADDRESS_ORIGIN_SLAAC
+        "dhcp6",  // 2, OT_ADDRESS_ORIGIN_DHCPV6
+        "manual", // 3, OT_ADDRESS_ORIGIN_MANUAL
+    };
+
+    static_assert(0 == OT_ADDRESS_ORIGIN_THREAD, "OT_ADDRESS_ORIGIN_THREAD value is incorrect");
+    static_assert(1 == OT_ADDRESS_ORIGIN_SLAAC, "OT_ADDRESS_ORIGIN_SLAAC value is incorrect");
+    static_assert(2 == OT_ADDRESS_ORIGIN_DHCPV6, "OT_ADDRESS_ORIGIN_DHCPV6 value is incorrect");
+    static_assert(3 == OT_ADDRESS_ORIGIN_MANUAL, "OT_ADDRESS_ORIGIN_MANUAL value is incorrect");
+
+    return aOrigin < OT_ARRAY_LENGTH(kOriginStrings) ? kOriginStrings[aOrigin] : "unknown";
+}
+
 otError Interpreter::ProcessIpAddr(Arg aArgs[])
 {
-    otError error = OT_ERROR_NONE;
+    otError error   = OT_ERROR_NONE;
+    bool    verbose = false;
+
+    if (aArgs[0] == "-v")
+    {
+        aArgs++;
+        verbose = true;
+    }
 
     if (aArgs[0].IsEmpty())
     {
@@ -2051,7 +2090,12 @@ otError Interpreter::ProcessIpAddr(Arg aArgs[])
 
         for (const otNetifAddress *addr = unicastAddrs; addr; addr = addr->mNext)
         {
-            OutputIp6AddressLine(addr->mAddress);
+            OutputIp6Address(addr->mAddress);
+            if (verbose)
+            {
+                OutputFormat(" origin:%s", AddressOriginToString(addr->mAddressOrigin));
+            }
+            OutputLine("");
         }
     }
     else
@@ -3666,6 +3710,28 @@ otError Interpreter::ProcessPreferRouterId(Arg aArgs[])
 }
 #endif
 
+#if OPENTHREAD_CONFIG_MAC_FILTER_ENABLE && OPENTHREAD_CONFIG_RADIO_LINK_IEEE_802_15_4_ENABLE
+otError Interpreter::ProcessRadioFilter(Arg aArgs[])
+{
+    otError error = OT_ERROR_NONE;
+
+    if (aArgs[0].IsEmpty())
+    {
+        OutputEnabledDisabledStatus(otLinkIsRadioFilterEnabled(GetInstancePtr()));
+    }
+    else
+    {
+        bool enable;
+
+        SuccessOrExit(error = ParseEnableOrDisable(aArgs[0], enable));
+        otLinkSetRadioFilterEnabled(GetInstancePtr(), enable);
+    }
+
+exit:
+    return error;
+}
+#endif
+
 otError Interpreter::ProcessRcp(Arg aArgs[])
 {
     otError     error   = OT_ERROR_NONE;
@@ -4976,6 +5042,7 @@ void Interpreter::Initialize(otInstance *aInstance, otCliOutputCallback aCallbac
 
 void Interpreter::OutputPrompt(void)
 {
+#if OPENTHREAD_CONFIG_CLI_PROMPT_ENABLE
     static const char sPrompt[] = "> ";
 
     // The `OutputFormat()` below is adding the prompt which is not
@@ -4986,6 +5053,7 @@ void Interpreter::OutputPrompt(void)
     SetEmittingCommandOutput(false);
     OutputFormat("%s", sPrompt);
     SetEmittingCommandOutput(true);
+#endif // OPENTHREAD_CONFIG_CLI_PROMPT_ENABLE
 }
 
 void Interpreter::HandleTimer(Timer &aTimer)

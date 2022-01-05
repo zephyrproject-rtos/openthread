@@ -182,8 +182,11 @@ SOURCES_COMMON                                  = \
     coap/coap.cpp                                 \
     coap/coap_message.cpp                         \
     coap/coap_secure.cpp                          \
+    common/appender.cpp                           \
     common/crc16.cpp                              \
+    common/data.cpp                               \
     common/error.cpp                              \
+    common/heap.cpp                               \
     common/heap_data.cpp                          \
     common/heap_string.cpp                        \
     common/instance.cpp                           \
@@ -413,6 +416,7 @@ HEADERS_COMMON                                  = \
     coap/coap.hpp                                 \
     coap/coap_message.hpp                         \
     coap/coap_secure.hpp                          \
+    common/appender.hpp                           \
     common/arg_macros.hpp                         \
     common/array.hpp                              \
     common/as_core_type.hpp                       \
@@ -427,6 +431,8 @@ HEADERS_COMMON                                  = \
     common/equatable.hpp                          \
     common/error.hpp                              \
     common/extension.hpp                          \
+    common/heap.hpp                               \
+    common/heap_allocatable.hpp                   \
     common/heap_data.hpp                          \
     common/heap_string.hpp                        \
     common/instance.hpp                           \
@@ -440,9 +446,13 @@ HEADERS_COMMON                                  = \
     common/non_copyable.hpp                       \
     common/notifier.hpp                           \
     common/numeric_limits.hpp                     \
+    common/owned_ptr.hpp                          \
+    common/owning_list.hpp                        \
     common/pool.hpp                               \
+    common/ptr_wrapper.hpp                        \
     common/random.hpp                             \
     common/random_manager.hpp                     \
+    common/retain_ptr.hpp                         \
     common/settings.hpp                           \
     common/settings_driver.hpp                    \
     common/string.hpp                             \

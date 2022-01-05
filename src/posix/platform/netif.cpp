@@ -163,6 +163,9 @@ unsigned int otSysGetThreadNetifIndex(void)
 }
 
 #if OPENTHREAD_CONFIG_PLATFORM_NETIF_ENABLE
+#if OPENTHREAD_POSIX_CONFIG_FIREWALL_ENABLE
+#include "firewall.hpp"
+#endif
 #include "posix/platform/ip6_utils.hpp"
 
 using namespace ot::Posix::Ip6Utils;
@@ -190,15 +193,11 @@ using namespace ot::Posix::Ip6Utils;
 static uint32_t sNetlinkSequence = 0; ///< Netlink message sequence.
 #endif
 
-#if OPENTHREAD_POSIX_CONFIG_INSTALL_EXTERNAL_ROUTES_ENABLE
-#if defined(__linux__)
+#if OPENTHREAD_POSIX_CONFIG_INSTALL_EXTERNAL_ROUTES_ENABLE && __linux__
 static constexpr uint32_t kExternalRoutePriority  = OPENTHREAD_POSIX_CONFIG_EXTERNAL_ROUTE_PRIORITY;
 static constexpr uint8_t  kMaxExternalRoutesNum   = OPENTHREAD_POSIX_CONFIG_MAX_EXTERNAL_ROUTE_NUM;
 static uint8_t            sAddedExternalRoutesNum = 0;
 static otIp6Prefix        sAddedExternalRoutes[kMaxExternalRoutesNum];
-#else
-#error "OPENTHREAD_POSIX_CONFIG_INSTALL_EXTERNAL_ROUTES_ENABLE only works on Linux platform"
-#endif // defined(__linux__)
 #endif
 
 #if defined(RTM_NEWMADDR) || defined(__NetBSD__)
@@ -516,7 +515,7 @@ exit:
     }
 }
 
-#if OPENTHREAD_POSIX_CONFIG_INSTALL_EXTERNAL_ROUTES_ENABLE
+#if OPENTHREAD_POSIX_CONFIG_INSTALL_EXTERNAL_ROUTES_ENABLE && __linux__
 void AddRtAttr(struct nlmsghdr *aHeader, uint32_t aMaxLen, uint8_t aType, const void *aData, uint8_t aLen)
 {
     uint8_t        len = RTA_LENGTH(aLen);
@@ -720,7 +719,7 @@ static void UpdateExternalRoutes(otInstance *aInstance)
 exit:
     return;
 }
-#endif // OPENTHREAD_POSIX_CONFIG_INSTALL_EXTERNAL_ROUTES_ENABLE
+#endif // OPENTHREAD_POSIX_CONFIG_INSTALL_EXTERNAL_ROUTES_ENABLE && __linux__
 
 static void processAddressChange(const otIp6AddressInfo *aAddressInfo, bool aIsAdded, void *aContext)
 {
@@ -740,10 +739,16 @@ void platformNetifStateChange(otInstance *aInstance, otChangedFlags aFlags)
     {
         UpdateLink(aInstance);
     }
-#if OPENTHREAD_POSIX_CONFIG_INSTALL_EXTERNAL_ROUTES_ENABLE
+#if OPENTHREAD_POSIX_CONFIG_INSTALL_EXTERNAL_ROUTES_ENABLE && __linux__
     if (OT_CHANGED_THREAD_NETDATA & aFlags)
     {
         UpdateExternalRoutes(aInstance);
+    }
+#endif
+#if OPENTHREAD_POSIX_CONFIG_FIREWALL_ENABLE
+    if (OT_CHANGED_THREAD_NETDATA & aFlags)
+    {
+        ot::Posix::UpdateIpSets(aInstance);
     }
 #endif
 }
@@ -842,7 +847,14 @@ exit:
 
     if (error != OT_ERROR_NONE)
     {
-        otLogWarnPlat("[netif] Failed to transmit, error:%s", otThreadErrorToString(error));
+        if (error == OT_ERROR_DROP)
+        {
+            otLogNotePlat("[netif] Message dropped by Thread", otThreadErrorToString(error));
+        }
+        else
+        {
+            otLogWarnPlat("[netif] Failed to transmit, error:%s", otThreadErrorToString(error));
+        }
     }
 }
 
@@ -957,7 +969,7 @@ static void processNetifAddrEvent(otInstance *aInstance, struct nlmsghdr *aNetli
         }
 
         default:
-            otLogWarnPlat("[netif] Unexpected address type (%d).", (int)rta->rta_type);
+            otLogDebgPlat("[netif] Unexpected address type (%d).", (int)rta->rta_type);
             break;
         }
     }

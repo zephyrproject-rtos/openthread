@@ -36,6 +36,7 @@
 #include "common/as_core_type.hpp"
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
+#include "common/heap.hpp"
 #include "common/instance.hpp"
 #include "common/locator_getters.hpp"
 #include "common/logging.hpp"
@@ -68,20 +69,20 @@ MessagePool::MessagePool(Instance &aInstance)
 #endif
 }
 
-Message *MessagePool::New(Message::Type aType, uint16_t aReserveHeader, Message::Priority aPriority)
+Message *MessagePool::Allocate(Message::Type aType, uint16_t aReserveHeader, const Message::Settings &aSettings)
 {
     Error    error = kErrorNone;
     Message *message;
 
-    VerifyOrExit((message = static_cast<Message *>(NewBuffer(aPriority))) != nullptr);
+    VerifyOrExit((message = static_cast<Message *>(NewBuffer(aSettings.GetPriority()))) != nullptr);
 
     memset(message, 0, sizeof(*message));
     message->SetMessagePool(this);
     message->SetType(aType);
     message->SetReserved(aReserveHeader);
-    message->SetLinkSecurityEnabled(true);
+    message->SetLinkSecurityEnabled(aSettings.IsLinkSecurityEnabled());
 
-    SuccessOrExit(error = message->SetPriority(aPriority));
+    SuccessOrExit(error = message->SetPriority(aSettings.GetPriority()));
     SuccessOrExit(error = message->SetLength(0));
 
 exit:
@@ -89,18 +90,6 @@ exit:
     {
         Free(message);
         message = nullptr;
-    }
-
-    return message;
-}
-
-Message *MessagePool::New(Message::Type aType, uint16_t aReserveHeader, const Message::Settings &aSettings)
-{
-    Message *message = New(aType, aReserveHeader, aSettings.GetPriority());
-
-    if (message)
-    {
-        message->SetLinkSecurityEnabled(aSettings.IsLinkSecurityEnabled());
     }
 
     return message;
@@ -119,7 +108,7 @@ Buffer *MessagePool::NewBuffer(Message::Priority aPriority)
 
     while ((
 #if OPENTHREAD_CONFIG_MESSAGE_USE_HEAP_ENABLE
-               buffer = static_cast<Buffer *>(Instance::HeapCAlloc(1, sizeof(Buffer)))
+               buffer = static_cast<Buffer *>(Heap::CAlloc(1, sizeof(Buffer)))
 #elif OPENTHREAD_CONFIG_PLATFORM_MESSAGE_MANAGEMENT
                buffer = static_cast<Buffer *>(otPlatMessagePoolNew(&GetInstance()))
 #else
@@ -151,7 +140,7 @@ void MessagePool::FreeBuffers(Buffer *aBuffer)
     {
         Buffer *next = aBuffer->GetNextBuffer();
 #if OPENTHREAD_CONFIG_MESSAGE_USE_HEAP_ENABLE
-        Instance::HeapFree(aBuffer);
+        Heap::Free(aBuffer);
 #elif OPENTHREAD_CONFIG_PLATFORM_MESSAGE_MANAGEMENT
         otPlatMessagePoolFree(&GetInstance(), aBuffer);
 #else
@@ -172,7 +161,7 @@ uint16_t MessagePool::GetFreeBufferCount(void) const
     uint16_t rval;
 
 #if OPENTHREAD_CONFIG_MESSAGE_USE_HEAP_ENABLE
-    rval = static_cast<uint16_t>(GetInstance().GetHeap().GetFreeSize() / sizeof(Buffer));
+    rval = static_cast<uint16_t>(Instance::GetHeap().GetFreeSize() / sizeof(Buffer));
 #elif OPENTHREAD_CONFIG_PLATFORM_MESSAGE_MANAGEMENT
     rval = otPlatMessagePoolNumFreeBuffers(&GetInstance());
 #else
@@ -185,7 +174,7 @@ uint16_t MessagePool::GetFreeBufferCount(void) const
 uint16_t MessagePool::GetTotalBufferCount(void) const
 {
 #if OPENTHREAD_CONFIG_MESSAGE_USE_HEAP_ENABLE
-    return static_cast<uint16_t>(GetInstance().GetHeap().GetCapacity() / sizeof(Buffer));
+    return static_cast<uint16_t>(Instance::GetHeap().GetCapacity() / sizeof(Buffer));
 #else
     return OPENTHREAD_CONFIG_NUM_MESSAGE_BUFFERS;
 #endif
@@ -577,7 +566,7 @@ Error Message::Read(uint16_t aOffset, void *aBuf, uint16_t aLength) const
     return (ReadBytes(aOffset, aBuf, aLength) == aLength) ? kErrorNone : kErrorParse;
 }
 
-bool Message::CompareBytes(uint16_t aOffset, const void *aBuf, uint16_t aLength) const
+bool Message::CompareBytes(uint16_t aOffset, const void *aBuf, uint16_t aLength, ByteMatcher aMatcher) const
 {
     uint16_t       bytesToCompare = aLength;
     const uint8_t *bufPtr         = reinterpret_cast<const uint8_t *>(aBuf);
@@ -587,7 +576,7 @@ bool Message::CompareBytes(uint16_t aOffset, const void *aBuf, uint16_t aLength)
 
     while (chunk.GetLength() > 0)
     {
-        VerifyOrExit(chunk.MatchesBytesIn(bufPtr));
+        VerifyOrExit(chunk.MatchesBytesIn(bufPtr, aMatcher));
         bufPtr += chunk.GetLength();
         bytesToCompare -= chunk.GetLength();
         GetNextChunk(aLength, chunk);
@@ -600,7 +589,8 @@ exit:
 bool Message::CompareBytes(uint16_t       aOffset,
                            const Message &aOtherMessage,
                            uint16_t       aOtherOffset,
-                           uint16_t       aLength) const
+                           uint16_t       aLength,
+                           ByteMatcher    aMatcher) const
 {
     uint16_t bytesToCompare = aLength;
     Chunk    chunk;
@@ -609,7 +599,7 @@ bool Message::CompareBytes(uint16_t       aOffset,
 
     while (chunk.GetLength() > 0)
     {
-        VerifyOrExit(aOtherMessage.CompareBytes(aOtherOffset, chunk.GetBytes(), chunk.GetLength()));
+        VerifyOrExit(aOtherMessage.CompareBytes(aOtherOffset, chunk.GetBytes(), chunk.GetLength(), aMatcher));
         aOtherOffset += chunk.GetLength();
         bytesToCompare -= chunk.GetLength();
         GetNextChunk(aLength, chunk);
@@ -665,10 +655,11 @@ Message *Message::Clone(uint16_t aLength) const
 {
     Error    error = kErrorNone;
     Message *messageCopy;
+    Settings settings(IsLinkSecurityEnabled() ? kWithLinkSecurity : kNoLinkSecurity, GetPriority());
     uint16_t offset;
 
-    VerifyOrExit((messageCopy = GetMessagePool()->New(GetType(), GetReserved(), GetPriority())) != nullptr,
-                 error = kErrorNoBufs);
+    messageCopy = GetMessagePool()->Allocate(GetType(), GetReserved(), settings);
+    VerifyOrExit(messageCopy != nullptr, error = kErrorNoBufs);
     SuccessOrExit(error = messageCopy->SetLength(aLength));
     CopyTo(0, 0, aLength, *messageCopy);
 
@@ -677,7 +668,6 @@ Message *Message::Clone(uint16_t aLength) const
     messageCopy->SetOffset(offset);
 
     messageCopy->SetSubType(GetSubType());
-    messageCopy->SetLinkSecurityEnabled(IsLinkSecurityEnabled());
 #if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
     messageCopy->SetTimeSync(IsTimeSync());
 #endif
@@ -854,7 +844,7 @@ PriorityQueue::PriorityQueue(void)
 
 Message *PriorityQueue::FindFirstNonNullTail(Message::Priority aStartPriorityLevel) const
 {
-    // Find the first non-nullptr tail starting from the given priority
+    // Find the first non-`nullptr` tail starting from the given priority
     // level and moving forward (wrapping from priority value
     // `kNumPriorities` -1 back to 0).
 

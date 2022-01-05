@@ -37,6 +37,7 @@
 
 #include "coap/coap_message.hpp"
 #include "common/as_core_type.hpp"
+#include "common/heap.hpp"
 #include "common/instance.hpp"
 #include "common/locator_getters.hpp"
 #include "common/logging.hpp"
@@ -114,7 +115,7 @@ void BorderAgent::SendErrorMessage(ForwardContext &aForwardContext, Error aError
     Coap::CoapSecure &coaps   = Get<Coap::CoapSecure>();
     Coap::Message *   message = nullptr;
 
-    VerifyOrExit((message = NewMeshCoPMessage(coaps)) != nullptr, error = kErrorNoBufs);
+    VerifyOrExit((message = coaps.NewPriorityMessage()) != nullptr, error = kErrorNoBufs);
     SuccessOrExit(error = aForwardContext.ToHeader(*message, CoapCodeFromError(aError)));
     SuccessOrExit(error = coaps.SendMessage(*message, coaps.GetMessageInfo()));
 
@@ -129,7 +130,7 @@ void BorderAgent::SendErrorMessage(const Coap::Message &aRequest, bool aSeparate
     Coap::CoapSecure &coaps   = Get<Coap::CoapSecure>();
     Coap::Message *   message = nullptr;
 
-    VerifyOrExit((message = NewMeshCoPMessage(coaps)) != nullptr, error = kErrorNoBufs);
+    VerifyOrExit((message = coaps.NewPriorityMessage()) != nullptr, error = kErrorNoBufs);
 
     if (aRequest.IsNonConfirmable() || aSeparate)
     {
@@ -172,7 +173,7 @@ void BorderAgent::HandleCoapResponse(ForwardContext &aForwardContext, const Coap
     Error          error;
 
     SuccessOrExit(error = aResult);
-    VerifyOrExit((message = NewMeshCoPMessage(Get<Coap::CoapSecure>())) != nullptr, error = kErrorNoBufs);
+    VerifyOrExit((message = Get<Coap::CoapSecure>().NewPriorityMessage()) != nullptr, error = kErrorNoBufs);
 
     if (aForwardContext.IsPetition() && aResponse->GetCode() == Coap::kCodeChanged)
     {
@@ -215,7 +216,7 @@ exit:
         SendErrorMessage(aForwardContext, error);
     }
 
-    Instance::HeapFree(&aForwardContext);
+    Heap::Free(&aForwardContext);
 }
 
 template <Coap::Resource BorderAgent::*aResource>
@@ -359,7 +360,7 @@ bool BorderAgent::HandleUdpReceive(const Message &aMessage, const Ip6::MessageIn
 
     VerifyOrExit(aMessage.GetLength() > 0, error = kErrorNone);
 
-    VerifyOrExit((message = NewMeshCoPMessage(Get<Coap::CoapSecure>())) != nullptr, error = kErrorNoBufs);
+    VerifyOrExit((message = Get<Coap::CoapSecure>().NewPriorityMessage()) != nullptr, error = kErrorNoBufs);
 
     message->InitAsNonConfirmablePost();
     SuccessOrExit(error = message->AppendUriPathOptions(UriPath::kProxyRx));
@@ -400,7 +401,7 @@ void BorderAgent::HandleRelayReceive(const Coap::Message &aMessage)
     Error          error;
 
     VerifyOrExit(aMessage.IsNonConfirmablePostRequest(), error = kErrorDrop);
-    VerifyOrExit((message = NewMeshCoPMessage(Get<Coap::CoapSecure>())) != nullptr, error = kErrorNoBufs);
+    VerifyOrExit((message = Get<Coap::CoapSecure>().NewPriorityMessage()) != nullptr, error = kErrorNoBufs);
 
     message->InitAsNonConfirmablePost();
     SuccessOrExit(error = message->AppendUriPathOptions(UriPath::kRelayRx));
@@ -460,7 +461,7 @@ void BorderAgent::HandleRelayTransmit(const Coap::Message &aMessage)
 
     SuccessOrExit(error = Tlv::Find<JoinerRouterLocatorTlv>(aMessage, joinerRouterRloc));
 
-    VerifyOrExit((message = NewMeshCoPMessage(Get<Tmf::Agent>())) != nullptr, error = kErrorNoBufs);
+    VerifyOrExit((message = Get<Tmf::Agent>().NewPriorityMessage()) != nullptr, error = kErrorNoBufs);
 
     SuccessOrExit(error = message->InitAsNonConfirmablePost(UriPath::kRelayTx));
     SuccessOrExit(error = message->SetPayloadMarker());
@@ -496,14 +497,14 @@ Error BorderAgent::ForwardToLeader(const Coap::Message &   aMessage,
     Coap::Message *  message = nullptr;
     uint16_t         offset  = 0;
 
-    VerifyOrExit((message = NewMeshCoPMessage(Get<Tmf::Agent>())) != nullptr, error = kErrorNoBufs);
+    VerifyOrExit((message = Get<Tmf::Agent>().NewPriorityMessage()) != nullptr, error = kErrorNoBufs);
 
     if (aSeparate)
     {
         SuccessOrExit(error = Get<Coap::CoapSecure>().SendAck(aMessage, aMessageInfo));
     }
 
-    forwardContext = static_cast<ForwardContext *>(Instance::HeapCAlloc(1, sizeof(ForwardContext)));
+    forwardContext = static_cast<ForwardContext *>(Heap::CAlloc(1, sizeof(ForwardContext)));
     VerifyOrExit(forwardContext != nullptr, error = kErrorNoBufs);
 
     forwardContext->Init(GetInstance(), aMessage, aPetition, aSeparate);
@@ -539,7 +540,7 @@ exit:
     {
         if (forwardContext != nullptr)
         {
-            Instance::HeapFree(forwardContext);
+            Heap::Free(forwardContext);
         }
 
         FreeMessage(message);

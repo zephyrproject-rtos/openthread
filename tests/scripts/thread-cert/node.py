@@ -33,6 +33,7 @@ import logging
 import os
 import re
 import socket
+import string
 import subprocess
 import sys
 import time
@@ -136,6 +137,21 @@ class OtbrDocker:
 
         assert launch_ok
 
+        self.start_ot_ctl()
+
+    def __repr__(self):
+        return f'OtbrDocker<{self.nodeid}>'
+
+    def start_otbr_service(self):
+        self.bash('service otbr-agent start')
+        self.simulator.go(3)
+        self.start_ot_ctl()
+
+    def stop_otbr_service(self):
+        self.stop_ot_ctl()
+        self.bash('service otbr-agent stop')
+
+    def start_ot_ctl(self):
         cmd = f'docker exec -i {self._docker_name} ot-ctl'
         self.pexpect = pexpect.popen_spawn.PopenSpawn(cmd, timeout=30)
         if self.verbose:
@@ -151,8 +167,10 @@ class OtbrDocker:
             except pexpect.TIMEOUT:
                 timeout -= 0.1
 
-    def __repr__(self):
-        return f'OtbrDocker<{self.nodeid}>'
+    def stop_ot_ctl(self):
+        self.pexpect.sendeof()
+        self.pexpect.wait()
+        self.pexpect.proc.kill()
 
     def destroy(self):
         logging.info("Destroying %s", self)
@@ -292,16 +310,46 @@ class OtbrDocker:
                     line = line[1:]
                 record = list(line.split())
 
-                if section != 'QUESTION':
+                if section == 'QUESTION':
+                    if record[2] in ('SRV', 'TXT'):
+                        record[0] = self.__unescape_dns_instance_name(record[0])
+                else:
                     record[1] = int(record[1])
                     if record[3] == 'SRV':
+                        record[0] = self.__unescape_dns_instance_name(record[0])
                         record[4], record[5], record[6] = map(int, [record[4], record[5], record[6]])
                     elif record[3] == 'TXT':
+                        record[0] = self.__unescape_dns_instance_name(record[0])
                         record[4:] = [self.__parse_dns_dig_txt(line)]
+                    elif record[3] == 'PTR':
+                        record[4] = self.__unescape_dns_instance_name(record[4])
 
                 dig_result[section].append(tuple(record))
 
         return dig_result
+
+    @staticmethod
+    def __unescape_dns_instance_name(name: str) -> str:
+        new_name = []
+        i = 0
+        while i < len(name):
+            c = name[i]
+
+            if c == '\\':
+                assert i + 1 < len(name), name
+                if name[i + 1].isdigit():
+                    assert i + 3 < len(name) and name[i + 2].isdigit() and name[i + 3].isdigit(), name
+                    new_name.append(chr(int(name[i + 1:i + 4])))
+                    i += 3
+                else:
+                    new_name.append(name[i + 1])
+                    i += 1
+            else:
+                new_name.append(c)
+
+            i += 1
+
+        return ''.join(new_name)
 
     def __parse_dns_dig_txt(self, line: str):
         # Example TXT entry:
@@ -791,6 +839,21 @@ class NodeImpl:
         self.send_command(cmd)
         self._expect_done()
 
+    def radiofilter_is_enabled(self) -> bool:
+        states = [r'Disabled', r'Enabled']
+        self.send_command('radiofilter')
+        return self._expect_result(states) == 'Enabled'
+
+    def radiofilter_enable(self):
+        cmd = 'radiofilter enable'
+        self.send_command(cmd)
+        self._expect_done()
+
+    def radiofilter_disable(self):
+        cmd = 'radiofilter disable'
+        self.send_command(cmd)
+        self._expect_done()
+
     def get_bbr_registration_jitter(self):
         self.send_command('bbr jitter')
         return int(self._expect_result(r'\d+'))
@@ -1029,6 +1092,7 @@ class NodeImpl:
 
     def srp_client_add_service(self, instance_name, service_name, port, priority=0, weight=0, txt_entries=[]):
         txt_record = "".join(self._encode_txt_entry(entry) for entry in txt_entries)
+        instance_name = self._escape_escapable(instance_name)
         self.send_command(
             f'srp client service add {instance_name} {service_name} {port} {priority} {weight} {txt_record}')
         self._expect_done()
@@ -1655,7 +1719,7 @@ class NodeImpl:
         omr_addrs = []
         for addr in self.get_addrs():
             for prefix in prefixes:
-                if (addr.startswith(prefix)):
+                if (addr.startswith(prefix)) and (addr != self.__getDua()):
                     omr_addrs.append(addr)
                     break
 
@@ -1950,6 +2014,18 @@ class NodeImpl:
                     'lqi': lqi,
                 })
             return networks
+
+    def scan_energy(self, timeout=10):
+        self.send_command('scan energy')
+        self.simulator.go(timeout)
+        rssi_list = []
+        for line in self._expect_command_output()[2:]:
+            _, channel, rssi, _ = line.split('|')
+            rssi_list.append({
+                'channel': int(channel.strip()),
+                'rssi': int(rssi.strip()),
+            })
+        return rssi_list
 
     def ping(self, ipaddr, num_responses=1, size=8, timeout=5, count=1, interval=1, hoplimit=64, interface=None):
         args = f'{ipaddr} {size} {count} {interval} {hoplimit} {timeout}'
@@ -2734,6 +2810,7 @@ class NodeImpl:
                 'aaaa_ttl': 7100,
             }
         """
+        instance = self._escape_escapable(instance)
         cmd = f'dns service {instance} {service}'
         if server is not None:
             cmd += f' {server} {port}'
@@ -3245,6 +3322,7 @@ EOF
 
 
 class OtbrNode(LinuxHost, NodeImpl, OtbrDocker):
+    TUN_DEV = config.THREAD_IFNAME
     is_otbr = True
     is_bbr = True  # OTBR is also BBR
     node_type = 'otbr-docker'
@@ -3257,6 +3335,14 @@ class OtbrNode(LinuxHost, NodeImpl, OtbrDocker):
         self.set_log_level(5)
         super().start()
 
+    def add_ipaddr(self, addr):
+        cmd = f'ip -6 addr add {addr}/64 dev {self.TUN_DEV}'
+        self.bash(cmd)
+
+    def add_ipmaddr_tun(self, ip: str):
+        cmd = f'python3 /app/third_party/openthread/repo/tests/scripts/thread-cert/mcast6.py {self.TUN_DEV} {ip} &'
+        self.bash(cmd)
+
 
 class HostNode(LinuxHost, OtbrDocker):
     is_host = True
@@ -3265,6 +3351,7 @@ class HostNode(LinuxHost, OtbrDocker):
         self.nodeid = nodeid
         self.name = name or ('Host%d' % nodeid)
         super().__init__(nodeid, **kwargs)
+        self.bash('service otbr-agent stop')
 
     def start(self, start_radvd=True, prefix=config.DOMAIN_PREFIX, slaac=False):
         self._setup_sysctl()

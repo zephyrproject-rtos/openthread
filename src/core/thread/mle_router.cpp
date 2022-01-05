@@ -72,6 +72,7 @@ MleRouter::MleRouter(Instance &aInstance)
 #if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
     , mPreferredLeaderPartitionId(0)
     , mCcmEnabled(false)
+    , mThreadVersionCheckEnabled(true)
 #endif
     , mRouterEligible(true)
     , mAddressSolicitPending(false)
@@ -132,8 +133,14 @@ bool MleRouter::IsRouterEligible(void) const
     }
     if (!secPolicy.mRoutersEnabled)
     {
+#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
+        VerifyOrExit(!mThreadVersionCheckEnabled ||
+                     secPolicy.mVersionThresholdForRouting + SecurityPolicy::kVersionThresholdOffsetVersion <=
+                         kThreadVersion);
+#else
         VerifyOrExit(secPolicy.mVersionThresholdForRouting + SecurityPolicy::kVersionThresholdOffsetVersion <=
                      kThreadVersion);
+#endif
     }
 #endif
 
@@ -1063,7 +1070,7 @@ uint8_t MleRouter::GetLinkCost(uint8_t aRouterId)
 
     router = mRouterTable.GetRouter(aRouterId);
 
-    // nullptr aRouterId indicates non-existing next hop, hence return kMaxRouteCost for it.
+    // `nullptr` aRouterId indicates non-existing next hop, hence return kMaxRouteCost for it.
     VerifyOrExit(router != nullptr);
 
     rval = mRouterTable.GetLinkCost(*router);
@@ -1552,7 +1559,7 @@ void MleRouter::UpdateRoutes(const RouteTlv &aRoute, uint8_t aRouterId)
                      (router.GetNextHop() == kInvalidRouterId) ? 0xffff : Rloc16FromRouterId(router.GetNextHop()),
                      router.GetCost(), mRouterTable.GetLinkCost(router), router.GetLinkInfo().GetLinkQuality(),
                      router.GetLinkQualityOut(),
-                     router.GetRloc16() == GetRloc16() ? "device" : (router.IsStateValid() ? "yes" : "no"));
+                     router.GetRloc16() == GetRloc16() ? "device" : ToYesNo(router.IsStateValid()));
     }
 
 #else
@@ -2111,23 +2118,6 @@ Error MleRouter::UpdateChildAddresses(const Message &aMessage, uint16_t aOffset,
             address.Clear();
             address.SetPrefix(context.mPrefix);
             address.SetIid(entry.GetIid());
-
-#if OPENTHREAD_FTD && OPENTHREAD_CONFIG_TMF_PROXY_DUA_ENABLE
-            if (Get<BackboneRouter::Leader>().IsDomainUnicast(address))
-            {
-                hasDua = true;
-
-                if (oldDuaPtr != nullptr)
-                {
-                    Get<DuaManager>().UpdateChildDomainUnicastAddress(
-                        aChild, oldDua != address ? ChildDuaState::kChanged : ChildDuaState::kUnchanged);
-                }
-                else
-                {
-                    Get<DuaManager>().UpdateChildDomainUnicastAddress(aChild, ChildDuaState::kAdded);
-                }
-            }
-#endif
         }
         else
         {
@@ -2152,11 +2142,37 @@ Error MleRouter::UpdateChildAddresses(const Message &aMessage, uint16_t aOffset,
         if (error == kErrorNone)
         {
             storedCount++;
+
+#if OPENTHREAD_FTD && OPENTHREAD_CONFIG_TMF_PROXY_DUA_ENABLE
+            if (Get<BackboneRouter::Leader>().IsDomainUnicast(address))
+            {
+                hasDua = true;
+
+                if (oldDuaPtr != nullptr)
+                {
+                    Get<DuaManager>().UpdateChildDomainUnicastAddress(
+                        aChild, oldDua != address ? ChildDuaState::kChanged : ChildDuaState::kUnchanged);
+                }
+                else
+                {
+                    Get<DuaManager>().UpdateChildDomainUnicastAddress(aChild, ChildDuaState::kAdded);
+                }
+            }
+#endif
+
             otLogInfoMle("Child 0x%04x IPv6 address[%d]=%s", aChild.GetRloc16(), storedCount,
                          address.ToString().AsCString());
         }
         else
         {
+#if OPENTHREAD_FTD && OPENTHREAD_CONFIG_TMF_PROXY_DUA_ENABLE
+            if (Get<BackboneRouter::Leader>().IsDomainUnicast(address))
+            {
+                // if not able to store DUA, then assume child does not have one
+                hasDua = false;
+            }
+#endif
+
             otLogWarnMle("Error %s adding IPv6 address %s to child 0x%04x", ErrorToString(error),
                          address.ToString().AsCString(), aChild.GetRloc16());
         }
@@ -2481,6 +2497,15 @@ void MleRouter::HandleChildUpdateRequest(const Message &aMessage, const Ip6::Mes
     switch (ReadLeaderData(aMessage, leaderData))
     {
     case kErrorNone:
+        if (child->IsFullNetworkData())
+        {
+            child->SetNetworkDataVersion(leaderData.GetDataVersion());
+        }
+        else
+        {
+            child->SetNetworkDataVersion(leaderData.GetStableDataVersion());
+        }
+        break;
     case kErrorNotFound:
         break;
     default:

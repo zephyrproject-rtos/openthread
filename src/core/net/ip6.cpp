@@ -80,13 +80,13 @@ Ip6::Ip6(Instance &aInstance)
 
 Message *Ip6::NewMessage(uint16_t aReserved, const Message::Settings &aSettings)
 {
-    return Get<MessagePool>().New(Message::kTypeIp6,
-                                  sizeof(Header) + sizeof(HopByHopHeader) + sizeof(OptionMpl) + aReserved, aSettings);
+    return Get<MessagePool>().Allocate(
+        Message::kTypeIp6, sizeof(Header) + sizeof(HopByHopHeader) + sizeof(OptionMpl) + aReserved, aSettings);
 }
 
 Message *Ip6::NewMessage(const uint8_t *aData, uint16_t aDataLength, const Message::Settings &aSettings)
 {
-    Message *message = Get<MessagePool>().New(Message::kTypeIp6, 0, aSettings);
+    Message *message = Get<MessagePool>().Allocate(Message::kTypeIp6, /* aReserveHeader */ 0, aSettings);
 
     VerifyOrExit(message != nullptr);
 
@@ -307,7 +307,7 @@ Error Ip6::InsertMplOption(Message &aMessage, Header &aHeader, MessageInfo &aMes
 
             if ((messageCopy = aMessage.Clone()) != nullptr)
             {
-                IgnoreError(HandleDatagram(*messageCopy, nullptr, nullptr, true));
+                IgnoreError(HandleDatagram(*messageCopy, nullptr, nullptr, /* aFromNcpHost */ true));
                 otLogInfoIp6("Message copy for indirect transmission to sleepy children");
             }
             else
@@ -540,7 +540,7 @@ void Ip6::HandleSendQueue(void)
     while ((message = mSendQueue.GetHead()) != nullptr)
     {
         mSendQueue.Dequeue(*message);
-        IgnoreError(HandleDatagram(*message, nullptr, nullptr, false));
+        IgnoreError(HandleDatagram(*message, nullptr, nullptr, /* aFromNcpHost */ false));
     }
 }
 
@@ -1084,7 +1084,7 @@ exit:
     return error;
 }
 
-Error Ip6::SendRaw(Message &aMessage)
+Error Ip6::SendRaw(Message &aMessage, bool aFromNcpHost)
 {
     Error       error = kErrorNone;
     Header      header;
@@ -1103,7 +1103,7 @@ Error Ip6::SendRaw(Message &aMessage)
         SuccessOrExit(error = InsertMplOption(aMessage, header, messageInfo));
     }
 
-    error = HandleDatagram(aMessage, nullptr, nullptr, true);
+    error = HandleDatagram(aMessage, nullptr, nullptr, aFromNcpHost);
     freed = true;
 
 exit:
@@ -1213,6 +1213,7 @@ start:
         {
             // Remove encapsulating header and start over.
             aMessage.RemoveHeader(aMessage.GetOffset());
+            Get<MeshForwarder>().LogMessage(MeshForwarder::kMessageReceive, aMessage, nullptr, kErrorNone);
             goto start;
         }
 

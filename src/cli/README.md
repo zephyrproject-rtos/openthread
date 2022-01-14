@@ -95,7 +95,7 @@ Done
 - [releaserouterid](#releaserouterid-routerid)
 - [reset](#reset)
 - [rloc16](#rloc16)
-- [route](#route-add-prefix-s-prf)
+- [route](#route)
 - [router](#router-list)
 - [routerdowngradethreshold](#routerdowngradethreshold)
 - [routereligible](#routereligible)
@@ -321,6 +321,17 @@ Set jitter (in seconds) for Backbone Router registration for Thread 1.2 FTD.
 
 ```bash
 > bbr jitter 10
+Done
+```
+
+### bbr skipseqnuminc
+
+Skip increase of Sequence Number when updating the local BBR Dataset from the Network Data.
+
+Only for testing/reference device.
+
+```bash
+> bbr skipseqnuminc
 Done
 ```
 

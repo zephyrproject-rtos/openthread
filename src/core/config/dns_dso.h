@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2019, The OpenThread Authors.
+ *  Copyright (c) 2021, The OpenThread Authors.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -28,43 +28,51 @@
 
 /**
  * @file
- * @brief
- *  This file defines the OpenThread entropy source API.
+ *   This file includes compile-time configurations for the DNS Stateful Operations (DSO).
+ *
  */
 
-#ifndef OPENTHREAD_ENTROPY_H_
-#define OPENTHREAD_ENTROPY_H_
+#ifndef CONFIG_DNS_DSO_H_
+#define CONFIG_DNS_DSO_H_
 
-#include <mbedtls/entropy.h>
-
-#ifdef __cplusplus
-extern "C" {
+/**
+ * @def OPENTHREAD_CONFIG_DNS_DSO_ENABLE
+ *
+ * Define to 1 to enable DSO support.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_DNS_DSO_ENABLE
+#define OPENTHREAD_CONFIG_DNS_DSO_ENABLE 0
 #endif
 
 /**
- * @addtogroup api-entropy
+ * @def OPENTHREAD_CONFIG_DNS_DSO_CONNECTING_TIMEOUT
  *
- * @brief
- *   This module includes functions that manages entropy source.
- *
- * @{
+ * Specifies the maximum time (in msec) waiting for a connection to be established by DSO platform layer.
  *
  */
-
-/**
- * This function returns initialized mbedtls_entropy_context.
- *
- * @returns  A pointer to initialized mbedtls_entropy_context.
- */
-mbedtls_entropy_context *otEntropyMbedTlsContextGet(void);
-
-/**
- * @}
- *
- */
-
-#ifdef __cplusplus
-} // extern "C"
+#ifndef OPENTHREAD_CONFIG_DNS_DSO_CONNECTING_TIMEOUT
+#define OPENTHREAD_CONFIG_DNS_DSO_CONNECTING_TIMEOUT (45 * 1000)
 #endif
 
-#endif // OPENTHREAD_ENTROPY_H_
+/**
+ * @def OPENTHREAD_CONFIG_DNS_DSO_RESPONSE_TIMEOUT
+ *
+ * Specifies the maximum time (in msec) waiting for a response to a request.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_DNS_DSO_RESPONSE_TIMEOUT
+#define OPENTHREAD_CONFIG_DNS_DSO_RESPONSE_TIMEOUT (30 * 1000)
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_DNS_DSO_MAX_PENDING_REQUESTS
+ *
+ * Specifies the maximum number of pending requests per DSO session.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_DNS_DSO_MAX_PENDING_REQUESTS
+#define OPENTHREAD_CONFIG_DNS_DSO_MAX_PENDING_REQUESTS 3
+#endif
+
+#endif // CONFIG_DNS_DSO_H_

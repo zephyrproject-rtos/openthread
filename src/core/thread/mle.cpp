@@ -79,7 +79,7 @@ Mle::Mle(Instance &aInstance)
     , mDelayedResponseTimer(aInstance, Mle::HandleDelayedResponseTimer)
     , mMessageTransmissionTimer(aInstance, Mle::HandleMessageTransmissionTimer)
     , mParentLeaderCost(0)
-    , mParentRequestMode(kAttachAny)
+    , mAttachMode(kAnyPartition)
     , mParentPriority(0)
     , mParentLinkQuality3(0)
     , mParentLinkQuality2(0)
@@ -219,14 +219,14 @@ Error Mle::Start(StartMode aMode)
 
     if ((aMode == kAnnounceAttach) || (GetRloc16() == Mac::kShortAddrInvalid))
     {
-        IgnoreError(BecomeChild(kAttachAny));
+        Attach(kAnyPartition);
     }
 #if OPENTHREAD_FTD
     else if (IsActiveRouter(GetRloc16()))
     {
         if (Get<MleRouter>().BecomeRouter(ThreadStatusTlv::kTooFewRouters) != kErrorNone)
         {
-            IgnoreError(BecomeChild(kAttachAny));
+            Attach(kAnyPartition);
         }
     }
 #endif
@@ -310,9 +310,8 @@ exit:
     return;
 }
 
-Error Mle::Restore(void)
+void Mle::Restore(void)
 {
-    Error                 error = kErrorNone;
     Settings::NetworkInfo networkInfo;
     Settings::ParentInfo  parentInfo;
 
@@ -323,12 +322,17 @@ Error Mle::Restore(void)
     Get<DuaManager>().Restore();
 #endif
 
-    SuccessOrExit(error = Get<Settings>().Read(networkInfo));
+    SuccessOrExit(Get<Settings>().Read(networkInfo));
 
     Get<KeyManager>().SetCurrentKeySequence(networkInfo.GetKeySequence());
     Get<KeyManager>().SetMleFrameCounter(networkInfo.GetMleFrameCounter());
     Get<KeyManager>().SetAllMacFrameCounters(networkInfo.GetMacFrameCounter());
+
+#if OPENTHREAD_MTD
+    mDeviceMode.Set(networkInfo.GetDeviceMode() & ~DeviceMode::kModeFullThreadDevice);
+#else
     mDeviceMode.Set(networkInfo.GetDeviceMode());
+#endif
 
     // force re-attach when version mismatch.
     VerifyOrExit(networkInfo.GetVersion() == kThreadVersion);
@@ -344,7 +348,12 @@ Error Mle::Restore(void)
         ExitNow();
     }
 
-    Get<Mac::Mac>().SetShortAddress(networkInfo.GetRloc16());
+#if OPENTHREAD_MTD
+    if (!IsActiveRouter(networkInfo.GetRloc16()))
+#endif
+    {
+        Get<Mac::Mac>().SetShortAddress(networkInfo.GetRloc16());
+    }
     Get<Mac::Mac>().SetExtAddress(networkInfo.GetExtAddress());
 
     mMeshLocal64.GetAddress().SetIid(networkInfo.GetMeshLocalIid());
@@ -356,9 +365,7 @@ Error Mle::Restore(void)
 
     if (!IsActiveRouter(networkInfo.GetRloc16()))
     {
-        error = Get<Settings>().Read(parentInfo);
-
-        if (error != kErrorNone)
+        if (Get<Settings>().Read(parentInfo) != kErrorNone)
         {
             // If the restored RLOC16 corresponds to an end-device, it
             // is expected that the `ParentInfo` settings to be valid
@@ -390,11 +397,11 @@ Error Mle::Restore(void)
     }
 #endif
 
-    // Sucessfully restored the network information from non-volatile settings after boot.
+    // Successfully restored the network information from non-volatile settings after boot.
     mHasRestored = true;
 
 exit:
-    return error;
+    return;
 }
 
 Error Mle::Store(void)
@@ -484,18 +491,28 @@ Error Mle::BecomeDetached(void)
     SetStateDetached();
     mParent.SetState(Neighbor::kStateInvalid);
     SetRloc16(Mac::kShortAddrInvalid);
-    IgnoreError(BecomeChild(kAttachAny));
+    Attach(kAnyPartition);
 
 exit:
     return error;
 }
 
-Error Mle::BecomeChild(AttachMode aMode)
+Error Mle::BecomeChild(void)
 {
     Error error = kErrorNone;
 
     VerifyOrExit(!IsDisabled(), error = kErrorInvalidState);
     VerifyOrExit(!IsAttaching(), error = kErrorBusy);
+
+    Attach(kAnyPartition);
+
+exit:
+    return error;
+}
+
+void Mle::Attach(AttachMode aMode)
+{
+    VerifyOrExit(!IsDisabled() && !IsAttaching());
 
     if (!IsDetached())
     {
@@ -516,9 +533,9 @@ Error Mle::BecomeChild(AttachMode aMode)
 
     mParentCandidate.Clear();
     SetAttachState(kAttachStateStart);
-    mParentRequestMode = aMode;
+    mAttachMode = aMode;
 
-    if (aMode != kAttachBetter)
+    if (aMode != kBetterPartition)
     {
 #if OPENTHREAD_FTD
         if (IsFullThreadDevice())
@@ -552,7 +569,7 @@ Error Mle::BecomeChild(AttachMode aMode)
     }
 
 exit:
-    return error;
+    return;
 }
 
 uint32_t Mle::GetAttachStartDelay(void) const
@@ -668,7 +685,7 @@ void Mle::SetStateChild(uint16_t aRloc16)
 #if OPENTHREAD_FTD
     if (IsFullThreadDevice())
     {
-        Get<MleRouter>().HandleChildStart(mParentRequestMode);
+        Get<MleRouter>().HandleChildStart(mAttachMode);
     }
 #endif
 
@@ -748,6 +765,10 @@ Error Mle::SetDeviceMode(DeviceMode aDeviceMode)
     Error      error   = kErrorNone;
     DeviceMode oldMode = mDeviceMode;
 
+#if OPENTHREAD_MTD
+    VerifyOrExit(!aDeviceMode.IsFullThreadDevice(), error = kErrorInvalidArgs);
+#endif
+
     VerifyOrExit(aDeviceMode.IsValid(), error = kErrorInvalidArgs);
     VerifyOrExit(mDeviceMode != aDeviceMode);
     mDeviceMode = aDeviceMode;
@@ -772,7 +793,7 @@ Error Mle::SetDeviceMode(DeviceMode aDeviceMode)
     case kRoleDetached:
         mAttachCounter = 0;
         SetStateDetached();
-        IgnoreError(BecomeChild(kAttachAny));
+        Attach(kAnyPartition);
         break;
 
     case kRoleChild:
@@ -1751,7 +1772,7 @@ bool Mle::HasAcceptableParentCandidate(void) const
         // new parent candidate is compared with the current parent
         // and that it is indeed preferred over the current one.
 
-        VerifyOrExit(mReceivedResponseFromParent || (mParentRequestMode == kAttachBetter));
+        VerifyOrExit(mReceivedResponseFromParent || (mAttachMode == kBetterPartition));
     }
 
     hasAcceptableParent = true;
@@ -1788,12 +1809,12 @@ void Mle::HandleAttachTimer(void)
     case kAttachStateStart:
         if (mAttachCounter > 0)
         {
-            LogNote("Attempt to attach - attempt %d, %s %s", mAttachCounter, AttachModeToString(mParentRequestMode),
+            LogNote("Attempt to attach - attempt %d, %s %s", mAttachCounter, AttachModeToString(mAttachMode),
                     ReattachStateToString(mReattachState));
         }
         else
         {
-            LogNote("Attempt to attach - %s %s", AttachModeToString(mParentRequestMode),
+            LogNote("Attempt to attach - %s %s", AttachModeToString(mAttachMode),
                     ReattachStateToString(mReattachState));
         }
 
@@ -1804,16 +1825,16 @@ void Mle::HandleAttachTimer(void)
 
         // initial MLE Parent Request has both E and R flags set in Scan Mask TLV
         // during reattach when losing connectivity.
-        if (mParentRequestMode == kAttachSame1 || mParentRequestMode == kAttachSame2)
+        if (mAttachMode == kSamePartition || mAttachMode == kSamePartitionRetry)
         {
-            IgnoreError(SendParentRequest(kParentRequestTypeRoutersAndReeds));
+            SendParentRequest(kToRoutersAndReeds);
             delay = kParentRequestReedTimeout;
         }
         // initial MLE Parent Request has only R flag set in Scan Mask TLV for
         // during initial attach or downgrade process
         else
         {
-            IgnoreError(SendParentRequest(kParentRequestTypeRouters));
+            SendParentRequest(kToRouters);
             delay = kParentRequestRouterTimeout;
         }
 
@@ -1821,7 +1842,7 @@ void Mle::HandleAttachTimer(void)
 
     case kAttachStateParentRequestRouter:
         SetAttachState(kAttachStateParentRequestReed);
-        IgnoreError(SendParentRequest(kParentRequestTypeRoutersAndReeds));
+        SendParentRequest(kToRoutersAndReeds);
         delay = kParentRequestReedTimeout;
         break;
 
@@ -1839,7 +1860,7 @@ void Mle::HandleAttachTimer(void)
             // (with `mAnnounceDelay` wait between them).
 
             SetAttachState(kAttachStateAnnounce);
-            IgnoreError(SendParentRequest(kParentRequestTypeRoutersAndReeds));
+            SendParentRequest(kToRoutersAndReeds);
             mAnnounceChannel = Mac::ChannelMask::kChannelIteratorFirst;
             delay            = mAnnounceDelay;
             break;
@@ -1924,9 +1945,10 @@ uint32_t Mle::Reattach(void)
 
     VerifyOrExit(mReattachState == kReattachStop);
 
-    switch (mParentRequestMode)
+    switch (mAttachMode)
     {
-    case kAttachAny:
+    case kAnyPartition:
+    case kBetterParent:
         if (!IsChild())
         {
             if (mAlternatePanId != Mac::kPanIdBroadcast)
@@ -1956,16 +1978,16 @@ uint32_t Mle::Reattach(void)
 
         break;
 
-    case kAttachSame1:
-        IgnoreError(BecomeChild(kAttachSame2));
+    case kSamePartition:
+        Attach(kSamePartitionRetry);
         break;
 
-    case kAttachSame2:
-    case kAttachSameDowngrade:
-        IgnoreError(BecomeChild(kAttachAny));
+    case kSamePartitionRetry:
+    case kDowngradeToReed:
+        Attach(kAnyPartition);
         break;
 
-    case kAttachBetter:
+    case kBetterPartition:
         break;
     }
 
@@ -1982,15 +2004,12 @@ void Mle::HandleDelayedResponseTimer(void)
 {
     TimeMilli now          = TimerMilli::GetNow();
     TimeMilli nextSendTime = now.GetDistantFuture();
-    Message * nextMessage;
 
-    for (Message *message = mDelayedResponses.GetHead(); message != nullptr; message = nextMessage)
+    for (Message &message : mDelayedResponses)
     {
         DelayedResponseMetadata metadata;
 
-        nextMessage = message->GetNext();
-
-        metadata.ReadFrom(*message);
+        metadata.ReadFrom(message);
 
         if (now < metadata.mSendTime)
         {
@@ -2001,8 +2020,8 @@ void Mle::HandleDelayedResponseTimer(void)
         }
         else
         {
-            mDelayedResponses.Dequeue(*message);
-            SendDelayedResponse(*message, metadata);
+            mDelayedResponses.Dequeue(message);
+            SendDelayedResponse(message, metadata);
         }
     }
 
@@ -2053,26 +2072,22 @@ void Mle::RemoveDelayedDataRequestMessage(const Ip6::Address &aDestination)
 
 void Mle::RemoveDelayedMessage(Message::SubType aSubType, MessageType aMessageType, const Ip6::Address *aDestination)
 {
-    Message *nextMessage;
-
-    for (Message *message = mDelayedResponses.GetHead(); message != nullptr; message = nextMessage)
+    for (Message &message : mDelayedResponses)
     {
         DelayedResponseMetadata metadata;
 
-        nextMessage = message->GetNext();
+        metadata.ReadFrom(message);
 
-        metadata.ReadFrom(*message);
-
-        if ((message->GetSubType() == aSubType) &&
+        if ((message.GetSubType() == aSubType) &&
             ((aDestination == nullptr) || (metadata.mDestination == *aDestination)))
         {
-            mDelayedResponses.DequeueAndFree(*message);
+            mDelayedResponses.DequeueAndFree(message);
             Log(kMessageRemoveDelayed, aMessageType, metadata.mDestination);
         }
     }
 }
 
-Error Mle::SendParentRequest(ParentRequestType aType)
+void Mle::SendParentRequest(ParentRequestType aType)
 {
     Error        error = kErrorNone;
     Message *    message;
@@ -2083,11 +2098,11 @@ Error Mle::SendParentRequest(ParentRequestType aType)
 
     switch (aType)
     {
-    case kParentRequestTypeRouters:
+    case kToRouters:
         scanMask = ScanMaskTlv::kRouterFlag;
         break;
 
-    case kParentRequestTypeRoutersAndReeds:
+    case kToRoutersAndReeds:
         scanMask = ScanMaskTlv::kRouterFlag | ScanMaskTlv::kEndDeviceFlag;
         break;
     }
@@ -2107,18 +2122,17 @@ Error Mle::SendParentRequest(ParentRequestType aType)
 
     switch (aType)
     {
-    case kParentRequestTypeRouters:
+    case kToRouters:
         Log(kMessageSend, kTypeParentRequestToRouters, destination);
         break;
 
-    case kParentRequestTypeRoutersAndReeds:
+    case kToRoutersAndReeds:
         Log(kMessageSend, kTypeParentRequestToRoutersReeds, destination);
         break;
     }
 
 exit:
     FreeMessageOnError(message, error);
-    return error;
 }
 
 void Mle::RequestShorterChildIdRequest(void)
@@ -3523,22 +3537,23 @@ void Mle::HandleParentResponse(const Message &aMessage, const Ip6::MessageInfo &
         bool isIdSequenceGreater =
             SerialNumber::IsGreater(connectivity.GetIdSequence(), Get<RouterTable>().GetRouterIdSequence());
 
-        switch (mParentRequestMode)
+        switch (mAttachMode)
         {
-        case kAttachAny:
+        case kAnyPartition:
+        case kBetterParent:
             VerifyOrExit(!isPartitionIdSame || isIdSequenceGreater);
             break;
 
-        case kAttachSame1:
-        case kAttachSame2:
+        case kSamePartition:
+        case kSamePartitionRetry:
             VerifyOrExit(isPartitionIdSame && isIdSequenceGreater);
             break;
 
-        case kAttachSameDowngrade:
+        case kDowngradeToReed:
             VerifyOrExit(isPartitionIdSame && (isIdSequenceSame || isIdSequenceGreater));
             break;
 
-        case kAttachBetter:
+        case kBetterPartition:
             VerifyOrExit(!isPartitionIdSame);
 
             VerifyOrExit(MleRouter::ComparePartitions(connectivity.GetActiveRouters() <= 1, leaderData,
@@ -4255,7 +4270,7 @@ void Mle::HandleParentSearchTimer(void)
     {
         LogInfo("PeriodicParentSearch: Parent RSS less than %d, searching for new parents", kParentSearchRssThreadhold);
         mParentSearchIsInBackoff = true;
-        IgnoreError(BecomeChild(kAttachAny));
+        Attach(kBetterParent);
     }
 
 exit:
@@ -4553,18 +4568,20 @@ const char *Mle::RoleToString(DeviceRole aRole)
 const char *Mle::AttachModeToString(AttachMode aMode)
 {
     static const char *const kAttachModeStrings[] = {
-        "any-partition",            // (0) kAttachAny
-        "same-partition-try-1",     // (1) kAttachSame1
-        "same-partition-try-2",     // (2) kAttachSame2
-        "better-partition",         // (3) kAttachBetter
-        "same-partition-downgrade", // (4) kAttachSameDowngrade
+        "AnyPartition",       // (0) kAnyPartition
+        "SamePartition",      // (1) kSamePartition
+        "SamePartitionRetry", // (2) kSamePartitionRetry
+        "BetterPartition",    // (3) kBetterPartition
+        "DowngradeToReed",    // (4) kDowngradeToReed
+        "BetterParent",       // (5) kBetterParent
     };
 
-    static_assert(kAttachAny == 0, "kAttachAny value is incorrect");
-    static_assert(kAttachSame1 == 1, "kAttachSame1 value is incorrect");
-    static_assert(kAttachSame2 == 2, "kAttachSame2 value is incorrect");
-    static_assert(kAttachBetter == 3, "kAttachBetter value is incorrect");
-    static_assert(kAttachSameDowngrade == 4, "kAttachSameDowngrade value is incorrect");
+    static_assert(kAnyPartition == 0, "kAnyPartition value is incorrect");
+    static_assert(kSamePartition == 1, "kSamePartition value is incorrect");
+    static_assert(kSamePartitionRetry == 2, "kSamePartitionRetry value is incorrect");
+    static_assert(kBetterPartition == 3, "kBetterPartition value is incorrect");
+    static_assert(kDowngradeToReed == 4, "kDowngradeToReed value is incorrect");
+    static_assert(kBetterParent == 5, "kBetterParent value is incorrect");
 
     return kAttachModeStrings[aMode];
 }

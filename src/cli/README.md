@@ -107,6 +107,7 @@ Done
 - [sntp](#sntp-query-sntp-server-ip-sntp-server-port)
 - [state](#state)
 - [srp](README_SRP.md)
+- [tcp](README_TCP.md)
 - [thread](#thread-start)
 - [trel](#trel)
 - [tvcheck](#tvcheck-enable)
@@ -321,17 +322,6 @@ Set jitter (in seconds) for Backbone Router registration for Thread 1.2 FTD.
 
 ```bash
 > bbr jitter 10
-Done
-```
-
-### bbr skipseqnuminc
-
-Skip increase of Sequence Number when updating the local BBR Dataset from the Network Data.
-
-Only for testing/reference device.
-
-```bash
-> bbr skipseqnuminc
 Done
 ```
 
@@ -2491,9 +2481,9 @@ Perform an IEEE 802.15.4 Active Scan.
 
 ```bash
 > scan
-| J | Network Name     | Extended PAN     | PAN  | MAC Address      | Ch | dBm | LQI |
-+---+------------------+------------------+------+------------------+----+-----+-----+
-| 0 | OpenThread       | dead00beef00cafe | ffff | f1d92a82c8d8fe43 | 11 | -20 |   0 |
+| PAN  | MAC Address      | Ch | dBm | LQI |
++------+------------------+----+-----+-----+
+| ffff | f1d92a82c8d8fe43 | 11 | -20 |   0 |
 Done
 ```
 

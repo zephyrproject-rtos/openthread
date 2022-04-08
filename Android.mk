@@ -251,6 +251,7 @@ LOCAL_SRC_FILES                                                  := \
     src/core/crypto/aes_ecb.cpp                                     \
     src/core/crypto/crypto_platform.cpp                             \
     src/core/crypto/ecdsa.cpp                                       \
+    src/core/crypto/ecdsa_tinycrypt.cpp                             \
     src/core/crypto/hkdf_sha256.cpp                                 \
     src/core/crypto/hmac_sha256.cpp                                 \
     src/core/crypto/mbedtls.cpp                                     \
@@ -411,6 +412,7 @@ LOCAL_SRC_FILES                                                  := \
     third_party/mbedtls/repo/library/cipher.c                       \
     third_party/mbedtls/repo/library/cipher_wrap.c                  \
     third_party/mbedtls/repo/library/cmac.c                         \
+    third_party/mbedtls/repo/library/constant_time.c                \
     third_party/mbedtls/repo/library/ctr_drbg.c                     \
     third_party/mbedtls/repo/library/debug.c                        \
     third_party/mbedtls/repo/library/des.c                          \

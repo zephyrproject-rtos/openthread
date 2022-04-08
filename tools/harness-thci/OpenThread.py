@@ -533,17 +533,6 @@ class OpenThreadTHCI(object):
         cmd = 'macfilter addr ' + mode
         return self.__executeCommand(cmd)[-1] == 'Done'
 
-    def __skipSeqNoIncrease(self):
-        """skip sequence number increase when recovering BBR Dataset from Network Data
-
-        Returns:
-            True: successful to set the behavior.
-            False: fail to set the behavior.
-        """
-        print('call __skipSeqNoIncrease()')
-        cmd = 'bbr skipseqnuminc'
-        return self.__executeCommand(cmd)[-1] == 'Done'
-
     def __startOpenThread(self):
         """start OpenThread stack
 
@@ -592,15 +581,10 @@ class OpenThreadTHCI(object):
             if self.__useDefaultDomainPrefix:
                 self.__addDefaultDomainPrefix()
 
-            self._deviceBeforeThreadStart()
-
         self.__executeCommand('ifconfig up')
         self.__executeCommand('thread start')
         self.isPowerDown = False
         return True
-
-    def _deviceBeforeThreadStart(self):
-        pass
 
     def __stopOpenThread(self):
         """stop OpenThread stack
@@ -1165,8 +1149,6 @@ class OpenThreadTHCI(object):
             if self.AutoDUTEnable is False:
                 # set ROUTER_DOWNGRADE_THRESHOLD
                 self.__setRouterDowngradeThreshold(33)
-                # skip increase of Sequence Number for BBR-TC-02
-                self.__skipSeqNoIncrease()
         elif eRoleId == Thread_Device_Role.SED:
             print('join as sleepy end device')
             mode = '-'
@@ -1478,7 +1460,7 @@ class OpenThreadTHCI(object):
                                           ModuleHelper.Default_NwkName)
         self.pskc = hex(stretchedPSKc).rstrip('L').lstrip('0x')
         self.securityPolicySecs = ModuleHelper.Default_SecurityPolicy
-        self.securityPolicyFlags = 'onrcb'
+        self.securityPolicyFlags = 'onrc'
         self.activetimestamp = ModuleHelper.Default_ActiveTimestamp
         # self.sedPollingRate = ModuleHelper.Default_Harness_SED_Polling_Rate
         self.__sedPollPeriod = 3 * 1000  # in milliseconds
@@ -2981,6 +2963,11 @@ class OpenThreadTHCI(object):
             False: fail to set BBR Dataset
         """
         assert not (SeqNumInc and SeqNum is not None), "Must not specify both SeqNumInc and SeqNum"
+
+        if (MlrTimeout and MlrTimeout != self.bbrMlrTimeout) or (ReRegDelay and ReRegDelay != self.bbrReRegDelay):
+            if SeqNum is None:
+                SeqNumInc = True
+
         if SeqNumInc:
             if self.bbrSeqNum in (126, 127):
                 self.bbrSeqNum = 0
@@ -2988,6 +2975,8 @@ class OpenThreadTHCI(object):
                 self.bbrSeqNum = 128
             else:
                 self.bbrSeqNum = (self.bbrSeqNum + 1) % 256
+        else:
+            self.bbrSeqNum = SeqNum
 
         return self.__configBbrDataset(SeqNum=self.bbrSeqNum, MlrTimeout=MlrTimeout, ReRegDelay=ReRegDelay)
 
@@ -3237,7 +3226,7 @@ class OpenThreadTHCI(object):
         return dua
 
     def __addDefaultDomainPrefix(self):
-        self.configBorderRouter(P_dp=1, P_slaac_preferred=1, P_stable=1, P_on_mesh=1, P_default=1)
+        self.configBorderRouter(P_dp=1, P_stable=1, P_on_mesh=1, P_default=1)
 
     def __setDUA(self, sDua):
         """specify the DUA before Thread Starts."""
@@ -3274,7 +3263,7 @@ class OpenThreadTHCI(object):
     @API
     def setMLRtimeout(self, iMsecs):
         """Setup BBR MLR Timeout to `iMsecs` seconds."""
-        self.__configBbrDataset(MlrTimeout=iMsecs)
+        self.setBbrDataset(MlrTimeout=iMsecs)
 
     @API
     def stopListeningToAddr(self, sAddr):

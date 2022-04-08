@@ -312,7 +312,7 @@ void MleRouter::HandleChildStart(AttachMode aMode)
 
     switch (aMode)
     {
-    case kAttachSameDowngrade:
+    case kDowngradeToReed:
         SendAddressRelease();
 
         // reset children info if any
@@ -325,8 +325,8 @@ void MleRouter::HandleChildStart(AttachMode aMode)
         SetRouterId(kInvalidRouterId);
         break;
 
-    case kAttachSame1:
-    case kAttachSame2:
+    case kSamePartition:
+    case kSamePartitionRetry:
         if (HasChildren())
         {
             IgnoreError(BecomeRouter(ThreadStatusTlv::kHaveChildIdRequest));
@@ -334,7 +334,8 @@ void MleRouter::HandleChildStart(AttachMode aMode)
 
         break;
 
-    case kAttachAny:
+    case kAnyPartition:
+    case kBetterParent:
         // If attach was started due to receiving MLE Announce Messages, all rx-on-when-idle devices would
         // start attach immediately when receiving such Announce message as in Thread 1.1 specification,
         // Section 4.8.1,
@@ -351,7 +352,7 @@ void MleRouter::HandleChildStart(AttachMode aMode)
 
         OT_FALL_THROUGH;
 
-    case kAttachBetter:
+    case kBetterPartition:
         if (HasChildren() && mPreviousPartitionIdRouter != mLeaderData.GetPartitionId())
         {
             IgnoreError(BecomeRouter(ThreadStatusTlv::kParentPartitionChange));
@@ -1236,7 +1237,7 @@ Error MleRouter::HandleAdvertisement(const Message &aMessage, const Ip6::Message
 #endif
         )
         {
-            IgnoreError(BecomeChild(kAttachBetter));
+            Attach(kBetterPartition);
         }
 
         ExitNow(error = kErrorDrop);
@@ -1816,14 +1817,13 @@ void MleRouter::HandleTimeTick(void)
         if ((mRouterTable.GetActiveRouterCount() > 0) && (mRouterTable.GetLeaderAge() >= mNetworkIdTimeout))
         {
             LogInfo("Router ID Sequence timeout");
-            IgnoreError(BecomeChild(kAttachSame1));
+            Attach(kSamePartition);
         }
 
         if (routerStateUpdate && mRouterTable.GetActiveRouterCount() > mRouterDowngradeThreshold)
         {
-            // downgrade to REED
             LogNote("Downgrade to REED");
-            IgnoreError(BecomeChild(kAttachSameDowngrade));
+            Attach(kDowngradeToReed);
         }
 
         break;
@@ -3160,15 +3160,15 @@ Error MleRouter::SendChildUpdateRequest(Child &aChild)
     static const uint8_t tlvs[] = {Tlv::kTimeout, Tlv::kAddressRegistration};
     Error                error  = kErrorNone;
     Ip6::Address         destination;
-    Message *            message;
+    Message *            message = nullptr;
 
     if (!aChild.IsRxOnWhenIdle())
     {
         uint16_t childIndex = Get<ChildTable>().GetChildIndex(aChild);
 
-        for (message = Get<MeshForwarder>().GetSendQueue().GetHead(); message; message = message->GetNext())
+        for (const Message &msg : Get<MeshForwarder>().GetSendQueue())
         {
-            if (message->GetChildMask(childIndex) && message->GetSubType() == Message::kSubTypeMleChildUpdateRequest)
+            if (msg.GetChildMask(childIndex) && msg.GetSubType() == Message::kSubTypeMleChildUpdateRequest)
             {
                 // No need to send the resync "Child Update Request" to the sleepy child
                 // if there is one already queued.
@@ -3657,8 +3657,7 @@ Error MleRouter::SendAddressSolicit(ThreadStatusTlv::Status aStatus)
     messageInfo.SetSockAddr(GetMeshLocal16());
     messageInfo.SetPeerPort(Tmf::kUdpPort);
 
-    SuccessOrExit(
-        error = Get<Tmf::Agent>().SendMessage(*message, messageInfo, &MleRouter::HandleAddressSolicitResponse, this));
+    SuccessOrExit(error = Get<Tmf::Agent>().SendMessage(*message, messageInfo, &HandleAddressSolicitResponse, this));
     mAddressSolicitPending = true;
 
     Log(kMessageSend, kTypeAddressSolicit, messageInfo.GetPeerAddr());
@@ -3717,7 +3716,7 @@ void MleRouter::HandleAddressSolicitResponse(Coap::Message *         aMessage,
 
     mAddressSolicitPending = false;
 
-    VerifyOrExit(aResult == kErrorNone && aMessage != nullptr && aMessage != nullptr);
+    VerifyOrExit(aResult == kErrorNone && aMessage != nullptr && aMessageInfo != nullptr);
 
     VerifyOrExit(aMessage->GetCode() == Coap::kCodeChanged);
 
@@ -3780,18 +3779,15 @@ void MleRouter::HandleAddressSolicitResponse(Coap::Message *         aMessage,
         leader->SetNextHop(RouterIdFromRloc16(mParent.GetRloc16()));
     }
 
-    // send link request
     IgnoreError(SendLinkRequest(nullptr));
 
-    // send child id responses
     for (Child &child : Get<ChildTable>().Iterate(Child::kInStateChildIdRequest))
     {
         IgnoreError(SendChildIdResponse(child));
     }
 
 exit:
-
-    // send announce after received address solicit reply if needed
+    // Send announce after received address solicit reply if needed
     InformPreviousChannel();
 }
 
@@ -3816,9 +3812,6 @@ void MleRouter::HandleAddressSolicit(Coap::Message &aMessage, const Ip6::Message
     uint16_t        rloc16;
     uint8_t         status;
     Router *        router = nullptr;
-#if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
-    uint16_t xtalAccuracy;
-#endif
 
     VerifyOrExit(aMessage.IsConfirmablePostRequest(), error = kErrorParse);
 
@@ -3828,20 +3821,18 @@ void MleRouter::HandleAddressSolicit(Coap::Message &aMessage, const Ip6::Message
     SuccessOrExit(error = Tlv::Find<ThreadStatusTlv>(aMessage, status));
 
 #if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
-    // In a time sync enabled network, all routers' xtal accuracy must be less than the threshold.
-    SuccessOrExit(Tlv::Find<XtalAccuracyTlv>(aMessage, xtalAccuracy));
-    VerifyOrExit(xtalAccuracy <= Get<TimeSync>().GetXtalThreshold());
+    {
+        uint16_t xtalAccuracy;
+
+        SuccessOrExit(Tlv::Find<XtalAccuracyTlv>(aMessage, xtalAccuracy));
+        VerifyOrExit(xtalAccuracy <= Get<TimeSync>().GetXtalThreshold());
+    }
 #endif
 
-    // see if allocation already exists
+    // Check if allocation already exists
     router = mRouterTable.GetRouter(extAddress);
+    VerifyOrExit(router == nullptr);
 
-    if (router != nullptr)
-    {
-        ExitNow();
-    }
-
-    // check the request reason
     switch (status)
     {
     case ThreadStatusTlv::kTooFewRouters:
@@ -3854,28 +3845,27 @@ void MleRouter::HandleAddressSolicit(Coap::Message &aMessage, const Ip6::Message
 
     default:
         ExitNow(error = kErrorParse);
-        OT_UNREACHABLE_CODE(break);
     }
 
     switch (Tlv::Find<ThreadRloc16Tlv>(aMessage, rloc16))
     {
     case kErrorNone:
         router = mRouterTable.Allocate(RouterIdFromRloc16(rloc16));
-        break;
+
+        if (router != nullptr)
+        {
+            LogInfo("Router id %d requested and provided!", RouterIdFromRloc16(rloc16));
+            break;
+        }
+
+        OT_FALL_THROUGH;
+
     case kErrorNotFound:
+        router = mRouterTable.Allocate();
         break;
+
     default:
         ExitNow(error = kErrorParse);
-    }
-
-    // allocate new router id
-    if (router == nullptr)
-    {
-        router = mRouterTable.Allocate();
-    }
-    else
-    {
-        LogInfo("router id requested and provided!");
     }
 
     if (router != nullptr)
@@ -3884,11 +3874,10 @@ void MleRouter::HandleAddressSolicit(Coap::Message &aMessage, const Ip6::Message
     }
     else
     {
-        LogInfo("router address unavailable!");
+        LogInfo("Router address unavailable!");
     }
 
 exit:
-
     if (error == kErrorNone)
     {
         SendAddressSolicitResponse(aMessage, router, aMessageInfo);
@@ -3899,35 +3888,37 @@ void MleRouter::SendAddressSolicitResponse(const Coap::Message &   aRequest,
                                            const Router *          aRouter,
                                            const Ip6::MessageInfo &aMessageInfo)
 {
-    Error               error = kErrorNone;
-    ThreadRouterMaskTlv routerMaskTlv;
-    Coap::Message *     message;
+    Coap::Message *         message = Get<Tmf::Agent>().NewPriorityMessage();
+    ThreadStatusTlv::Status status;
 
-    VerifyOrExit((message = Get<Tmf::Agent>().NewPriorityMessage()) != nullptr, error = kErrorNoBufs);
+    VerifyOrExit(message != nullptr);
 
-    SuccessOrExit(error = message->SetDefaultResponseHeader(aRequest));
-    SuccessOrExit(error = message->SetPayloadMarker());
+    SuccessOrExit(message->SetDefaultResponseHeader(aRequest));
+    SuccessOrExit(message->SetPayloadMarker());
 
-    SuccessOrExit(error = Tlv::Append<ThreadStatusTlv>(
-                      *message, aRouter == nullptr ? ThreadStatusTlv::kNoAddressAvailable : ThreadStatusTlv::kSuccess));
+    status = (aRouter == nullptr) ? ThreadStatusTlv::kNoAddressAvailable : ThreadStatusTlv::kSuccess;
+    SuccessOrExit(Tlv::Append<ThreadStatusTlv>(*message, status));
 
     if (aRouter != nullptr)
     {
-        SuccessOrExit(error = Tlv::Append<ThreadRloc16Tlv>(*message, aRouter->GetRloc16()));
+        ThreadRouterMaskTlv routerMaskTlv;
+
+        SuccessOrExit(Tlv::Append<ThreadRloc16Tlv>(*message, aRouter->GetRloc16()));
 
         routerMaskTlv.Init();
         routerMaskTlv.SetIdSequence(mRouterTable.GetRouterIdSequence());
         routerMaskTlv.SetAssignedRouterIdMask(mRouterTable.GetRouterIdSet());
 
-        SuccessOrExit(error = routerMaskTlv.AppendTo(*message));
+        SuccessOrExit(routerMaskTlv.AppendTo(*message));
     }
 
-    SuccessOrExit(error = Get<Tmf::Agent>().SendMessage(*message, aMessageInfo));
+    SuccessOrExit(Get<Tmf::Agent>().SendMessage(*message, aMessageInfo));
+    message = nullptr;
 
     Log(kMessageSend, kTypeAddressReply, aMessageInfo.GetPeerAddr());
 
 exit:
-    FreeMessageOnError(message, error);
+    FreeMessage(message);
 }
 
 void MleRouter::HandleAddressRelease(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)

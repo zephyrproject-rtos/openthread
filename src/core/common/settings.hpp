@@ -128,6 +128,8 @@ public:
     };
 
     static constexpr Key kLastKey = kKeyBrUlaPrefix; ///< The last (numerically) enumerator value in `Key`.
+    static_assert(static_cast<uint16_t>(kLastKey) < static_cast<uint16_t>(OT_SETTINGS_KEY_VENDOR_RESERVED_MIN),
+                  "Core settings keys overlap with vendor reserved keys");
 
     /**
      * This structure represents the device's own network information for settings storage.
@@ -1118,7 +1120,7 @@ private:
 
     static void Log(Action aAction, Error aError, Key aKey, const void *aValue = nullptr);
 
-    static const uint16_t kCriticalKeys[];
+    static const uint16_t kSensitiveKeys[];
 };
 
 } // namespace ot

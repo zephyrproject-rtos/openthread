@@ -429,7 +429,7 @@ private:
                           Ip6::Header &       aIp6Header);
     void     GetMacDestinationAddress(const Ip6::Address &aIp6Addr, Mac::Address &aMacAddr);
     void     GetMacSourceAddress(const Ip6::Address &aIp6Addr, Mac::Address &aMacAddr);
-    Message *GetDirectTransmission(void);
+    Message *PrepareNextDirectTransmission(void);
     void     HandleMesh(uint8_t *             aFrame,
                         uint16_t              aFrameLength,
                         const Mac::Address &  aMacSource,
@@ -512,7 +512,11 @@ private:
     void PauseMessageTransmissions(void) { mTxPaused = true; }
     void ResumeMessageTransmissions(void);
 
-    void LogMessage(MessageAction aAction, const Message &aMessage, const Mac::Address *aAddress, Error aError);
+    void LogMessage(MessageAction       aAction,
+                    const Message &     aMessage,
+                    Error               aError   = kErrorNone,
+                    const Mac::Address *aAddress = nullptr);
+
     void LogFrame(const char *aActionText, const Mac::Frame &aFrame, Error aError);
     void LogFragmentFrameDrop(Error                         aError,
                               uint16_t                      aFrameLength,

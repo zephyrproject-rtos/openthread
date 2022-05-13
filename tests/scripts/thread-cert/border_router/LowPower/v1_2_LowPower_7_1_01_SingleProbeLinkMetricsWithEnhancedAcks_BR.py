@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-#  Copyright (c) 2019, The OpenThread Authors.
+#  Copyright (c) 2022, The OpenThread Authors.
 #  All rights reserved.
 #
 #  Redistribution and use in source and binary forms, with or without
@@ -14,7 +14,7 @@
 #     names of its contributors may be used to endorse or promote products
 #     derived from this software without specific prior written permission.
 #
-#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS 'AS IS'
 #  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 #  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
 #  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
@@ -29,59 +29,10 @@
 
 import unittest
 
-import config
-import thread_cert
+from v1_2_LowPower_7_1_01_SingleProbeLinkMetricsWithEnhancedAcks import LowPower_7_1_01
+from v1_2_LowPower_7_1_01_SingleProbeLinkMetricsWithEnhancedAcks import LEADER
 
-LEADER = 1
-ROUTER1 = 2
-ROUTER2 = 3
-
-# Topology:
-# LEADER -- ROUTER1 -- ROUTER2
-#
-
-
-class TestRouteTable(thread_cert.TestCase):
-    SUPPORT_NCP = False
-
-    TOPOLOGY = {
-        LEADER: {
-            'mode': 'rdn',
-            'allowlist': [ROUTER1]
-        },
-        ROUTER1: {
-            'mode': 'rdn',
-            'allowlist': [LEADER, ROUTER2]
-        },
-        ROUTER2: {
-            'mode': 'rdn',
-            'allowlist': [ROUTER1]
-        },
-    }
-
-    def test(self):
-        self.nodes[LEADER].start()
-        self.simulator.go(5)
-        self.assertEqual(self.nodes[LEADER].get_state(), 'leader')
-
-        self.nodes[ROUTER1].start()
-        self.simulator.go(config.ROUTER_STARTUP_DELAY)
-        self.assertEqual(self.nodes[ROUTER1].get_state(), 'router')
-
-        self.nodes[ROUTER2].start()
-        self.simulator.go(config.ROUTER_STARTUP_DELAY)
-        self.assertEqual(self.nodes[ROUTER2].get_state(), 'router')
-
-        self.simulator.go(100)
-
-        router_ids = set(_node.get_router_id() for _node in self.nodes.values())
-        for _node in self.nodes.values():
-            self.assertEqual(set(_node.router_list()), router_ids)
-
-        for _node in self.nodes.values():
-            router_table = _node.router_table()
-            self.assertEqual(set(router_table), router_ids)
-
+LowPower_7_1_01.TOPOLOGY[LEADER]['is_otbr'] = True
 
 if __name__ == '__main__':
     unittest.main()

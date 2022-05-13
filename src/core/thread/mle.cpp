@@ -64,6 +64,10 @@ namespace Mle {
 
 RegisterLogModule("Mle");
 
+const otMeshLocalPrefix Mle::sMeshLocalPrefixInit = {
+    {0xfd, 0xde, 0xad, 0x00, 0xbe, 0xef, 0x00, 0x00},
+};
+
 Mle::Mle(Instance &aInstance)
     : InstanceLocator(aInstance)
     , mRetrieveNewNetworkData(false)
@@ -114,8 +118,6 @@ Mle::Mle(Instance &aInstance)
     , mParentResponseCb(nullptr)
     , mParentResponseCbContext(nullptr)
 {
-    MeshLocalPrefix meshLocalPrefix;
-
     mParent.Init(aInstance);
     mParentCandidate.Init(aInstance);
 
@@ -129,8 +131,6 @@ Mle::Mle(Instance &aInstance)
     mLinkLocal64.GetAddress().SetToLinkLocalAddress(Get<Mac::Mac>().GetExtAddress());
 
     mLeaderAloc.InitAsThreadOriginRealmLocalScope();
-
-    meshLocalPrefix.SetFromExtendedPanId(Get<MeshCoP::ExtendedPanIdManager>().GetExtPanId());
 
     mMeshLocal64.InitAsThreadOriginRealmLocalScope();
     mMeshLocal64.GetAddress().GetIid().GenerateRandom();
@@ -150,7 +150,7 @@ Mle::Mle(Instance &aInstance)
     mRealmLocalAllThreadNodes.GetAddress().mFields.m16[0] = HostSwap16(0xff33);
     mRealmLocalAllThreadNodes.GetAddress().mFields.m16[7] = HostSwap16(0x0001);
 
-    SetMeshLocalPrefix(meshLocalPrefix);
+    SetMeshLocalPrefix(AsCoreType(&sMeshLocalPrefixInit));
 
     // `SetMeshLocalPrefix()` also adds the Mesh-Local EID and subscribes
     // to the Link- and Realm-Local All Thread Nodes multicast addresses.
@@ -823,7 +823,7 @@ void Mle::UpdateLinkLocalAddress(void)
     Get<Notifier>().Signal(kEventThreadLinkLocalAddrChanged);
 }
 
-void Mle::SetMeshLocalPrefix(const MeshLocalPrefix &aMeshLocalPrefix)
+void Mle::SetMeshLocalPrefix(const Ip6::NetworkPrefix &aMeshLocalPrefix)
 {
     VerifyOrExit(GetMeshLocalPrefix() != aMeshLocalPrefix,
                  Get<Notifier>().SignalIfFirst(kEventThreadMeshLocalAddrChanged));
@@ -1556,7 +1556,7 @@ Error Mle::AppendCslClockAccuracy(Message &aMessage)
     cslClockAccuracy.Init();
 
     cslClockAccuracy.SetCslClockAccuracy(Get<Radio>().GetCslAccuracy());
-    cslClockAccuracy.SetCslUncertainty(Get<Radio>().GetCslClockUncertainty());
+    cslClockAccuracy.SetCslUncertainty(Get<Radio>().GetCslUncertainty());
 
     SuccessOrExit(error = aMessage.Append(cslClockAccuracy));
 
@@ -3472,7 +3472,7 @@ bool Mle::IsBetterParent(uint16_t               aRloc16,
     {
         cslMetric = CalcParentCslMetric(aCslClockAccuracy, aCslUncertainty);
         candidateCslMetric =
-            CalcParentCslMetric(mParentCandidate.GetCslClockAccuracy(), mParentCandidate.GetCslClockUncertainty());
+            CalcParentCslMetric(mParentCandidate.GetCslClockAccuracy(), mParentCandidate.GetCslUncertainty());
         if (candidateCslMetric != cslMetric)
         {
             ExitNow(rval = (cslMetric < candidateCslMetric));
@@ -3681,7 +3681,7 @@ void Mle::HandleParentResponse(RxInfo &aRxInfo)
     mParentCandidate.SetKeySequence(aRxInfo.mKeySequence);
 #if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
     mParentCandidate.SetCslClockAccuracy(clockAccuracy.GetCslClockAccuracy());
-    mParentCandidate.SetCslClockUncertainty(clockAccuracy.GetCslUncertainty());
+    mParentCandidate.SetCslUncertainty(clockAccuracy.GetCslUncertainty());
 #endif
 
     mParentPriority         = connectivity.GetParentPriority();
@@ -3809,7 +3809,7 @@ void Mle::HandleChildIdResponse(RxInfo &aRxInfo)
     mParentCandidate.Clear();
 
 #if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
-    Get<Mac::Mac>().SetCslParentUncertainty(mParent.GetCslClockUncertainty());
+    Get<Mac::Mac>().SetCslParentUncertainty(mParent.GetCslUncertainty());
     Get<Mac::Mac>().SetCslParentClockAccuracy(mParent.GetCslClockAccuracy());
 #endif
 

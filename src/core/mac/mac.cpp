@@ -210,6 +210,11 @@ Error Mac::ConvertBeaconToActiveScanResult(const RxFrame *aBeaconFrame, ActiveSc
 {
     Error   error = kErrorNone;
     Address address;
+#if OPENTHREAD_CONFIG_MAC_BEACON_PAYLOAD_PARSING_ENABLE
+    const BeaconPayload *beaconPayload = nullptr;
+    const Beacon *       beacon        = nullptr;
+    uint16_t             payloadLength;
+#endif
 
     memset(&aResult, 0, sizeof(ActiveScanResult));
 
@@ -228,6 +233,23 @@ Error Mac::ConvertBeaconToActiveScanResult(const RxFrame *aBeaconFrame, ActiveSc
     aResult.mChannel = aBeaconFrame->GetChannel();
     aResult.mRssi    = aBeaconFrame->GetRssi();
     aResult.mLqi     = aBeaconFrame->GetLqi();
+
+#if OPENTHREAD_CONFIG_MAC_BEACON_PAYLOAD_PARSING_ENABLE
+    payloadLength = aBeaconFrame->GetPayloadLength();
+
+    beacon        = reinterpret_cast<const Beacon *>(aBeaconFrame->GetPayload());
+    beaconPayload = reinterpret_cast<const BeaconPayload *>(beacon->GetPayload());
+
+    if ((payloadLength >= (sizeof(*beacon) + sizeof(*beaconPayload))) && beacon->IsValid() && beaconPayload->IsValid())
+    {
+        aResult.mVersion    = beaconPayload->GetProtocolVersion();
+        aResult.mIsJoinable = beaconPayload->IsJoiningPermitted();
+        aResult.mIsNative   = beaconPayload->IsNative();
+        IgnoreError(AsCoreType(&aResult.mNetworkName).Set(beaconPayload->GetNetworkName()));
+        VerifyOrExit(IsValidUtf8String(aResult.mNetworkName.m8), error = kErrorParse);
+        aResult.mExtendedPanId = beaconPayload->GetExtendedPanId();
+    }
+#endif
 
     LogBeacon("Received");
 
@@ -482,7 +504,7 @@ Error Mac::RequestDataPollTransmission(void)
     Error error = kErrorNone;
 
     VerifyOrExit(IsEnabled(), error = kErrorInvalidState);
-    VerifyOrExit(!IsActiveOrPending(kOperationTransmitPoll), error = kErrorAlready);
+    VerifyOrExit(!IsActiveOrPending(kOperationTransmitPoll));
 
     // We ensure data frame and data poll tx requests are handled in the
     // order they are requested. So if we have a pending direct data frame
@@ -715,6 +737,10 @@ TxFrame *Mac::PrepareBeacon(void)
     TxFrame *frame;
     uint16_t fcf;
     Beacon * beacon = nullptr;
+#if OPENTHREAD_CONFIG_MAC_OUTGOING_BEACON_PAYLOAD_ENABLE
+    uint8_t        beaconLength;
+    BeaconPayload *beaconPayload = nullptr;
+#endif
 
 #if OPENTHREAD_CONFIG_MULTI_RADIO
     OT_ASSERT(!mTxBeaconRadioLinks.IsEmpty());
@@ -731,6 +757,30 @@ TxFrame *Mac::PrepareBeacon(void)
 
     beacon = reinterpret_cast<Beacon *>(frame->GetPayload());
     beacon->Init();
+
+#if OPENTHREAD_CONFIG_MAC_OUTGOING_BEACON_PAYLOAD_ENABLE
+    beaconLength = sizeof(*beacon);
+
+    beaconPayload = reinterpret_cast<BeaconPayload *>(beacon->GetPayload());
+
+    beaconPayload->Init();
+
+    if (IsJoinable())
+    {
+        beaconPayload->SetJoiningPermitted();
+    }
+    else
+    {
+        beaconPayload->ClearJoiningPermitted();
+    }
+
+    beaconPayload->SetNetworkName(Get<MeshCoP::NetworkNameManager>().GetNetworkName().GetAsData());
+    beaconPayload->SetExtendedPanId(Get<MeshCoP::ExtendedPanIdManager>().GetExtPanId());
+
+    beaconLength += sizeof(*beaconPayload);
+
+    frame->SetPayloadLength(beaconLength);
+#endif
 
     LogBeacon("Sending");
 

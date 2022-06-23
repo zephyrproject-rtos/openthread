@@ -76,10 +76,20 @@ void Client::HostInfo::SetState(ItemState aState)
     }
 }
 
+void Client::HostInfo::EnableAutoAddress(void)
+{
+    mAddresses    = nullptr;
+    mNumAddresses = 0;
+    mAutoAddress  = true;
+
+    LogInfo("HostInfo enabled auto address", GetNumAddresses());
+}
+
 void Client::HostInfo::SetAddresses(const Ip6::Address *aAddresses, uint8_t aNumAddresses)
 {
     mAddresses    = aAddresses;
     mNumAddresses = aNumAddresses;
+    mAutoAddress  = false;
 
     LogInfo("HostInfo set %d addrs", GetNumAddresses());
 
@@ -239,12 +249,14 @@ Client::Client(Instance &aInstance)
     , mState(kStateStopped)
     , mTxFailureRetryCount(0)
     , mShouldRemoveKeyLease(false)
+    , mAutoHostAddressAddedMeshLocal(false)
 #if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
     , mServiceKeyRecordEnabled(false)
 #endif
     , mUpdateMessageId(0)
     , mRetryWaitInterval(kMinRetryWaitInterval)
     , mAcceptedLeaseInterval(0)
+    , mTtl(0)
     , mLeaseInterval(kDefaultLease)
     , mKeyLeaseInterval(kDefaultKeyLease)
     , mSocket(aInstance)
@@ -323,6 +335,8 @@ void Client::Stop(Requester aRequester, StopMode aMode)
 
     VerifyOrExit(GetState() != kStateStopped);
 
+    mSingleServiceMode.Disable();
+
     // State changes:
     //   kAdding     -> kToRefresh
     //   kRefreshing -> kToRefresh
@@ -391,6 +405,8 @@ void Client::Pause(void)
         /* (7) kRemoved    -> */ kRemoved,
     };
 
+    mSingleServiceMode.Disable();
+
     // State changes:
     //   kAdding     -> kToRefresh
     //   kRefreshing -> kToRefresh
@@ -414,6 +430,22 @@ void Client::HandleNotifierEvents(Events aEvents)
         ProcessAutoStart();
     }
 #endif
+
+    if (mHostInfo.IsAutoAddressEnabled())
+    {
+        Events::Flags eventFlags = (kEventIp6AddressAdded | kEventIp6AddressRemoved);
+
+        if (mAutoHostAddressAddedMeshLocal)
+        {
+            eventFlags |= kEventThreadMeshLocalAddrChanged;
+        }
+
+        if (aEvents.ContainsAny(eventFlags))
+        {
+            IgnoreError(UpdateHostInfoStateOnAddressChange());
+            UpdateState();
+        }
+    }
 }
 
 void Client::HandleRoleChanged(void)
@@ -465,11 +497,37 @@ exit:
     return error;
 }
 
+Error Client::EnableAutoHostAddress(void)
+{
+    Error error = kErrorNone;
+
+    VerifyOrExit(!mHostInfo.IsAutoAddressEnabled());
+    SuccessOrExit(error = UpdateHostInfoStateOnAddressChange());
+
+    mHostInfo.EnableAutoAddress();
+    UpdateState();
+
+exit:
+    return error;
+}
+
 Error Client::SetHostAddresses(const Ip6::Address *aAddresses, uint8_t aNumAddresses)
 {
     Error error = kErrorNone;
 
     VerifyOrExit((aAddresses != nullptr) && (aNumAddresses > 0), error = kErrorInvalidArgs);
+    SuccessOrExit(error = UpdateHostInfoStateOnAddressChange());
+
+    mHostInfo.SetAddresses(aAddresses, aNumAddresses);
+    UpdateState();
+
+exit:
+    return error;
+}
+
+Error Client::UpdateHostInfoStateOnAddressChange(void)
+{
+    Error error = kErrorNone;
 
     VerifyOrExit((mHostInfo.GetState() != kToRemove) && (mHostInfo.GetState() != kRemoving),
                  error = kErrorInvalidState);
@@ -482,9 +540,6 @@ Error Client::SetHostAddresses(const Ip6::Address *aAddresses, uint8_t aNumAddre
     {
         mHostInfo.SetState(kToRefresh);
     }
-
-    mHostInfo.SetAddresses(aAddresses, aNumAddresses);
-    UpdateState();
 
 exit:
     return error;
@@ -659,6 +714,11 @@ void Client::ChangeHostAndServiceStates(const ItemState *aNewStates)
 
     for (Service &service : mServices)
     {
+        if (mSingleServiceMode.IsEnabled() && mSingleServiceMode.GetService() != &service)
+        {
+            continue;
+        }
+
         service.SetState(aNewStates[service.GetState()]);
     }
 
@@ -717,9 +777,21 @@ void Client::SendUpdate(void)
 
     Error    error   = kErrorNone;
     Message *message = mSocket.NewMessage(0);
+    uint32_t length;
 
     VerifyOrExit(message != nullptr, error = kErrorNoBufs);
     SuccessOrExit(error = PrepareUpdateMessage(*message));
+
+    length = message->GetLength() + sizeof(Ip6::Udp::Header) + sizeof(Ip6::Header);
+
+    if (length >= Ip6::kMaxDatagramLength)
+    {
+        LogInfo("Msg len %u is larger than MTU, enabling single service mode", length);
+        mSingleServiceMode.Enable();
+        IgnoreError(message->SetLength(0));
+        SuccessOrExit(error = PrepareUpdateMessage(*message));
+    }
+
     SuccessOrExit(error = mSocket.SendTo(*message, Ip6::MessageInfo()));
 
     LogInfo("Send update");
@@ -757,6 +829,7 @@ exit:
 
         LogInfo("Failed to send update: %s", ErrorToString(error));
 
+        mSingleServiceMode.Disable();
         FreeMessage(message);
 
         SetState(kStateToRetry);
@@ -831,6 +904,11 @@ Error Client::PrepareUpdateMessage(Message &aMessage)
         for (Service &service : mServices)
         {
             SuccessOrExit(error = AppendServiceInstructions(service, aMessage, info));
+
+            if (mSingleServiceMode.IsEnabled() && (mSingleServiceMode.GetService() != nullptr))
+            {
+                break;
+            }
         }
     }
 
@@ -911,7 +989,7 @@ Error Client::AppendServiceInstructions(Service &aService, Message &aMessage, In
     // to NONE and TTL to zero (RFC 2136 - section 2.5.4).
 
     rr.Init(Dns::ResourceRecord::kTypePtr, removing ? Dns::PtrRecord::kClassNone : Dns::PtrRecord::kClassInternet);
-    rr.SetTtl(removing ? 0 : mLeaseInterval);
+    rr.SetTtl(removing ? 0 : GetTtl());
     offset = aMessage.GetLength();
     SuccessOrExit(error = aMessage.Append(rr));
 
@@ -970,7 +1048,7 @@ Error Client::AppendServiceInstructions(Service &aService, Message &aMessage, In
 
     SuccessOrExit(error = Dns::Name::AppendPointerLabel(instanceNameOffset, aMessage));
     srv.Init();
-    srv.SetTtl(mLeaseInterval);
+    srv.SetTtl(GetTtl());
     srv.SetPriority(aService.GetPriority());
     srv.SetWeight(aService.GetWeight());
     srv.SetPort(aService.GetPort());
@@ -1003,14 +1081,18 @@ Error Client::AppendServiceInstructions(Service &aService, Message &aMessage, In
     }
 #endif
 
+    if (mSingleServiceMode.IsEnabled())
+    {
+        mSingleServiceMode.SetService(aService);
+    }
+
 exit:
     return error;
 }
 
-Error Client::AppendHostDescriptionInstruction(Message &aMessage, Info &aInfo) const
+Error Client::AppendHostDescriptionInstruction(Message &aMessage, Info &aInfo)
 {
-    Error               error = kErrorNone;
-    Dns::ResourceRecord rr;
+    Error error = kErrorNone;
 
     //----------------------------------
     // Host Description Instruction
@@ -1023,22 +1105,61 @@ Error Client::AppendHostDescriptionInstruction(Message &aMessage, Info &aInfo) c
 
     // AAAA RRs
 
-    rr.Init(Dns::ResourceRecord::kTypeAaaa);
-    rr.SetTtl(mLeaseInterval);
-    rr.SetLength(sizeof(Ip6::Address));
-
-    for (uint8_t index = 0; index < mHostInfo.GetNumAddresses(); index++)
+    if (mHostInfo.IsAutoAddressEnabled())
     {
-        SuccessOrExit(error = AppendHostName(aMessage, aInfo));
-        SuccessOrExit(error = aMessage.Append(rr));
-        SuccessOrExit(error = aMessage.Append(mHostInfo.GetAddress(index)));
-        aInfo.mRecordCount++;
+        // Append all addresses on Thread netif excluding link-local and
+        // mesh-local addresses. If no address is appended, we include
+        // the mesh local address.
+
+        mAutoHostAddressAddedMeshLocal = true;
+
+        for (const Ip6::Netif::UnicastAddress &unicastAddress : Get<ThreadNetif>().GetUnicastAddresses())
+        {
+            if (unicastAddress.GetAddress().IsLinkLocal() ||
+                Get<Mle::Mle>().IsMeshLocalAddress(unicastAddress.GetAddress()))
+            {
+                continue;
+            }
+
+            SuccessOrExit(error = AppendAaaaRecord(unicastAddress.GetAddress(), aMessage, aInfo));
+            mAutoHostAddressAddedMeshLocal = false;
+        }
+
+        if (mAutoHostAddressAddedMeshLocal)
+        {
+            SuccessOrExit(error = AppendAaaaRecord(Get<Mle::Mle>().GetMeshLocal64(), aMessage, aInfo));
+        }
+    }
+    else
+    {
+        for (uint8_t index = 0; index < mHostInfo.GetNumAddresses(); index++)
+        {
+            SuccessOrExit(error = AppendAaaaRecord(mHostInfo.GetAddress(index), aMessage, aInfo));
+        }
     }
 
     // KEY RR
 
     SuccessOrExit(error = AppendHostName(aMessage, aInfo));
     SuccessOrExit(error = AppendKeyRecord(aMessage, aInfo));
+
+exit:
+    return error;
+}
+
+Error Client::AppendAaaaRecord(const Ip6::Address &aAddress, Message &aMessage, Info &aInfo) const
+{
+    Error               error;
+    Dns::ResourceRecord rr;
+
+    rr.Init(Dns::ResourceRecord::kTypeAaaa);
+    rr.SetTtl(GetTtl());
+    rr.SetLength(sizeof(Ip6::Address));
+
+    SuccessOrExit(error = AppendHostName(aMessage, aInfo));
+    SuccessOrExit(error = aMessage.Append(rr));
+    SuccessOrExit(error = aMessage.Append(aAddress));
+    aInfo.mRecordCount++;
 
 exit:
     return error;
@@ -1051,7 +1172,7 @@ Error Client::AppendKeyRecord(Message &aMessage, Info &aInfo) const
     Crypto::Ecdsa::P256::PublicKey publicKey;
 
     key.Init();
-    key.SetTtl(mLeaseInterval);
+    key.SetTtl(GetTtl());
     key.SetFlags(Dns::KeyRecord::kAuthConfidPermitted, Dns::KeyRecord::kOwnerNonZone,
                  Dns::KeyRecord::kSignatoryFlagGeneral);
     key.SetProtocol(Dns::KeyRecord::kProtocolDnsSec);
@@ -1384,6 +1505,7 @@ void Client::ProcessResponse(Message &aMessage)
     //   kRemoving   -> kRemoved
 
     ChangeHostAndServiceStates(kNewStateOnUpdateDone);
+    mSingleServiceMode.Disable();
 
     HandleUpdateDone();
     UpdateState();
@@ -1518,7 +1640,7 @@ void Client::UpdateState(void)
         // host address, otherwise no need to send SRP update message.
         // The exception is when removing host info where we allow
         // for empty service list.
-        VerifyOrExit(!mServices.IsEmpty() && (mHostInfo.GetNumAddresses() > 0));
+        VerifyOrExit(!mServices.IsEmpty() && (mHostInfo.IsAutoAddressEnabled() || (mHostInfo.GetNumAddresses() > 0)));
 
         // Fall through
 
@@ -1653,6 +1775,7 @@ void Client::HandleTimer(void)
         break;
 
     case kStateUpdating:
+        mSingleServiceMode.Disable();
         LogRetryWaitInterval();
         LogInfo("Timed out, no response");
         GrowRetryWaitInterval();
@@ -1782,7 +1905,6 @@ Error Client::SelectUnicastEntry(DnsSrpUnicast::Origin aOrigin, DnsSrpUnicast::I
     Error                                   error = kErrorNotFound;
     DnsSrpUnicast::Info                     unicastInfo;
     NetworkData::Service::Manager::Iterator iterator;
-    uint16_t                                numServers = 0;
 #if OPENTHREAD_CONFIG_SRP_CLIENT_SAVE_SELECTED_SERVER_ENABLE
     Settings::SrpClientInfo savedInfo;
     bool                    hasSavedServerInfo = false;
@@ -1819,16 +1941,10 @@ Error Client::SelectUnicastEntry(DnsSrpUnicast::Origin aOrigin, DnsSrpUnicast::I
             ExitNow();
         }
 #endif
-        numServers++;
 
-        // Choose a server randomly (with uniform distribution) from
-        // the list of servers. As we iterate through server entries,
-        // with probability `1/numServers`, we choose to switch the
-        // current selected server with the new entry. This approach
-        // results in a uniform/same probability of selection among
-        // all server entries.
+        // Prefer the numerically lowest server address
 
-        if ((numServers == 1) || (Random::NonCrypto::GetUint16InRange(0, numServers) == 0))
+        if ((error == kErrorNotFound) || (unicastInfo.mSockAddr.GetAddress() < aInfo.mSockAddr.GetAddress()))
         {
             aInfo = unicastInfo;
             error = kErrorNone;

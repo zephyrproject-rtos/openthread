@@ -100,6 +100,7 @@ constexpr uint32_t kMaxResponseDelay               = 1000; ///< Max response del
 constexpr uint32_t kMaxChildIdRequestTimeout       = 5000; ///< Max delay to rx a Child ID Request (in msec)
 constexpr uint32_t kMaxChildUpdateResponseTimeout  = 2000; ///< Max delay to rx a Child Update Response (in msec)
 constexpr uint32_t kMaxLinkRequestTimeout          = 2000; ///< Max delay to rx a Link Accept
+constexpr uint8_t  kMulticastLinkRequestDelay      = 5;    ///< Max delay for sending a mcast Link Request (in sec)
 
 constexpr uint32_t kMinTimeoutKeepAlive = (((kMaxChildKeepAliveAttempts + 1) * kUnicastRetransmissionDelay) / 1000);
 constexpr uint32_t kMinPollPeriod       = OPENTHREAD_CONFIG_MAC_MINIMUM_POLL_PERIOD;
@@ -160,6 +161,13 @@ constexpr uint8_t kRouterSelectionJitter      = 120; ///< (in sec)
 
 constexpr uint8_t kRouterDowngradeThreshold = 23;
 constexpr uint8_t kRouterUpgradeThreshold   = 16;
+
+/**
+ * Threshold to accept a router upgrade request with reason `kBorderRouterRequest` (number of BRs acting as router in
+ * Network Data).
+ *
+ */
+constexpr uint8_t kRouterUpgradeBorderRouterRequestThreshold = 2;
 
 constexpr uint32_t kMaxLeaderToRouterTimeout = 90;  ///< (in sec)
 constexpr uint32_t kReedAdvertiseInterval    = 570; ///< (in sec)

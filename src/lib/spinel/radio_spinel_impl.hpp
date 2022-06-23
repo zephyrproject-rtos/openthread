@@ -752,7 +752,7 @@ otError RadioSpinel<InterfaceType, ProcessContextType>::ThreadDatasetHandler(con
      * Initially set Active Timestamp to 0. This is to allow the node to join the network
      * yet retrieve the full Active Dataset from a neighboring device if one exists.
      */
-    opDataset.mActiveTimestamp                      = 0;
+    memset(&opDataset.mActiveTimestamp, 0, sizeof(opDataset.mActiveTimestamp));
     opDataset.mComponents.mIsActiveTimestampPresent = true;
 
     SuccessOrExit(error = dataset.SetFrom(static_cast<MeshCoP::Dataset::Info &>(opDataset)));
@@ -1671,18 +1671,11 @@ otError RadioSpinel<InterfaceType, ProcessContextType>::WaitResponse(void)
     do
     {
         uint64_t now;
-        uint64_t remain;
 
         now = otPlatTimeGet();
-        if (end <= now)
+        if ((end <= now) || (mSpinelInterface.WaitForFrame(end - now) != OT_ERROR_NONE))
         {
-            HandleRcpTimeout();
-            ExitNow(mError = OT_ERROR_NONE);
-        }
-        remain = end - now;
-
-        if (mSpinelInterface.WaitForFrame(remain) != OT_ERROR_NONE)
-        {
+            otLogWarnPlat("Wait for response timeout");
             HandleRcpTimeout();
             ExitNow(mError = OT_ERROR_NONE);
         }
@@ -2309,6 +2302,7 @@ void RadioSpinel<InterfaceType, ProcessContextType>::RecoverFromRcpFailure(void)
     }
 
     --mRcpFailureCount;
+    otLogNotePlat("RCP recovery is done");
 
 exit:
     return;
@@ -2409,7 +2403,22 @@ exit:
 template <typename InterfaceType, typename ProcessContextType>
 otError RadioSpinel<InterfaceType, ProcessContextType>::SetRadioRegion(uint16_t aRegionCode)
 {
-    return Set(SPINEL_PROP_PHY_REGION_CODE, SPINEL_DATATYPE_UINT16_S, aRegionCode);
+    otError error;
+
+    error = Set(SPINEL_PROP_PHY_REGION_CODE, SPINEL_DATATYPE_UINT16_S, aRegionCode);
+
+    if (error == OT_ERROR_NONE)
+    {
+        otLogNotePlat("Set region code \"%c%c\" successfully", static_cast<char>(aRegionCode >> 8),
+                      static_cast<char>(aRegionCode));
+    }
+    else
+    {
+        otLogWarnPlat("Failed to set region code \"%c%c\": %s", static_cast<char>(aRegionCode >> 8),
+                      static_cast<char>(aRegionCode), otThreadErrorToString(error));
+    }
+
+    return error;
 }
 
 template <typename InterfaceType, typename ProcessContextType>

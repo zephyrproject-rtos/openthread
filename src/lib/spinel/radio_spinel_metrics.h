@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2018, The OpenThread Authors.
+ *  Copyright (c) 2022, The OpenThread Authors.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -29,66 +29,30 @@
 /**
  * @file
  * @brief
- *   This file includes functions for the Thread Border Agent role.
+ *   This file includes the definitions of the radio spinel metrics.
  */
 
-#ifndef OPENTHREAD_BORDER_AGENT_H_
-#define OPENTHREAD_BORDER_AGENT_H_
-
-#include <openthread/instance.h>
+#ifndef RADIO_SPINEL_METRICS_H_
+#define RADIO_SPINEL_METRICS_H_
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /**
- * @addtogroup api-border-agent
- *
- * @brief
- *   This module includes functions for the Thread Border Agent role.
- *
- * @{
+ * This structure represents the radio spinel metrics.
  *
  */
-
-/**
- * This enumeration defines the Border Agent state.
- *
- */
-typedef enum otBorderAgentState
+typedef struct otRadioSpinelMetrics
 {
-    OT_BORDER_AGENT_STATE_STOPPED = 0, ///< Border agent role is disabled.
-    OT_BORDER_AGENT_STATE_STARTED = 1, ///< Border agent is started.
-    OT_BORDER_AGENT_STATE_ACTIVE  = 2, ///< Border agent is connected with external commissioner.
-} otBorderAgentState;
-
-/**
- * Gets the #otBorderAgentState of the Thread Border Agent role.
- *
- * @param[in]  aInstance  A pointer to an OpenThread instance.
- *
- * @returns The current #otBorderAgentState of the Border Agent.
- *
- */
-otBorderAgentState otBorderAgentGetState(otInstance *aInstance);
-
-/**
- * Gets the UDP port of the Thread Border Agent service.
- *
- * @param[in]  aInstance  A pointer to an OpenThread instance.
- *
- * @returns UDP port of the Border Agent.
- *
- */
-uint16_t otBorderAgentGetUdpPort(otInstance *aInstance);
-
-/**
- * @}
- *
- */
+    uint32_t mRcpTimeoutCount;         ///< The number of RCP timeouts.
+    uint32_t mRcpUnexpectedResetCount; ///< The number of RCP unexcepted resets.
+    uint32_t mRcpRestorationCount;     ///< The number of RCP restorations.
+    uint32_t mSpinelParseErrorCount;   ///< The number of spinel frame parse errors.
+} otRadioSpinelMetrics;
 
 #ifdef __cplusplus
 } // end of extern "C"
 #endif
 
-#endif // OPENTHREAD_BORDER_AGENT_H_
+#endif // RADIO_SPINEL_METRICS_H_

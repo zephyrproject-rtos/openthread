@@ -207,12 +207,14 @@ otError otDiagProcessCmd(otInstance *aInstance, uint8_t aArgsLength, char *aArgs
     return OT_ERROR_NOT_IMPLEMENTED;
 }
 
-void otDiagProcessCmdLine(otInstance *aInstance, const char *aString, char *aOutput, size_t aOutputMaxLen)
+otError otDiagProcessCmdLine(otInstance *aInstance, const char *aString, char *aOutput, size_t aOutputMaxLen)
 {
     OT_UNUSED_VARIABLE(aInstance);
     OT_UNUSED_VARIABLE(aString);
     OT_UNUSED_VARIABLE(aOutput);
     OT_UNUSED_VARIABLE(aOutputMaxLen);
+
+    return OT_ERROR_NOT_IMPLEMENTED;
 }
 
 void otPlatReset(otInstance *aInstance)
@@ -228,7 +230,7 @@ otPlatResetReason otPlatGetResetReason(otInstance *aInstance)
     return OT_PLAT_RESET_REASON_POWER_ON;
 }
 
-void otPlatLog(otLogLevel aLogLevel, otLogRegion aLogRegion, const char *aFormat, ...)
+OT_TOOL_WEAK void otPlatLog(otLogLevel aLogLevel, otLogRegion aLogRegion, const char *aFormat, ...)
 {
     OT_UNUSED_VARIABLE(aLogLevel);
     OT_UNUSED_VARIABLE(aLogRegion);

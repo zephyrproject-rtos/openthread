@@ -598,7 +598,13 @@ public:
      * @returns A reference to the MLE counters.
      *
      */
-    const otMleCounters &GetCounters(void) const { return mCounters; }
+    const otMleCounters &GetCounters(void)
+    {
+#if OPENTHREAD_CONFIG_UPTIME_ENABLE
+        UpdateRoleTimeCounters(mRole);
+#endif
+        return mCounters;
+    }
 
     /**
      * This method resets the MLE counters.
@@ -1678,6 +1684,17 @@ protected:
 
 #endif
 
+private:
+    // Declare early so we can use in as `TimerMilli` callbacks.
+    void HandleAttachTimer(void);
+    void HandleDelayedResponseTimer(void);
+    void HandleMessageTransmissionTimer(void);
+
+protected:
+    using AttachTimer = TimerMilliIn<Mle, &Mle::HandleAttachTimer>;
+    using DelayTimer  = TimerMilliIn<Mle, &Mle::HandleDelayedResponseTimer>;
+    using MsgTxTimer  = TimerMilliIn<Mle, &Mle::HandleMessageTransmissionTimer>;
+
     Ip6::Netif::UnicastAddress mLeaderAloc; ///< Leader anycast locator
 
     LeaderData    mLeaderData;               ///< Last received Leader Data TLV.
@@ -1691,9 +1708,9 @@ protected:
     ReattachState mReattachState;            ///< Reattach state
     uint16_t      mAttachCounter;            ///< Attach attempt counter.
     uint16_t      mAnnounceDelay;            ///< Delay in between sending Announce messages during attach.
-    TimerMilli    mAttachTimer;              ///< The timer for driving the attach process.
-    TimerMilli    mDelayedResponseTimer;     ///< The timer to delay MLE responses.
-    TimerMilli    mMessageTransmissionTimer; ///< The timer for (re-)sending of MLE messages (e.g. Child Update).
+    AttachTimer   mAttachTimer;              ///< The timer for driving the attach process.
+    DelayTimer    mDelayedResponseTimer;     ///< The timer to delay MLE responses.
+    MsgTxTimer    mMessageTransmissionTimer; ///< The timer for (re-)sending of MLE messages (e.g. Child Update).
 
 private:
     static constexpr uint8_t kMleHopLimit        = 255;
@@ -1837,6 +1854,8 @@ private:
 #endif
 
 #if OPENTHREAD_CONFIG_PARENT_SEARCH_ENABLE
+    void HandleParentSearchTimer(void) { mParentSearch.HandleTimer(); }
+
     class ParentSearch : public InstanceLocator
     {
     public:
@@ -1846,13 +1865,14 @@ private:
             , mBackoffWasCanceled(false)
             , mRecentlyDetached(false)
             , mBackoffCancelTime(0)
-            , mTimer(aInstance, HandleTimer)
+            , mTimer(aInstance)
         {
         }
 
         void StartTimer(void);
         void UpdateState(void);
         void SetRecentlyDetached(void) { mRecentlyDetached = true; }
+        void HandleTimer(void);
 
     private:
         // All timer intervals are converted to milliseconds.
@@ -1861,27 +1881,20 @@ private:
         static constexpr uint32_t kJitterInterval  = (15 * 1000u);
         static constexpr int8_t   kRssThreadhold   = OPENTHREAD_CONFIG_PARENT_SEARCH_RSS_THRESHOLD;
 
-        static void HandleTimer(Timer &aTimer);
-        void        HandleTimer(void);
+        using SearchTimer = TimerMilliIn<Mle, &Mle::HandleParentSearchTimer>;
 
-        bool       mIsInBackoff : 1;
-        bool       mBackoffWasCanceled : 1;
-        bool       mRecentlyDetached : 1;
-        TimeMilli  mBackoffCancelTime;
-        TimerMilli mTimer;
+        bool        mIsInBackoff : 1;
+        bool        mBackoffWasCanceled : 1;
+        bool        mRecentlyDetached : 1;
+        TimeMilli   mBackoffCancelTime;
+        SearchTimer mTimer;
     };
 #endif // OPENTHREAD_CONFIG_PARENT_SEARCH_ENABLE
 
     Error       Start(StartMode aMode);
     void        Stop(StopMode aMode);
     void        HandleNotifierEvents(Events aEvents);
-    static void HandleAttachTimer(Timer &aTimer);
-    void        HandleAttachTimer(void);
-    static void HandleDelayedResponseTimer(Timer &aTimer);
-    void        HandleDelayedResponseTimer(void);
     void        SendDelayedResponse(TxMessage &aMessage, const DelayedResponseMetadata &aMetadata);
-    static void HandleMessageTransmissionTimer(Timer &aTimer);
-    void        HandleMessageTransmissionTimer(void);
     static void HandleUdpReceive(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
     void        HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
     void        ScheduleMessageTransmissionTimer(void);
@@ -1976,6 +1989,12 @@ private:
     static const char *MessageTypeActionToSuffixString(MessageType aType, MessageAction aAction);
 #endif
 
+#if OPENTHREAD_CONFIG_UPTIME_ENABLE
+    void UpdateRoleTimeCounters(DeviceRole aRole);
+#endif
+
+    using DetachGracefullyTimer = TimerMilliIn<Mle, &Mle::HandleDetachGracefullyTimer>;
+
     MessageQueue mDelayedResponses;
 
     Challenge mParentRequestChallenge;
@@ -2015,7 +2034,9 @@ private:
 #endif
 
     otMleCounters mCounters;
-
+#if OPENTHREAD_CONFIG_UPTIME_ENABLE
+    uint64_t mLastUpdatedTimestamp;
+#endif
     static const otMeshLocalPrefix sMeshLocalPrefixInit;
 
     Ip6::Netif::UnicastAddress   mLinkLocal64;
@@ -2024,7 +2045,7 @@ private:
     Ip6::Netif::MulticastAddress mLinkLocalAllThreadNodes;
     Ip6::Netif::MulticastAddress mRealmLocalAllThreadNodes;
 
-    TimerMilli                 mDetachGracefullyTimer;
+    DetachGracefullyTimer      mDetachGracefullyTimer;
     otDetachGracefullyCallback mDetachGracefullyCallback;
     void *                     mDetachGracefullyContext;
 

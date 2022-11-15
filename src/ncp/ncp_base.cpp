@@ -1075,7 +1075,6 @@ otError NcpBase::HandleCommandPropertyInsertRemove(uint8_t aHeader, spinel_prop_
 
     default:
         OT_ASSERT(false);
-        OT_UNREACHABLE_CODE(break);
     }
 
     VerifyOrExit(handler != nullptr, error = PrepareLastStatusResponse(aHeader, SPINEL_STATUS_PROP_NOT_FOUND));
@@ -1371,7 +1370,7 @@ otError NcpBase::HandlePropertySet_SPINEL_PROP_NEST_STREAM_MFG(uint8_t aHeader)
     }
 #endif
 
-    otDiagProcessCmdLine(mInstance, string, output, sizeof(output));
+    SuccessOrExit(error = otDiagProcessCmdLine(mInstance, string, output, sizeof(output)));
 
     // Prepare the response
     SuccessOrExit(error = mEncoder.BeginFrame(aHeader, SPINEL_CMD_PROP_VALUE_IS, SPINEL_PROP_NEST_STREAM_MFG));
@@ -2445,7 +2444,6 @@ template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_DEBUG_NCP_LOG_LEVEL>(
 
     default:
         ExitNow(error = OT_ERROR_INVALID_ARGS);
-        OT_UNREACHABLE_CODE(break);
     }
 
     IgnoreError(otLoggingSetLevel(logLevel));

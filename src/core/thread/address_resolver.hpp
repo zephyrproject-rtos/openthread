@@ -47,6 +47,7 @@
 #include "net/icmp6.hpp"
 #include "net/udp6.hpp"
 #include "thread/thread_tlvs.hpp"
+#include "thread/tmf.hpp"
 
 namespace ot {
 
@@ -66,6 +67,7 @@ namespace ot {
 class AddressResolver : public InstanceLocator, private NonCopyable
 {
     friend class TimeTicker;
+    friend class Tmf::Agent;
 
     class CacheEntry;
     class CacheEntryList;
@@ -336,22 +338,18 @@ private:
     CacheEntry *NewCacheEntry(bool aSnoopedEntry);
     void        RemoveCacheEntry(CacheEntry &aEntry, CacheEntryList &aList, CacheEntry *aPrevEntry, Reason aReason);
     Error       UpdateCacheEntry(const Ip6::Address &aEid, Mac::ShortAddress aRloc16);
-
-    Error SendAddressQuery(const Ip6::Address &aEid);
+    Error       SendAddressQuery(const Ip6::Address &aEid);
+#if OPENTHREAD_CONFIG_TMF_ALLOW_ADDRESS_RESOLUTION_USING_NET_DATA_SERVICES
+    Error ResolveUsingNetDataServices(const Ip6::Address &aEid, Mac::ShortAddress &aRloc16);
+#endif
 
     static void HandleUdpReceive(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
 
 #endif // OPENTHREAD_FTD
 
-    static void HandleAddressError(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
-    void        HandleAddressError(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
+    template <Uri kUri> void HandleTmf(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
 
 #if OPENTHREAD_FTD
-    static void HandleAddressQuery(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
-    void        HandleAddressQuery(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
-
-    static void HandleAddressNotification(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
-    void        HandleAddressNotification(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
 
     static void HandleIcmpReceive(void *               aContext,
                                   otMessage *          aMessage,
@@ -361,32 +359,30 @@ private:
                                   const Ip6::MessageInfo & aMessageInfo,
                                   const Ip6::Icmp::Header &aIcmpHeader);
 
-    void HandleTimeTick(void);
-
-    void LogCacheEntryChange(EntryChange       aChange,
-                             Reason            aReason,
-                             const CacheEntry &aEntry,
-                             CacheEntryList *  aList = nullptr);
-
+    void        HandleTimeTick(void);
+    void        LogCacheEntryChange(EntryChange       aChange,
+                                    Reason            aReason,
+                                    const CacheEntry &aEntry,
+                                    CacheEntryList *  aList = nullptr);
     const char *ListToString(const CacheEntryList *aList) const;
 
     static AddressResolver::CacheEntry *GetEntryAfter(CacheEntry *aPrev, CacheEntryList &aList);
 
-#endif // OPENTHREAD_FTD
-    Coap::Resource mAddressError;
-#if OPENTHREAD_FTD
-    Coap::Resource mAddressQuery;
-    Coap::Resource mAddressNotification;
-
-    CacheEntryPool mCacheEntryPool;
-    CacheEntryList mCachedList;
-    CacheEntryList mSnoopedList;
-    CacheEntryList mQueryList;
-    CacheEntryList mQueryRetryList;
-
+    CacheEntryPool     mCacheEntryPool;
+    CacheEntryList     mCachedList;
+    CacheEntryList     mSnoopedList;
+    CacheEntryList     mQueryList;
+    CacheEntryList     mQueryRetryList;
     Ip6::Icmp::Handler mIcmpHandler;
-#endif //  OPENTHREAD_FTD
+
+#endif // OPENTHREAD_FTD
 };
+
+DeclareTmfHandler(AddressResolver, kUriAddressError);
+#if OPENTHREAD_FTD
+DeclareTmfHandler(AddressResolver, kUriAddressQuery);
+DeclareTmfHandler(AddressResolver, kUriAddressNotify);
+#endif
 
 /**
  * @}

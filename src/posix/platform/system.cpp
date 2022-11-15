@@ -123,6 +123,10 @@ static const char *getTrelRadioUrl(otPlatformConfig *aPlatformConfig)
 
 void platformInit(otPlatformConfig *aPlatformConfig)
 {
+#if OPENTHREAD_POSIX_CONFIG_BACKTRACE_ENABLE
+    platformBacktraceInit();
+#endif
+
     platformAlarmInit(aPlatformConfig->mSpeedUpFactor, aPlatformConfig->mRealTimeSignal);
     platformRadioInit(get802154RadioUrl(aPlatformConfig));
 
@@ -154,7 +158,7 @@ void platformInit(otPlatformConfig *aPlatformConfig)
 #endif
 
 #if OPENTHREAD_CONFIG_PLATFORM_NETIF_ENABLE
-    platformNetifInit(aPlatformConfig->mInterfaceName);
+    platformNetifInit(aPlatformConfig);
 #endif
 
 #if OPENTHREAD_CONFIG_PLATFORM_UDP_ENABLE

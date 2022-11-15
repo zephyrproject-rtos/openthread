@@ -64,7 +64,7 @@ TimeSync::TimeSync(Instance &aInstance)
     , mNetworkTimeOffset(0)
     , mTimeSyncCallback(nullptr)
     , mTimeSyncCallbackContext(nullptr)
-    , mTimer(aInstance, HandleTimeout)
+    , mTimer(aInstance)
     , mCurrentStatus(OT_NETWORK_TIME_UNSYNCHRONIZED)
 {
     CheckAndHandleChanges(false);
@@ -209,11 +209,6 @@ void TimeSync::HandleTimeout(void)
     CheckAndHandleChanges(false);
 }
 
-void TimeSync::HandleTimeout(Timer &aTimer)
-{
-    aTimer.Get<TimeSync>().HandleTimeout();
-}
-
 void TimeSync::CheckAndHandleChanges(bool aTimeUpdated)
 {
     otNetworkTimeStatus networkTimeStatus       = OT_NETWORK_TIME_SYNCHRONIZED;
@@ -242,8 +237,8 @@ void TimeSync::CheckAndHandleChanges(bool aTimeUpdated)
         {
             // The device hasn’t received time sync for more than two periods time.
             networkTimeStatus = OT_NETWORK_TIME_RESYNC_NEEDED;
-            LogInfo("Time sync status RESYNC_NEEDED as timeSyncLastSyncMs:%u > resyncNeededThresholdMs:%u",
-                    timeSyncLastSyncMs, resyncNeededThresholdMs);
+            LogInfo("Time sync status RESYNC_NEEDED as timeSyncLastSyncMs:%lu > resyncNeededThresholdMs:%lu",
+                    ToUlong(timeSyncLastSyncMs), ToUlong(resyncNeededThresholdMs));
         }
         else
         {

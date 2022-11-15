@@ -50,12 +50,12 @@
 extern void otAppCliInit(otInstance *aInstance);
 
 #if OPENTHREAD_CONFIG_HEAP_EXTERNAL_ENABLE
-void *otPlatCAlloc(size_t aNum, size_t aSize)
+OT_TOOL_WEAK void *otPlatCAlloc(size_t aNum, size_t aSize)
 {
     return calloc(aNum, aSize);
 }
 
-void otPlatFree(void *aPtr)
+OT_TOOL_WEAK void otPlatFree(void *aPtr)
 {
     free(aPtr);
 }
@@ -83,6 +83,12 @@ extern otError ProcessNodeIdFilter(void *aContext, uint8_t aArgsLength, char *aA
 static const otCliCommand kCommands[] = {
     {"exit", ProcessExit},
 #if OPENTHREAD_EXAMPLES_SIMULATION
+    /*
+     * The CLI command `nodeidfilter` only works for simulation in real time.
+     * The usage of the command `nodeidfilter`:
+     *     - `nodeidfilter deny <nodeid>`:  It denies the connection to a specified node.
+     *     - `nodeidfilter clear`:          It restores the filter state to default.
+     */
     {"nodeidfilter", ProcessNodeIdFilter},
 #endif
 };

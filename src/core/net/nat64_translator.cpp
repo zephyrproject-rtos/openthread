@@ -50,13 +50,14 @@ RegisterLogModule("Nat64");
 
 Translator::Translator(Instance &aInstance)
     : InstanceLocator(aInstance)
-    , mMappingExpirer(aInstance, MappingExpirerHandler)
+    , mEnabled(false)
+    , mMappingExpirerTimer(aInstance)
 {
     Random::NonCrypto::FillBuffer(reinterpret_cast<uint8_t *>(&mNextMappingId), sizeof(mNextMappingId));
 
     mNat64Prefix.Clear();
     mIp4Cidr.Clear();
-    mMappingExpirer.Start(kAddressMappingIdleTimeoutMsec);
+    mMappingExpirerTimer.Start(kAddressMappingIdleTimeoutMsec);
 }
 
 Message *Translator::NewIp4Message(const Message::Settings &aSettings)
@@ -308,21 +309,26 @@ void Translator::ReleaseMapping(AddressMapping &aMapping)
     LogInfo("mapping removed: %s", aMapping.ToString().AsCString());
 }
 
-uint16_t Translator::ReleaseExpiredMappings(void)
+uint16_t Translator::ReleaseMappings(LinkedList<AddressMapping> &aMappings)
 {
-    uint16_t                   numRemoved = 0;
-    TimeMilli                  now        = TimerMilli::GetNow();
-    LinkedList<AddressMapping> idleMappings;
+    uint16_t numRemoved = 0;
 
-    mActiveAddressMappings.RemoveAllMatching(now, idleMappings);
-
-    for (AddressMapping *idleMapping = idleMappings.Pop(); idleMapping != nullptr; idleMapping = idleMappings.Pop())
+    for (AddressMapping *mapping = aMappings.Pop(); mapping != nullptr; mapping = aMappings.Pop())
     {
         numRemoved++;
-        ReleaseMapping(*idleMapping);
+        ReleaseMapping(*mapping);
     }
 
     return numRemoved;
+}
+
+uint16_t Translator::ReleaseExpiredMappings(void)
+{
+    LinkedList<AddressMapping> idleMappings;
+
+    mActiveAddressMappings.RemoveAllMatching(TimerMilli::GetNow(), idleMappings);
+
+    return ReleaseMappings(idleMappings);
 }
 
 Translator::AddressMapping *Translator::AllocateMapping(const Ip6::Address &aIp6Addr)
@@ -497,10 +503,10 @@ void Translator::SetNat64Prefix(const Ip6::Prefix &aNat64Prefix)
     }
 }
 
-void Translator::MappingExpirerHandler(Timer &aTimer)
+void Translator::HandleMappingExpirerTimer(void)
 {
-    LogInfo("Released %d expired mappings", aTimer.Get<Translator>().ReleaseExpiredMappings());
-    aTimer.Get<Translator>().mMappingExpirer.Start(kAddressMappingIdleTimeoutMsec);
+    LogInfo("Released %d expired mappings", ReleaseExpiredMappings());
+    mMappingExpirerTimer.Start(kAddressMappingIdleTimeoutMsec);
 }
 
 void Translator::InitAddressMappingIterator(AddressMappingIterator &aIterator)
@@ -588,6 +594,34 @@ void Translator::ProtocolCounters::Count4To6Packet(uint8_t aProtocol, uint64_t a
 
     mTotal.m4To6Packets++;
     mTotal.m4To6Bytes += aPacketSize;
+}
+
+State Translator::GetState(void) const
+{
+    State ret = kStateDisabled;
+
+    VerifyOrExit(mEnabled);
+    VerifyOrExit(mIp4Cidr.mLength > 0 && mNat64Prefix.IsValidNat64(), ret = kStateNotRunning);
+    ret = kStateActive;
+
+exit:
+    return ret;
+}
+
+void Translator::SetEnabled(bool aEnabled)
+{
+    VerifyOrExit(mEnabled != aEnabled);
+    mEnabled = aEnabled;
+
+    if (!aEnabled)
+    {
+        ReleaseMappings(mActiveAddressMappings);
+    }
+
+    LogInfo("NAT64 translator %s", aEnabled ? "enabled" : "disabled");
+
+exit:
+    return;
 }
 
 } // namespace Nat64

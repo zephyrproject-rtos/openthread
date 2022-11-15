@@ -766,13 +766,14 @@ tcp_input(struct ip6_hdr* ip6, struct tcphdr* th, otMessage* msg, struct tcpcb* 
 		 */
 
 		tcp_dooptions(&to, optp, optlen, TO_SYN);
-		tp = tcplp_sys_accept_ready(tpl, &ip6->ip6_dst, th->th_sport); // Try to allocate an active socket to accept into
+		tp = tcplp_sys_accept_ready(tpl, &ip6->ip6_src, th->th_sport); // Try to allocate an active socket to accept into
 		if (tp == NULL) {
 			/* If we couldn't allocate, just ignore the SYN. */
 			return IPPROTO_DONE;
 		}
 		if (tp == (struct tcpcb *) -1) {
 			rstreason = ECONNREFUSED;
+			tp = NULL;
 			goto dropwithreset;
 		}
 		tcp_state_change(tp, TCPS_SYN_RECEIVED);

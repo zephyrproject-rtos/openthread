@@ -294,4 +294,33 @@
 #define OPENTHREAD_POSIX_CONFIG_TREL_UDP_PORT 0
 #endif
 
+/**
+ * @def OPENTHREAD_POSIX_CONFIG_NAT64_CIDR
+ *
+ * This setting configures the NAT64 CIDR, used by NAT64 translator.
+ *
+ */
+#ifndef OPENTHREAD_POSIX_CONFIG_NAT64_CIDR
+#define OPENTHREAD_POSIX_CONFIG_NAT64_CIDR "192.168.255.0/24"
+#endif
+
+/**
+ * @def OPENTHREAD_POSIX_CONFIG_BACKTRACE_ENABLE
+ *
+ * Define as 1 to enable backtrace support.
+ *
+ */
+#ifndef OPENTHREAD_POSIX_CONFIG_BACKTRACE_ENABLE
+#define OPENTHREAD_POSIX_CONFIG_BACKTRACE_ENABLE 1
+#endif
+
+/**
+ * @def OPENTHREAD_POSIX_CONFIG_ANDROID_ENABLE
+ *
+ * Define as 1 to enable android support.
+ *
+ */
+#ifndef OPENTHREAD_POSIX_CONFIG_ANDROID_ENABLE
+#define OPENTHREAD_POSIX_CONFIG_ANDROID_ENABLE 0
+#endif
 #endif // OPENTHREAD_PLATFORM_CONFIG_H_

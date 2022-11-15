@@ -255,7 +255,6 @@ LOCAL_SRC_FILES                                                  := \
     src/core/crypto/aes_ecb.cpp                                     \
     src/core/crypto/crypto_platform.cpp                             \
     src/core/crypto/ecdsa.cpp                                       \
-    src/core/crypto/ecdsa_tinycrypt.cpp                             \
     src/core/crypto/hkdf_sha256.cpp                                 \
     src/core/crypto/hmac_sha256.cpp                                 \
     src/core/crypto/mbedtls.cpp                                     \
@@ -386,6 +385,7 @@ LOCAL_SRC_FILES                                                  := \
     src/lib/url/url.cpp                                             \
     src/posix/platform/alarm.cpp                                    \
     src/posix/platform/backbone.cpp                                 \
+    src/posix/platform/backtrace.cpp                                \
     src/posix/platform/daemon.cpp                                   \
     src/posix/platform/entropy.cpp                                  \
     src/posix/platform/firewall.cpp                                 \
@@ -405,6 +405,46 @@ LOCAL_SRC_FILES                                                  := \
     src/posix/platform/trel.cpp                                     \
     src/posix/platform/udp.cpp                                      \
     src/posix/platform/utils.cpp                                    \
+    third_party/tcplp/bsdtcp/tcp_usrreq.c                           \
+    third_party/tcplp/bsdtcp/tcp_subr.c                             \
+    third_party/tcplp/bsdtcp/tcp_output.c                           \
+    third_party/tcplp/bsdtcp/cc/cc_newreno.c                        \
+    third_party/tcplp/bsdtcp/tcp_reass.c                            \
+    third_party/tcplp/bsdtcp/tcp_timewait.c                         \
+    third_party/tcplp/bsdtcp/tcp_sack.c                             \
+    third_party/tcplp/bsdtcp/tcp_input.c                            \
+    third_party/tcplp/bsdtcp/tcp_timer.c                            \
+    third_party/tcplp/lib/bitmap.c                                  \
+    third_party/tcplp/lib/cbuf.c                                    \
+    third_party/tcplp/lib/lbuf.c                                    \
+    $(OPENTHREAD_PROJECT_SRC_FILES)                                 \
+    $(NULL)
+
+include $(BUILD_STATIC_LIBRARY)
+
+include $(CLEAR_VARS)
+
+LOCAL_MODULE := libopenthread-mbedtls
+LOCAL_MODULE_TAGS := eng
+LOCAL_C_INCLUDES                                         := \
+    $(OPENTHREAD_PROJECT_INCLUDES)                          \
+    $(LOCAL_PATH)/include                                   \
+    $(LOCAL_PATH)/src                                       \
+    $(LOCAL_PATH)/src/cli                                   \
+    $(LOCAL_PATH)/src/core                                  \
+    $(LOCAL_PATH)/src/posix/platform                        \
+    $(LOCAL_PATH)/src/posix/platform/include                \
+    $(LOCAL_PATH)/third_party/mbedtls                       \
+    $(LOCAL_PATH)/third_party/mbedtls/repo/include          \
+    $(NULL)
+
+LOCAL_CFLAGS                     := \
+    -std=c99                        \
+    $(OPENTHREAD_PUBLIC_CFLAGS)     \
+    $(OPENTHREAD_PRIVATE_CFLAGS)    \
+    $(OPENTHREAD_PROJECT_CFLAGS)    \
+
+LOCAL_SRC_FILES                                                  := \
     third_party/mbedtls/repo/library/aes.c                          \
     third_party/mbedtls/repo/library/aesni.c                        \
     third_party/mbedtls/repo/library/arc4.c                         \
@@ -492,20 +532,6 @@ LOCAL_SRC_FILES                                                  := \
     third_party/mbedtls/repo/library/x509write_crt.c                \
     third_party/mbedtls/repo/library/x509write_csr.c                \
     third_party/mbedtls/repo/library/xtea.c                         \
-    third_party/tcplp/bsdtcp/tcp_usrreq.c                           \
-    third_party/tcplp/bsdtcp/tcp_subr.c                             \
-    third_party/tcplp/bsdtcp/tcp_output.c                           \
-    third_party/tcplp/bsdtcp/cc/cc_newreno.c                        \
-    third_party/tcplp/bsdtcp/tcp_reass.c                            \
-    third_party/tcplp/bsdtcp/tcp_timewait.c                         \
-    third_party/tcplp/bsdtcp/tcp_sack.c                             \
-    third_party/tcplp/bsdtcp/tcp_input.c                            \
-    third_party/tcplp/bsdtcp/tcp_timer.c                            \
-    third_party/tcplp/lib/bitmap.c                                  \
-    third_party/tcplp/lib/cbuf.c                                    \
-    third_party/tcplp/lib/lbuf.c                                    \
-    $(OPENTHREAD_PROJECT_SRC_FILES)                                 \
-    $(NULL)
 
 include $(BUILD_STATIC_LIBRARY)
 
@@ -590,7 +616,8 @@ LOCAL_CPPFLAGS                                                              := \
 LOCAL_LDLIBS                               := \
     -lanl                                     \
     -lrt                                      \
-    -lutil
+    -lutil                                    \
+    -rdynamic                                 \
 
 LOCAL_SRC_FILES                            := \
     src/posix/cli_readline.cpp                \
@@ -598,7 +625,7 @@ LOCAL_SRC_FILES                            := \
     src/posix/main.c                          \
     $(NULL)
 
-LOCAL_STATIC_LIBRARIES = libopenthread-cli ot-core
+LOCAL_STATIC_LIBRARIES = libopenthread-cli ot-core libopenthread-mbedtls
 include $(BUILD_EXECUTABLE)
 
 ifeq ($(USE_OTBR_DAEMON), 1)

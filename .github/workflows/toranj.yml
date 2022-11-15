@@ -47,7 +47,7 @@ jobs:
       COVERAGE: 1
       TORANJ_RADIO : ${{ matrix.TORANJ_RADIO }}
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - name: Bootstrap
@@ -79,7 +79,7 @@ jobs:
       if: "matrix.TORANJ_RADIO != 'multi'"
       run: |
         ./script/test generate_coverage gcc
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       if: "matrix.TORANJ_RADIO != 'multi'"
       with:
         name: cov-toranj-ncp-${{ matrix.TORANJ_RADIO }}
@@ -96,7 +96,7 @@ jobs:
       TORANJ_RADIO : ${{ matrix.TORANJ_RADIO }}
       TORANJ_CLI: 1
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - name: Bootstrap
@@ -113,11 +113,32 @@ jobs:
       if: "matrix.TORANJ_RADIO != 'multi'"
       run: |
         ./script/test generate_coverage gcc
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       if: "matrix.TORANJ_RADIO != 'multi'"
       with:
         name: cov-toranj-cli-${{ matrix.TORANJ_RADIO }}
         path: tmp/coverage.info
+
+  toranj-unittest:
+    name: toranj-unittest
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - name: Bootstrap
+      env:
+        GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+      run: |
+        sudo dpkg --add-architecture i386
+        sudo apt-get update
+        sudo apt-get --no-install-recommends install -y clang-10 clang++-10 ninja-build python3-setuptools python3-wheel llvm lcov
+        sudo apt-get --no-install-recommends install -y g++-multilib libreadline-dev:i386 libncurses-dev:i386
+        python3 -m pip install -r tests/scripts/thread-cert/requirements.txt
+    - name: Build & Run
+      run: |
+        ./tests/toranj/build.sh cmake
+        ninja test
 
   upload-coverage:
     needs:
@@ -125,7 +146,7 @@ jobs:
     - toranj-cli
     runs-on: ubuntu-20.04
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - name: Bootstrap
@@ -147,7 +168,7 @@ jobs:
     needs: upload-coverage
     runs-on: ubuntu-20.04
     steps:
-    - uses: geekyeggo/delete-artifact@1-glob-support
+    - uses: geekyeggo/delete-artifact@v2
       with:
         name: cov-*
         useGlob: true

@@ -176,6 +176,19 @@ typedef struct otMleCounters
     uint16_t mBetterPartitionAttachAttempts; ///< Number of attempts to attach to a better partition.
 
     /**
+     * Role time tracking.
+     *
+     * When uptime feature is enabled (OPENTHREAD_CONFIG_UPTIME_ENABLE = 1) time spent in each MLE role is tracked.
+     *
+     */
+    uint64_t mDisabledTime; ///< Number of milliseconds device has been in OT_DEVICE_ROLE_DISABLED role.
+    uint64_t mDetachedTime; ///< Number of milliseconds device has been in OT_DEVICE_ROLE_DETACHED role.
+    uint64_t mChildTime;    ///< Number of milliseconds device has been in OT_DEVICE_ROLE_CHILD role.
+    uint64_t mRouterTime;   ///< Number of milliseconds device has been in OT_DEVICE_ROLE_ROUTER role.
+    uint64_t mLeaderTime;   ///< Number of milliseconds device has been in OT_DEVICE_ROLE_LEADER role.
+    uint64_t mTrackedTime;  ///< Number of milliseconds tracked by previous counters.
+
+    /**
      * Number of times device changed its parent.
      *
      * A parent change can happen if device detaches from its current parent and attaches to a different one, or even
@@ -459,7 +472,7 @@ otError otThreadSetNetworkKey(otInstance *aInstance, const otNetworkKey *aKey);
 otError otThreadSetNetworkKeyRef(otInstance *aInstance, otNetworkKeyRef aKeyRef);
 
 /**
- * This function returns a pointer to the Thread Routing Locator (RLOC) address.
+ * Gets the Thread Routing Locator (RLOC) address.
  *
  * @param[in]  aInstance A pointer to an OpenThread instance.
  *
@@ -469,7 +482,7 @@ otError otThreadSetNetworkKeyRef(otInstance *aInstance, otNetworkKeyRef aKeyRef)
 const otIp6Address *otThreadGetRloc(otInstance *aInstance);
 
 /**
- * This function returns a pointer to the Mesh Local EID address.
+ * Gets the Mesh Local EID address.
  *
  * @param[in]  aInstance A pointer to an OpenThread instance.
  *
@@ -505,7 +518,7 @@ const otMeshLocalPrefix *otThreadGetMeshLocalPrefix(otInstance *aInstance);
 otError otThreadSetMeshLocalPrefix(otInstance *aInstance, const otMeshLocalPrefix *aMeshLocalPrefix);
 
 /**
- * This function returns the Thread link-local IPv6 address.
+ * Gets the Thread link-local IPv6 address.
  *
  * The Thread link local address is derived using IEEE802.15.4 Extended Address as Interface Identifier.
  *
@@ -517,9 +530,9 @@ otError otThreadSetMeshLocalPrefix(otInstance *aInstance, const otMeshLocalPrefi
 const otIp6Address *otThreadGetLinkLocalIp6Address(otInstance *aInstance);
 
 /**
- * This function returns the Thread Link-Local All Thread Nodes multicast address.
+ * Gets the Thread Link-Local All Thread Nodes multicast address.
  *
- * The address is a link-local Unicast Prefix-Based Multcast Address [RFC 3306], with:
+ * The address is a link-local Unicast Prefix-Based Multicast Address [RFC 3306], with:
  *   - flgs set to 3 (P = 1 and T = 1)
  *   - scop set to 2
  *   - plen set to 64
@@ -534,9 +547,9 @@ const otIp6Address *otThreadGetLinkLocalIp6Address(otInstance *aInstance);
 const otIp6Address *otThreadGetLinkLocalAllThreadNodesMulticastAddress(otInstance *aInstance);
 
 /**
- * This function returns the Thread Realm-Local All Thread Nodes multicast address.
+ * Gets the Thread Realm-Local All Thread Nodes multicast address.
  *
- * The address is a realm-local Unicast Prefix-Based Multcast Address [RFC 3306], with:
+ * The address is a realm-local Unicast Prefix-Based Multicast Address [RFC 3306], with:
  *   - flgs set to 3 (P = 1 and T = 1)
  *   - scop set to 3
  *   - plen set to 64
@@ -656,7 +669,7 @@ otError otThreadSetFixedDuaInterfaceIdentifier(otInstance *aInstance, const otIp
 const otIp6InterfaceIdentifier *otThreadGetFixedDuaInterfaceIdentifier(otInstance *aInstance);
 
 /**
- * Get the thrKeySequenceCounter.
+ * Gets the thrKeySequenceCounter.
  *
  * @param[in]  aInstance A pointer to an OpenThread instance.
  *
@@ -668,7 +681,7 @@ const otIp6InterfaceIdentifier *otThreadGetFixedDuaInterfaceIdentifier(otInstanc
 uint32_t otThreadGetKeySequenceCounter(otInstance *aInstance);
 
 /**
- * Set the thrKeySequenceCounter.
+ * Sets the thrKeySequenceCounter.
  *
  * @note This API is reserved for testing and demo purposes only. Changing settings with
  * this API will render a production application non-compliant with the Thread Specification.
@@ -682,7 +695,7 @@ uint32_t otThreadGetKeySequenceCounter(otInstance *aInstance);
 void otThreadSetKeySequenceCounter(otInstance *aInstance, uint32_t aKeySequenceCounter);
 
 /**
- * Get the thrKeySwitchGuardTime
+ * Gets the thrKeySwitchGuardTime (in hours).
  *
  * @param[in]  aInstance A pointer to an OpenThread instance.
  *
@@ -694,7 +707,7 @@ void otThreadSetKeySequenceCounter(otInstance *aInstance, uint32_t aKeySequenceC
 uint32_t otThreadGetKeySwitchGuardTime(otInstance *aInstance);
 
 /**
- * Set the thrKeySwitchGuardTime
+ * Sets the thrKeySwitchGuardTime (in hours).
  *
  * @note This API is reserved for testing and demo purposes only. Changing settings with
  * this API will render a production application non-compliant with the Thread Specification.

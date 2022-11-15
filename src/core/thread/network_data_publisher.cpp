@@ -63,7 +63,7 @@ Publisher::Publisher(Instance &aInstance)
     , mPrefixCallback(nullptr)
     , mPrefixCallbackContext(nullptr)
 #endif
-    , mTimer(aInstance, Publisher::HandleTimer)
+    , mTimer(aInstance)
 {
 #if OPENTHREAD_CONFIG_BORDER_ROUTER_ENABLE
     // Since the `PrefixEntry` type is used in an array,
@@ -87,7 +87,7 @@ void Publisher::SetPrefixCallback(PrefixCallback aCallback, void *aContext)
     mPrefixCallbackContext = aContext;
 }
 
-Error Publisher::PublishOnMeshPrefix(const OnMeshPrefixConfig &aConfig)
+Error Publisher::PublishOnMeshPrefix(const OnMeshPrefixConfig &aConfig, Requester aRequester)
 {
     Error        error = kErrorNone;
     PrefixEntry *entry;
@@ -95,16 +95,16 @@ Error Publisher::PublishOnMeshPrefix(const OnMeshPrefixConfig &aConfig)
     VerifyOrExit(aConfig.IsValid(GetInstance()), error = kErrorInvalidArgs);
     VerifyOrExit(aConfig.mStable, error = kErrorInvalidArgs);
 
-    entry = FindOrAllocatePrefixEntry(aConfig.GetPrefix());
+    entry = FindOrAllocatePrefixEntry(aConfig.GetPrefix(), aRequester);
     VerifyOrExit(entry != nullptr, error = kErrorNoBufs);
 
-    entry->Publish(aConfig);
+    entry->Publish(aConfig, aRequester);
 
 exit:
     return error;
 }
 
-Error Publisher::PublishExternalRoute(const ExternalRouteConfig &aConfig)
+Error Publisher::PublishExternalRoute(const ExternalRouteConfig &aConfig, Requester aRequester)
 {
     Error        error = kErrorNone;
     PrefixEntry *entry;
@@ -112,10 +112,10 @@ Error Publisher::PublishExternalRoute(const ExternalRouteConfig &aConfig)
     VerifyOrExit(aConfig.IsValid(GetInstance()), error = kErrorInvalidArgs);
     VerifyOrExit(aConfig.mStable, error = kErrorInvalidArgs);
 
-    entry = FindOrAllocatePrefixEntry(aConfig.GetPrefix());
+    entry = FindOrAllocatePrefixEntry(aConfig.GetPrefix(), aRequester);
     VerifyOrExit(entry != nullptr, error = kErrorNoBufs);
 
-    entry->Publish(aConfig);
+    entry->Publish(aConfig, aRequester);
 
 exit:
     return error;
@@ -149,23 +149,47 @@ exit:
     return error;
 }
 
-Publisher::PrefixEntry *Publisher::FindOrAllocatePrefixEntry(const Ip6::Prefix &aPrefix)
+Publisher::PrefixEntry *Publisher::FindOrAllocatePrefixEntry(const Ip6::Prefix &aPrefix, Requester aRequester)
 {
     // Returns a matching prefix entry if found, otherwise tries
     // to allocate a new entry.
 
-    PrefixEntry *prefixEntry = FindMatchingPrefixEntry(aPrefix);
-
-    VerifyOrExit(prefixEntry == nullptr);
+    PrefixEntry *prefixEntry = nullptr;
+    uint16_t     numEntries  = 0;
+    uint8_t      maxEntries  = 0;
 
     for (PrefixEntry &entry : mPrefixEntries)
     {
-        if (!entry.IsInUse())
+        if (entry.IsInUse())
+        {
+            if (entry.GetRequester() == aRequester)
+            {
+                numEntries++;
+            }
+
+            if (entry.Matches(aPrefix))
+            {
+                prefixEntry = &entry;
+                ExitNow();
+            }
+        }
+        else if (prefixEntry == nullptr)
         {
             prefixEntry = &entry;
-            ExitNow();
         }
     }
+
+    switch (aRequester)
+    {
+    case kFromUser:
+        maxEntries = kMaxUserPrefixEntries;
+        break;
+    case kFromRoutingManager:
+        maxEntries = kMaxRoutingManagerPrefixEntries;
+        break;
+    }
+
+    VerifyOrExit(numEntries < maxEntries, prefixEntry = nullptr);
 
 exit:
     return prefixEntry;
@@ -219,11 +243,6 @@ void Publisher::HandleNotifierEvents(Events aEvents)
         entry.HandleNotifierEvents(aEvents);
     }
 #endif
-}
-
-void Publisher::HandleTimer(Timer &aTimer)
-{
-    aTimer.Get<Publisher>().HandleTimer();
 }
 
 void Publisher::HandleTimer(void)
@@ -437,7 +456,7 @@ Publisher::Entry::InfoString Publisher::Entry::ToString(bool aIncludeState) cons
             break;
         }
 
-        string.Append(prefixEntry.mPrefix.ToString().AsCString());
+        string.Append("%s", prefixEntry.mPrefix.ToString().AsCString());
         ExitNow();
     }
 #endif
@@ -453,7 +472,7 @@ exit:
 
 void Publisher::Entry::LogUpdateTime(void) const
 {
-    LogInfo("%s - update in %u msec", ToString().AsCString(), mUpdateTime - TimerMilli::GetNow());
+    LogInfo("%s - update in %lu msec", ToString().AsCString(), ToUlong(mUpdateTime - TimerMilli::GetNow()));
 }
 
 const char *Publisher::Entry::StateToString(State aState)
@@ -791,22 +810,27 @@ Publisher::DnsSrpServiceEntry::Info::Info(Type aType, uint16_t aPortOrSeqNumber,
 //---------------------------------------------------------------------------------------------------------------------
 // Publisher::PrefixEntry
 
-void Publisher::PrefixEntry::Publish(const OnMeshPrefixConfig &aConfig)
+void Publisher::PrefixEntry::Publish(const OnMeshPrefixConfig &aConfig, Requester aRequester)
 {
     LogInfo("Publishing OnMeshPrefix %s", aConfig.GetPrefix().ToString().AsCString());
 
-    Publish(aConfig.GetPrefix(), aConfig.ConvertToTlvFlags(), kTypeOnMeshPrefix);
+    Publish(aConfig.GetPrefix(), aConfig.ConvertToTlvFlags(), kTypeOnMeshPrefix, aRequester);
 }
 
-void Publisher::PrefixEntry::Publish(const ExternalRouteConfig &aConfig)
+void Publisher::PrefixEntry::Publish(const ExternalRouteConfig &aConfig, Requester aRequester)
 {
     LogInfo("Publishing ExternalRoute %s", aConfig.GetPrefix().ToString().AsCString());
 
-    Publish(aConfig.GetPrefix(), aConfig.ConvertToTlvFlags(), kTypeExternalRoute);
+    Publish(aConfig.GetPrefix(), aConfig.ConvertToTlvFlags(), kTypeExternalRoute, aRequester);
 }
 
-void Publisher::PrefixEntry::Publish(const Ip6::Prefix &aPrefix, uint16_t aNewFlags, Type aNewType)
+void Publisher::PrefixEntry::Publish(const Ip6::Prefix &aPrefix,
+                                     uint16_t           aNewFlags,
+                                     Type               aNewType,
+                                     Requester          aRequester)
 {
+    mRequester = aRequester;
+
     if (GetState() != kNoEntry)
     {
         // If this is an existing entry, first we check that there is

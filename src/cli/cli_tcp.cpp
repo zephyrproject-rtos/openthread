@@ -49,10 +49,8 @@
 namespace ot {
 namespace Cli {
 
-constexpr TcpExample::Command TcpExample::sCommands[];
-
-TcpExample::TcpExample(Output &aOutput)
-    : OutputWrapper(aOutput)
+TcpExample::TcpExample(otInstance *aInstance, OutputImplementer &aOutputImplementer)
+    : Output(aInstance, aOutputImplementer)
     , mInitialized(false)
     , mEndpointConnected(false)
     , mSendBusy(false)
@@ -62,19 +60,7 @@ TcpExample::TcpExample(Output &aOutput)
 {
 }
 
-otError TcpExample::ProcessHelp(Arg aArgs[])
-{
-    OT_UNUSED_VARIABLE(aArgs);
-
-    for (const Command &command : sCommands)
-    {
-        OutputLine(command.mName);
-    }
-
-    return OT_ERROR_NONE;
-}
-
-otError TcpExample::ProcessInit(Arg aArgs[])
+template <> otError TcpExample::Process<Cmd("init")>(Arg aArgs[])
 {
     otError error = OT_ERROR_NONE;
     size_t  receiveBufferSize;
@@ -163,7 +149,7 @@ exit:
     return error;
 }
 
-otError TcpExample::ProcessDeinit(Arg aArgs[])
+template <> otError TcpExample::Process<Cmd("deinit")>(Arg aArgs[])
 {
     otError error = OT_ERROR_NONE;
     otError endpointError;
@@ -190,7 +176,7 @@ exit:
     return error;
 }
 
-otError TcpExample::ProcessBind(Arg aArgs[])
+template <> otError TcpExample::Process<Cmd("bind")>(Arg aArgs[])
 {
     otError    error;
     otSockAddr sockaddr;
@@ -207,7 +193,7 @@ exit:
     return error;
 }
 
-otError TcpExample::ProcessConnect(Arg aArgs[])
+template <> otError TcpExample::Process<Cmd("connect")>(Arg aArgs[])
 {
     otError    error;
     otSockAddr sockaddr;
@@ -227,13 +213,13 @@ otError TcpExample::ProcessConnect(Arg aArgs[])
     VerifyOrExit(aArgs[2].IsEmpty(), error = OT_ERROR_INVALID_ARGS);
 
     SuccessOrExit(error = otTcpConnect(&mEndpoint, &sockaddr, OT_TCP_CONNECT_NO_FAST_OPEN));
-    mEndpointConnected = false;
+    mEndpointConnected = true;
 
 exit:
     return error;
 }
 
-otError TcpExample::ProcessSend(Arg aArgs[])
+template <> otError TcpExample::Process<Cmd("send")>(Arg aArgs[])
 {
     otError error;
 
@@ -265,7 +251,7 @@ exit:
     return error;
 }
 
-otError TcpExample::ProcessBenchmark(Arg aArgs[])
+template <> otError TcpExample::Process<Cmd("benchmark")>(Arg aArgs[])
 {
     otError error = OT_ERROR_NONE;
 
@@ -317,7 +303,7 @@ exit:
     return error;
 }
 
-otError TcpExample::ProcessSendEnd(Arg aArgs[])
+template <> otError TcpExample::Process<Cmd("sendend")>(Arg aArgs[])
 {
     otError error;
 
@@ -330,7 +316,7 @@ exit:
     return error;
 }
 
-otError TcpExample::ProcessAbort(Arg aArgs[])
+template <> otError TcpExample::Process<Cmd("abort")>(Arg aArgs[])
 {
     otError error;
 
@@ -344,7 +330,7 @@ exit:
     return error;
 }
 
-otError TcpExample::ProcessListen(Arg aArgs[])
+template <> otError TcpExample::Process<Cmd("listen")>(Arg aArgs[])
 {
     otError    error;
     otSockAddr sockaddr;
@@ -362,7 +348,7 @@ exit:
     return error;
 }
 
-otError TcpExample::ProcessStopListening(Arg aArgs[])
+template <> otError TcpExample::Process<Cmd("stoplistening")>(Arg aArgs[])
 {
     otError error;
 
@@ -377,13 +363,29 @@ exit:
 
 otError TcpExample::Process(Arg aArgs[])
 {
-    otError        error = OT_ERROR_INVALID_ARGS;
+#define CmdEntry(aCommandString)                                  \
+    {                                                             \
+        aCommandString, &TcpExample::Process<Cmd(aCommandString)> \
+    }
+
+    static constexpr Command kCommands[] = {
+        CmdEntry("abort"), CmdEntry("benchmark"), CmdEntry("bind"), CmdEntry("connect"), CmdEntry("deinit"),
+        CmdEntry("init"),  CmdEntry("listen"),    CmdEntry("send"), CmdEntry("sendend"), CmdEntry("stoplistening"),
+    };
+
+    static_assert(BinarySearch::IsSorted(kCommands), "kCommands is not sorted");
+
+    otError        error = OT_ERROR_INVALID_COMMAND;
     const Command *command;
 
-    VerifyOrExit(!aArgs[0].IsEmpty(), IgnoreError(ProcessHelp(nullptr)));
+    if (aArgs[0].IsEmpty() || (aArgs[0] == "help"))
+    {
+        OutputCommandTable(kCommands);
+        ExitNow(error = aArgs[0].IsEmpty() ? error : OT_ERROR_NONE);
+    }
 
-    command = BinarySearch::Find(aArgs[0].GetCString(), sCommands);
-    VerifyOrExit(command != nullptr, error = OT_ERROR_INVALID_COMMAND);
+    command = BinarySearch::Find(aArgs[0].GetCString(), kCommands);
+    VerifyOrExit(command != nullptr);
 
     error = (this->*command->mHandler)(aArgs + 1);
 
@@ -518,8 +520,8 @@ void TcpExample::HandleTcpReceiveAvailable(otTcpEndpoint *aEndpoint,
         IgnoreError(otTcpReceiveByReference(aEndpoint, &data));
         for (; data != nullptr; data = data->mNext)
         {
-            OutputLine("TCP: Received %u bytes: %.*s", data->mLength, data->mLength,
-                       reinterpret_cast<const char *>(data->mData));
+            OutputLine("TCP: Received %u bytes: %.*s", static_cast<unsigned>(data->mLength),
+                       static_cast<unsigned>(data->mLength), reinterpret_cast<const char *>(data->mData));
             totalReceived += data->mLength;
         }
         OT_ASSERT(aBytesAvailable == totalReceived);
@@ -594,6 +596,7 @@ void TcpExample::HandleTcpAcceptDone(otTcpListener *aListener, otTcpEndpoint *aE
     OT_UNUSED_VARIABLE(aListener);
     OT_UNUSED_VARIABLE(aEndpoint);
 
+    mEndpointConnected = true;
     OutputFormat("Accepted connection from ");
     OutputSockAddrLine(*aPeer);
 }
@@ -632,8 +635,10 @@ void TcpExample::CompleteBenchmark(void)
     uint32_t milliseconds         = TimerMilli::GetNow() - mBenchmarkStart;
     uint32_t thousandTimesGoodput = (1000 * (mBenchmarkBytesTotal << 3) + (milliseconds >> 1)) / milliseconds;
 
-    OutputLine("TCP Benchmark Complete: Transferred %u bytes in %u milliseconds", mBenchmarkBytesTotal, milliseconds);
-    OutputLine("TCP Goodput: %u.%03u kb/s", thousandTimesGoodput / 1000, thousandTimesGoodput % 1000);
+    OutputLine("TCP Benchmark Complete: Transferred %lu bytes in %lu milliseconds", ToUlong(mBenchmarkBytesTotal),
+               ToUlong(milliseconds));
+    OutputLine("TCP Goodput: %lu.%03u kb/s", ToUlong(thousandTimesGoodput / 1000),
+               static_cast<uint16_t>(thousandTimesGoodput % 1000));
     mBenchmarkBytesTotal = 0;
 }
 

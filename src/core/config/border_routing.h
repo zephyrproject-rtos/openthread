@@ -68,12 +68,40 @@
 /**
  * @def OPENTHREAD_CONFIG_BORDER_ROUTING_MAX_ON_MESH_PREFIXES
  *
- * Specified maximum number of on-mesh prefixes (discovered from Thread Network Data) that are included as Route Info
+ * Specifies maximum number of on-mesh prefixes (discovered from Thread Network Data) that are included as Route Info
  * Option in emitted Router Advertisement messages.
  *
  */
 #ifndef OPENTHREAD_CONFIG_BORDER_ROUTING_MAX_ON_MESH_PREFIXES
 #define OPENTHREAD_CONFIG_BORDER_ROUTING_MAX_ON_MESH_PREFIXES 16
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_BORDER_ROUTING_MAX_OLD_ON_LINK_PREFIXES
+ *
+ * Specifies maximum number of old local on-link prefixes (being deprecated) maintained by routing manager.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_BORDER_ROUTING_MAX_OLD_ON_LINK_PREFIXES
+#define OPENTHREAD_CONFIG_BORDER_ROUTING_MAX_OLD_ON_LINK_PREFIXES 3
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_BORDER_ROUTING_ROUTER_ACTIVE_CHECK_TIMEOUT
+ *
+ * Specifies the timeout in msec for a discovered router on infra link side.
+ *
+ * This parameter is related to mechanism to check that a discovered router is still active.
+ *
+ * After this timeout elapses since the last received message (a Router or Neighbor Advertisement) from the router,
+ * routing manager will start sending Neighbor Solidification (NS) probes to the router to check that it is still
+ * active.
+ *
+ * This parameter can be considered to large value to practically disable this behavior.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_BORDER_ROUTING_ROUTER_ACTIVE_CHECK_TIMEOUT
+#define OPENTHREAD_CONFIG_BORDER_ROUTING_ROUTER_ACTIVE_CHECK_TIMEOUT (60 * 1000) // (in msec).
 #endif
 
 #endif // CONFIG_BORDER_ROUTING_H_

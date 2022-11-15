@@ -37,6 +37,7 @@
 #include "common/arg_macros.hpp"
 #include "common/array.hpp"
 #include "common/instance.hpp"
+#include "common/time.hpp"
 #include "net/icmp6.hpp"
 #include "net/nd6.hpp"
 
@@ -45,8 +46,8 @@
 using namespace ot;
 
 // Logs a message and adds current time (sNow) as "<hours>:<min>:<secs>.<msec>"
-#define Log(...)                                                                                          \
-    printf("%02u:%02u:%02u.%03u " OT_FIRST_ARG(__VA_ARGS__) "\n", (sNow / 36000000), (sNow / 60000) % 60, \
+#define Log(...)                                                                                         \
+    printf("%02u:%02u:%02u.%03u " OT_FIRST_ARG(__VA_ARGS__) "\n", (sNow / 3600000), (sNow / 60000) % 60, \
            (sNow / 1000) % 60, sNow % 1000 OT_REST_ARGS(__VA_ARGS__))
 
 static constexpr uint32_t kInfraIfIndex     = 1;
@@ -55,7 +56,8 @@ static const char         kInfraIfAddress[] = "fe80::1";
 static constexpr uint32_t kValidLitime       = 2000;
 static constexpr uint32_t kPreferredLifetime = 1800;
 
-static constexpr uint16_t kMaxRaSize = 800;
+static constexpr uint16_t kMaxRaSize              = 800;
+static constexpr uint16_t kMaxDeprecatingPrefixes = 16;
 
 static ot::Instance *sInstance;
 
@@ -76,15 +78,33 @@ enum ExpectedPio
     kPioDeprecatingLocalOnLink, // Expect to see local on-link prefix deprecated (zero preferred lifetime).
 };
 
+struct DeprecatingPrefix
+{
+    DeprecatingPrefix(void) = default;
+
+    DeprecatingPrefix(const Ip6::Prefix &aPrefix, uint32_t aLifetime)
+        : mPrefix(aPrefix)
+        , mLifetime(aLifetime)
+    {
+    }
+
+    bool Matches(const Ip6::Prefix &aPrefix) const { return mPrefix == aPrefix; }
+
+    Ip6::Prefix mPrefix;   // Old on-link prefix being deprecated.
+    uint32_t    mLifetime; // Valid lifetime of prefix from PIO.
+};
+
 static Ip6::Address sInfraIfAddress;
 
-bool        sRsEmitted;          // Indicates if an RS message was emitted by BR.
-bool        sRaValidated;        // Indicates if an RA was emitted by BR and successfully validated.
-ExpectedPio sExpectedPio;        // Expected PIO in the emitted RA by BR (MUST be seen in RA to set `sRaValidated`).
-bool        sExpectOldOnLinkPio; // Expect to see old local prefix PIO
-uint32_t    sOnLinkLifetime;     // Valid lifetime for local on-link prefix from the last processed RA.
-uint32_t    sOldOnLinkLifetime;  // Valid lifetime of the old local prefix PIO (when `sExpectOldOnLinkPio`).
-Ip6::Prefix sOldOnLinkPrefix;    // The old on-link PIO prefix in last processed RA (when `sExpectOldOnLinkPio`)
+bool        sRsEmitted;      // Indicates if an RS message was emitted by BR.
+bool        sRaValidated;    // Indicates if an RA was emitted by BR and successfully validated.
+bool        sNsEmitted;      // Indicates if an NS message was emitted by BR.
+bool        sRespondToNs;    // Indicates whether or not to respond to NS.
+ExpectedPio sExpectedPio;    // Expected PIO in the emitted RA by BR (MUST be seen in RA to set `sRaValidated`).
+uint32_t    sOnLinkLifetime; // Valid lifetime for local on-link prefix from the last processed RA.
+
+// Array containing deprecating prefixes from PIOs in the last processed RA.
+Array<DeprecatingPrefix, kMaxDeprecatingPrefixes> sDeprecatingPrefixes;
 
 static constexpr uint16_t kMaxRioPrefixes = 10;
 
@@ -137,6 +157,23 @@ void        LogRouterAdvert(const Icmp6Packet &aPacket);
 void        ValidateRouterAdvert(const Icmp6Packet &aPacket);
 const char *PreferenceToString(int8_t aPreference);
 void        SendRouterAdvert(const Ip6::Address &aAddress, const Icmp6Packet &aPacket);
+void        SendNeighborAdvert(const Ip6::Address &aAddress, const Ip6::Nd::NeighborAdvertMessage &aNaMessage);
+
+#if OPENTHREAD_CONFIG_LOG_OUTPUT == OPENTHREAD_CONFIG_LOG_OUTPUT_PLATFORM_DEFINED
+void otPlatLog(otLogLevel aLogLevel, otLogRegion aLogRegion, const char *aFormat, ...)
+{
+    OT_UNUSED_VARIABLE(aLogLevel);
+    OT_UNUSED_VARIABLE(aLogRegion);
+
+    va_list args;
+
+    printf("   ");
+    va_start(args, aFormat);
+    vprintf(aFormat, args);
+    va_end(args);
+    printf("\n");
+}
+#endif
 
 //----------------------------------------------------------------------------------------------------------------------
 // `otPlatRadio
@@ -213,6 +250,30 @@ otError otPlatInfraIfSendIcmp6Nd(uint32_t            aInfraIfIndex,
         ValidateRouterAdvert(packet);
         break;
 
+    case Ip6::Icmp::Header::kTypeNeighborSolicit:
+    {
+        const Ip6::Nd::NeighborSolicitMessage *nsMsg =
+            reinterpret_cast<const Ip6::Nd::NeighborSolicitMessage *>(packet.GetBytes());
+
+        Log("  Neighbor Solicit message");
+
+        VerifyOrQuit(packet.GetLength() >= sizeof(Ip6::Nd::NeighborSolicitMessage));
+        VerifyOrQuit(nsMsg->IsValid());
+        sNsEmitted = true;
+
+        if (sRespondToNs)
+        {
+            Ip6::Nd::NeighborAdvertMessage naMsg;
+
+            naMsg.SetTargetAddress(nsMsg->GetTargetAddress());
+            naMsg.SetRouterFlag();
+            naMsg.SetSolicitedFlag();
+            SendNeighborAdvert(AsCoreType(aDestAddress), naMsg);
+        }
+
+        break;
+    }
+
     default:
         VerifyOrQuit(false, "Bad ICMP6 type");
     }
@@ -245,7 +306,7 @@ void AdvanceTime(uint32_t aDuration)
 
     Log("AdvanceTime for %u.%03u", aDuration / 1000, aDuration % 1000);
 
-    while (sAlarmTime <= time)
+    while (TimeMilli(sAlarmTime) <= TimeMilli(time))
     {
         ProcessRadioTxAndTasklets();
         sNow = sAlarmTime;
@@ -259,10 +320,11 @@ void AdvanceTime(uint32_t aDuration)
 void ValidateRouterAdvert(const Icmp6Packet &aPacket)
 {
     Ip6::Nd::RouterAdvertMessage raMsg(aPacket);
-    bool                         sawExpectedPio   = false;
-    bool                         sawExpecteOldPio = false;
+    bool                         sawExpectedPio = false;
 
     VerifyOrQuit(raMsg.IsValid());
+
+    sDeprecatingPrefixes.Clear();
 
     for (const Ip6::Nd::Option &option : raMsg)
     {
@@ -287,28 +349,26 @@ void ValidateRouterAdvert(const Icmp6Packet &aPacket)
                     break;
 
                 case kPioAdvertisingLocalOnLink:
-                    VerifyOrQuit(pio.GetPreferredLifetime() > 0, "On link prefix is deprecated unexpectedly");
-                    sOnLinkLifetime = pio.GetValidLifetime();
-                    sawExpectedPio  = true;
+                    if (pio.GetPreferredLifetime() > 0)
+                    {
+                        sOnLinkLifetime = pio.GetValidLifetime();
+                        sawExpectedPio  = true;
+                    }
                     break;
 
                 case kPioDeprecatingLocalOnLink:
-                    VerifyOrQuit(pio.GetPreferredLifetime() == 0, "On link prefix is not deprecated");
-                    sOnLinkLifetime = pio.GetValidLifetime();
-                    sawExpectedPio  = true;
+                    if (pio.GetPreferredLifetime() == 0)
+                    {
+                        sOnLinkLifetime = pio.GetValidLifetime();
+                        sawExpectedPio  = true;
+                    }
                     break;
                 }
             }
             else
             {
                 VerifyOrQuit(pio.GetPreferredLifetime() == 0, "Old on link prefix is not deprecated");
-                sOldOnLinkPrefix   = prefix;
-                sOldOnLinkLifetime = pio.GetValidLifetime();
-
-                if (sExpectOldOnLinkPio)
-                {
-                    sawExpecteOldPio = true;
-                }
+                SuccessOrQuit(sDeprecatingPrefixes.PushBack(DeprecatingPrefix(prefix, pio.GetValidLifetime())));
             }
             break;
         }
@@ -346,16 +406,18 @@ void ValidateRouterAdvert(const Icmp6Packet &aPacket)
             break;
         case kPioAdvertisingLocalOnLink:
         case kPioDeprecatingLocalOnLink:
-            VerifyOrQuit(sawExpectedPio, "Did not see on-link prefix PIO in the RA");
-        }
-
-        if (sExpectOldOnLinkPio)
-        {
-            VerifyOrQuit(sawExpecteOldPio, "Did not see old on-link prefix PIO in the RA");
+            // First emitted RAs may not yet have the expected PIO
+            // so we exit and not set `sRaValidated` to allow it
+            // to be checked for next received RA.
+            VerifyOrExit(sawExpectedPio);
+            break;
         }
 
         sRaValidated = true;
     }
+
+exit:
+    return;
 }
 
 void LogRouterAdvert(const Icmp6Packet &aPacket)
@@ -432,6 +494,13 @@ void SendRouterAdvert(const Ip6::Address &aAddress, const Icmp6Packet &aPacket)
     otPlatInfraIfRecvIcmp6Nd(sInstance, kInfraIfIndex, &aAddress, aPacket.GetBytes(), aPacket.GetLength());
 }
 
+void SendNeighborAdvert(const Ip6::Address &aAddress, const Ip6::Nd::NeighborAdvertMessage &aNaMessage)
+{
+    Log("Sending NA from %s", aAddress.ToString().AsCString());
+    otPlatInfraIfRecvIcmp6Nd(sInstance, kInfraIfIndex, &aAddress, reinterpret_cast<const uint8_t *>(&aNaMessage),
+                             sizeof(aNaMessage));
+}
+
 Ip6::Prefix PrefixFromString(const char *aString, uint8_t aPrefixLength)
 {
     Ip6::Prefix prefix;
@@ -467,6 +536,15 @@ void VerifyOmrPrefixInNetData(const Ip6::Prefix &aOmrPrefix, bool aDefaultRoute 
     VerifyOrQuit(prefixConfig.mDefaultRoute == aDefaultRoute);
 
     VerifyOrQuit(otNetDataGetNextOnMeshPrefix(sInstance, &iterator, &prefixConfig) == kErrorNotFound);
+}
+
+void VerifyNoOmrPrefixInNetData(void)
+{
+    otNetworkDataIterator           iterator = OT_NETWORK_DATA_ITERATOR_INIT;
+    NetworkData::OnMeshPrefixConfig prefixConfig;
+
+    Log("VerifyNoOmrPrefixInNetData()");
+    VerifyOrQuit(otNetDataGetNextOnMeshPrefix(sInstance, &iterator, &prefixConfig) != kErrorNone);
 }
 
 using NetworkData::RoutePreference;
@@ -516,6 +594,15 @@ template <uint16_t kLength> void VerifyExternalRoutesInNetData(const ExternalRou
     }
 
     VerifyOrQuit(counter == kLength);
+}
+
+void VerifyNoExternalRouteInNetData(void)
+{
+    otNetworkDataIterator            iterator = OT_NETWORK_DATA_ITERATOR_INIT;
+    NetworkData::ExternalRouteConfig routeConfig;
+
+    Log("VerifyNoExternalRouteInNetData()");
+    VerifyOrQuit(otNetDataGetNextRoute(sInstance, &iterator, &routeConfig) != kErrorNone);
 }
 
 struct Pio
@@ -653,6 +740,19 @@ template <uint16_t kNumOnLinkPrefixes, uint16_t kNumRoutePrefixes>
 void VerifyPrefixTable(const OnLinkPrefix (&aOnLinkPrefixes)[kNumOnLinkPrefixes],
                        const RoutePrefix (&aRoutePrefixes)[kNumRoutePrefixes])
 {
+    VerifyPrefixTable(aOnLinkPrefixes, kNumOnLinkPrefixes, aRoutePrefixes, kNumRoutePrefixes);
+}
+
+template <uint16_t kNumOnLinkPrefixes> void VerifyPrefixTable(const OnLinkPrefix (&aOnLinkPrefixes)[kNumOnLinkPrefixes])
+{
+    VerifyPrefixTable(aOnLinkPrefixes, kNumOnLinkPrefixes, nullptr, 0);
+}
+
+void VerifyPrefixTable(const OnLinkPrefix *aOnLinkPrefixes,
+                       uint16_t            aNumOnLinkPrefixes,
+                       const RoutePrefix * aRoutePrefixes,
+                       uint16_t            aNumRoutePrefixes)
+{
     BorderRouter::RoutingManager::PrefixTableIterator iter;
     BorderRouter::RoutingManager::PrefixTableEntry    entry;
     uint16_t                                          onLinkPrefixCount = 0;
@@ -668,14 +768,16 @@ void VerifyPrefixTable(const OnLinkPrefix (&aOnLinkPrefixes)[kNumOnLinkPrefixes]
 
         if (entry.mIsOnLink)
         {
-            Log("   on-link prefix:%s, valid:%u, preferred:%u, router:%s",
+            Log("   on-link prefix:%s, valid:%u, preferred:%u, router:%s, age:%u",
                 AsCoreType(&entry.mPrefix).ToString().AsCString(), entry.mValidLifetime, entry.mPreferredLifetime,
-                AsCoreType(&entry.mRouterAddress).ToString().AsCString());
+                AsCoreType(&entry.mRouterAddress).ToString().AsCString(), entry.mMsecSinceLastUpdate / 1000);
 
             onLinkPrefixCount++;
 
-            for (const OnLinkPrefix &onLinkPrefix : aOnLinkPrefixes)
+            for (uint16_t index = 0; index < aNumOnLinkPrefixes; index++)
             {
+                const OnLinkPrefix &onLinkPrefix = aOnLinkPrefixes[index];
+
                 if ((onLinkPrefix.mPrefix == AsCoreType(&entry.mPrefix)) &&
                     (AsCoreType(&entry.mRouterAddress) == onLinkPrefix.mRouterAddress))
                 {
@@ -688,14 +790,17 @@ void VerifyPrefixTable(const OnLinkPrefix (&aOnLinkPrefixes)[kNumOnLinkPrefixes]
         }
         else
         {
-            Log("   route prefix:%s, valid:%u, prf:%s, router:%s", AsCoreType(&entry.mPrefix).ToString().AsCString(),
-                entry.mValidLifetime, PreferenceToString(entry.mRoutePreference),
-                AsCoreType(&entry.mRouterAddress).ToString().AsCString());
+            Log("   route prefix:%s, valid:%u, prf:%s, router:%s, age:%u",
+                AsCoreType(&entry.mPrefix).ToString().AsCString(), entry.mValidLifetime,
+                PreferenceToString(entry.mRoutePreference), AsCoreType(&entry.mRouterAddress).ToString().AsCString(),
+                entry.mMsecSinceLastUpdate / 1000);
 
             routePrefixCount++;
 
-            for (const RoutePrefix &routePrefix : aRoutePrefixes)
+            for (uint16_t index = 0; index < aNumRoutePrefixes; index++)
             {
+                const RoutePrefix &routePrefix = aRoutePrefixes[index];
+
                 if ((routePrefix.mPrefix == AsCoreType(&entry.mPrefix)) &&
                     (AsCoreType(&entry.mRouterAddress) == routePrefix.mRouterAddress))
                 {
@@ -710,8 +815,8 @@ void VerifyPrefixTable(const OnLinkPrefix (&aOnLinkPrefixes)[kNumOnLinkPrefixes]
         VerifyOrQuit(didFind);
     }
 
-    VerifyOrQuit(onLinkPrefixCount == kNumOnLinkPrefixes);
-    VerifyOrQuit(routePrefixCount == kNumRoutePrefixes);
+    VerifyOrQuit(onLinkPrefixCount == aNumOnLinkPrefixes);
+    VerifyOrQuit(routePrefixCount == aNumRoutePrefixes);
 }
 
 void InitTest(void)
@@ -748,6 +853,15 @@ void InitTest(void)
     sRaValidated = false;
     sExpectedPio = kNoPio;
     sExpectedRios.Clear();
+    sRespondToNs = true;
+}
+
+void FinalizeTest(void)
+{
+    SuccessOrQuit(otIp6SetEnabled(sInstance, false));
+    SuccessOrQuit(otThreadSetEnabled(sInstance, false));
+    SuccessOrQuit(otInstanceErasePersistentInfo(sInstance));
+    testFreeInstance(sInstance);
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -894,7 +1008,7 @@ void TestSamePrefixesFromMultipleRouters(void)
 
     Log("End of TestSamePrefixesFromMultipleRouters");
 
-    testFreeInstance(sInstance);
+    FinalizeTest();
 }
 
 void TestOmrSelection(void)
@@ -1010,7 +1124,7 @@ void TestOmrSelection(void)
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     Log("End of TestOmrSelection");
-    testFreeInstance(sInstance);
+    FinalizeTest();
 }
 
 void TestDefaultRoute(void)
@@ -1194,7 +1308,7 @@ void TestDefaultRoute(void)
 
     Log("End of TestDefaultRoute");
 
-    testFreeInstance(sInstance);
+    FinalizeTest();
 }
 
 void TestLocalOnLinkPrefixDeprecation(void)
@@ -1331,7 +1445,7 @@ void TestLocalOnLinkPrefixDeprecation(void)
 
     Log("End of TestLocalOnLinkPrefixDeprecation");
 
-    testFreeInstance(sInstance);
+    FinalizeTest();
 }
 
 #if OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE
@@ -1400,7 +1514,7 @@ void TestDomainPrefixAsOmr(void)
     AdvanceTime(100);
 
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // Make sure BR emits RA without domain prfix or previous local OMR.
+    // Make sure BR emits RA without domain prefix or previous local OMR.
 
     sRaValidated = false;
     sExpectedPio = kPioAdvertisingLocalOnLink;
@@ -1412,7 +1526,7 @@ void TestDomainPrefixAsOmr(void)
 
     VerifyOrQuit(sRaValidated);
 
-    // We should see RIO removing the local OMR prefix with lifetiem zero
+    // We should see RIO removing the local OMR prefix with lifetime zero
     // and should not see the domain prefix as RIO.
 
     VerifyOrQuit(sExpectedRios[0].mPrefix == domainPrefix);
@@ -1477,7 +1591,7 @@ void TestDomainPrefixAsOmr(void)
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     Log("End of TestDomainPrefixAsOmr");
-    testFreeInstance(sInstance);
+    FinalizeTest();
 }
 #endif // OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE
 
@@ -1487,6 +1601,9 @@ void TestExtPanIdChange(void)
 
     static const otExtendedPanId kExtPanId1 = {{0x01, 0x02, 0x03, 0x04, 0x05, 0x6, 0x7, 0x08}};
     static const otExtendedPanId kExtPanId2 = {{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x99, 0x88}};
+    static const otExtendedPanId kExtPanId3 = {{0x12, 0x34, 0x56, 0x78, 0x9a, 0xab, 0xcd, 0xef}};
+    static const otExtendedPanId kExtPanId4 = {{0x44, 0x00, 0x44, 0x00, 0x44, 0x00, 0x44, 0x00}};
+    static const otExtendedPanId kExtPanId5 = {{0x77, 0x88, 0x00, 0x00, 0x55, 0x55, 0x55, 0x55}};
 
     Ip6::Prefix          localOnLink;
     Ip6::Prefix          oldLocalOnLink;
@@ -1494,6 +1611,7 @@ void TestExtPanIdChange(void)
     Ip6::Prefix          onLinkPrefix   = PrefixFromString("2000:abba:baba::", 64);
     Ip6::Address         routerAddressA = AddressFromString("fd00::aaaa");
     uint32_t             oldPrefixLifetime;
+    Ip6::Prefix          oldPrefixes[4];
     otOperationalDataset dataset;
 
     Log("--------------------------------------------------------------------------------------------");
@@ -1537,9 +1655,8 @@ void TestExtPanIdChange(void)
     oldLocalOnLink    = localOnLink;
     oldPrefixLifetime = sOnLinkLifetime;
 
-    sRaValidated        = false;
-    sExpectOldOnLinkPio = true;
-    sExpectedPio        = kPioAdvertisingLocalOnLink;
+    sRaValidated = false;
+    sExpectedPio = kPioAdvertisingLocalOnLink;
 
     SuccessOrQuit(otDatasetGetActive(sInstance, &dataset));
 
@@ -1560,7 +1677,9 @@ void TestExtPanIdChange(void)
     AdvanceTime(30000);
 
     VerifyOrQuit(sRaValidated);
-    VerifyOrQuit(sOldOnLinkPrefix == oldLocalOnLink);
+    VerifyOrQuit(sDeprecatingPrefixes.GetLength() == 1);
+    VerifyOrQuit(sDeprecatingPrefixes[0].mPrefix == oldLocalOnLink);
+    oldPrefixLifetime = sDeprecatingPrefixes[0].mLifetime;
 
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Validate the Network Data to contain both the current and old
@@ -1571,9 +1690,47 @@ void TestExtPanIdChange(void)
                                    ExternalRoute(oldLocalOnLink, NetworkData::kRoutePreferenceMedium)});
 
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Stop BR and validate that a final RA is emitted deprecating
+    // both current local on-link prefix and old prefix.
+
+    sRaValidated = false;
+    sExpectedPio = kPioDeprecatingLocalOnLink;
+
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().SetEnabled(false));
+    AdvanceTime(100);
+
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sDeprecatingPrefixes.GetLength() == 1);
+    VerifyOrQuit(sDeprecatingPrefixes[0].mPrefix == oldLocalOnLink);
+    oldPrefixLifetime = sDeprecatingPrefixes[0].mLifetime;
+
+    sRaValidated = false;
+    AdvanceTime(350000);
+    VerifyOrQuit(!sRaValidated);
+
+    VerifyNoOmrPrefixInNetData();
+    VerifyNoExternalRouteInNetData();
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Start BR again and validate old prefix will continue to
+    // be deprecated.
+
+    sRaValidated = false;
+    sExpectedPio = kPioAdvertisingLocalOnLink;
+
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().SetEnabled(true));
+
+    AdvanceTime(300000);
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sDeprecatingPrefixes.GetLength() == 1);
+    VerifyOrQuit(sDeprecatingPrefixes[0].mPrefix == oldLocalOnLink);
+    VerifyOrQuit(oldPrefixLifetime > sDeprecatingPrefixes[0].mLifetime);
+    oldPrefixLifetime = sDeprecatingPrefixes[0].mLifetime;
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Wait for old local on-link prefix to expire.
 
-    while (oldPrefixLifetime > kMaxRaTxInterval)
+    while (oldPrefixLifetime > 2 * kMaxRaTxInterval)
     {
         // Ensure Network Data entries remain as before. Mainly we still
         // see the deprecating local on-link prefix.
@@ -1589,21 +1746,22 @@ void TestExtPanIdChange(void)
         AdvanceTime(kMaxRaTxInterval * 1000);
 
         VerifyOrQuit(sRaValidated);
-        Log("Old on-link prefix is deprecating, remaining lifetime:%d", sOldOnLinkLifetime);
-        VerifyOrQuit(sOldOnLinkLifetime < oldPrefixLifetime);
-        oldPrefixLifetime = sOldOnLinkLifetime;
+        VerifyOrQuit(sDeprecatingPrefixes.GetLength() == 1);
+        Log("Old on-link prefix is deprecating, remaining lifetime:%d", sDeprecatingPrefixes[0].mLifetime);
+        VerifyOrQuit(sDeprecatingPrefixes[0].mLifetime < oldPrefixLifetime);
+        oldPrefixLifetime = sDeprecatingPrefixes[0].mLifetime;
     }
 
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // The local on-link prefix must be expired now and should no
     // longer be seen in the emitted RA message.
 
-    sRaValidated        = false;
-    sExpectOldOnLinkPio = false;
+    sRaValidated = false;
 
-    AdvanceTime(kMaxRaTxInterval * 1000);
+    AdvanceTime(2 * kMaxRaTxInterval * 1000);
 
     VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sDeprecatingPrefixes.IsEmpty());
     Log("Old on-link prefix is now expired");
 
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1626,9 +1784,8 @@ void TestExtPanIdChange(void)
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Validate that the local on-link prefix is deprecated.
 
-    sRaValidated        = false;
-    sExpectOldOnLinkPio = false;
-    sExpectedPio        = kPioDeprecatingLocalOnLink;
+    sRaValidated = false;
+    sExpectedPio = kPioDeprecatingLocalOnLink;
 
     AdvanceTime(30000);
 
@@ -1652,13 +1809,14 @@ void TestExtPanIdChange(void)
     // Validate that the old local on-link prefix is still being included
     // as PIO in the emitted RA.
 
-    sRaValidated        = false;
-    sExpectOldOnLinkPio = true;
-    sExpectedPio        = kNoPio;
+    sRaValidated = false;
+    sExpectedPio = kNoPio;
 
     AdvanceTime(30000);
 
     VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sDeprecatingPrefixes.GetLength() == 1);
+    VerifyOrQuit(sDeprecatingPrefixes[0].mPrefix == oldLocalOnLink);
 
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Validate that Network Data contains the old local on-link
@@ -1671,7 +1829,7 @@ void TestExtPanIdChange(void)
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Wait for old local on-link prefix to expire.
 
-    while (oldPrefixLifetime > kMaxRaTxInterval)
+    while (oldPrefixLifetime > 2 * kMaxRaTxInterval)
     {
         // Send same RA from router A to keep its on-link prefix alive.
 
@@ -1691,35 +1849,1011 @@ void TestExtPanIdChange(void)
         AdvanceTime(kMaxRaTxInterval * 1000);
 
         VerifyOrQuit(sRaValidated);
-        Log("Old on-link prefix is deprecating, remaining lifetime:%d", sOldOnLinkLifetime);
-        VerifyOrQuit(sOldOnLinkLifetime < oldPrefixLifetime);
-        oldPrefixLifetime = sOldOnLinkLifetime;
+        VerifyOrQuit(sDeprecatingPrefixes.GetLength() == 1);
+        Log("Old on-link prefix is deprecating, remaining lifetime:%d", sDeprecatingPrefixes[0].mLifetime);
+        VerifyOrQuit(sDeprecatingPrefixes[0].mLifetime < oldPrefixLifetime);
+        oldPrefixLifetime = sDeprecatingPrefixes[0].mLifetime;
     }
 
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // The old on-link prefix must be expired now and should no
     // longer be seen in the emitted RA message.
 
-    sRaValidated        = false;
-    sExpectOldOnLinkPio = false;
+    SendRouterAdvert(routerAddressA, {Pio(onLinkPrefix, kValidLitime, kPreferredLifetime)});
+    sRaValidated = false;
 
-    AdvanceTime(kMaxRaTxInterval * 1000);
+    AdvanceTime(2 * kMaxRaTxInterval * 1000);
 
     VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sDeprecatingPrefixes.IsEmpty());
     Log("Old on-link prefix is now expired");
 
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // Validate the Network Data to now only contains entry from router A
+    // Validate the Network Data to now only contains entry from router A.
+
+    VerifyOmrPrefixInNetData(localOmr);
+    VerifyExternalRoutesInNetData({ExternalRoute(onLinkPrefix, NetworkData::kRoutePreferenceMedium)});
+
+    //= = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+    // Check behavior when ext PAN ID changes while the local on-link is not
+    // advertised.
+
+    Log("Changing ext PAN ID again");
+
+    oldLocalOnLink = localOnLink;
+
+    sRaValidated = false;
+    sExpectedPio = kNoPio;
+
+    dataset.mExtendedPanId = kExtPanId3;
+    SuccessOrQuit(otDatasetSetActive(sInstance, &dataset));
+
+    AdvanceTime(500);
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().GetOnLinkPrefix(localOnLink));
+    Log("Local on-link prefix changed to %s from %s", localOnLink.ToString().AsCString(),
+        oldLocalOnLink.ToString().AsCString());
+
+    AdvanceTime(35000);
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sDeprecatingPrefixes.IsEmpty());
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Validate the Network Data to now only contains entry from router A.
 
     VerifyOmrPrefixInNetData(localOmr);
     VerifyExternalRoutesInNetData({ExternalRoute(onLinkPrefix, NetworkData::kRoutePreferenceMedium)});
 
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Remove the on-link prefix PIO being advertised by router A
+    // and ensure local on-link prefix is advertised again.
+
+    sRaValidated = false;
+    sExpectedPio = kPioAdvertisingLocalOnLink;
+
+    SendRouterAdvert(routerAddressA, {Pio(onLinkPrefix, kValidLitime, 0)});
+
+    AdvanceTime(300000);
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sDeprecatingPrefixes.IsEmpty());
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Wait for longer than valid lifetime of PIO entry from router A.
+    // Validate that it is unpublished from network data.
+
+    AdvanceTime(2000 * 1000);
+    VerifyOmrPrefixInNetData(localOmr);
+    VerifyExternalRoutesInNetData({ExternalRoute(localOnLink, NetworkData::kRoutePreferenceMedium)});
+
+    //= = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+    // Multiple PAN ID changes and multiple deprecating old prefixes.
+
+    oldPrefixes[0] = localOnLink;
+
+    dataset.mExtendedPanId = kExtPanId2;
+    SuccessOrQuit(otDatasetSetActive(sInstance, &dataset));
+
+    sRaValidated = false;
+    sExpectedPio = kPioAdvertisingLocalOnLink;
+
+    AdvanceTime(30000);
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().GetOnLinkPrefix(localOnLink));
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sDeprecatingPrefixes.GetLength() == 1);
+    VerifyOrQuit(sDeprecatingPrefixes.ContainsMatching(oldPrefixes[0]));
+
+    VerifyExternalRoutesInNetData({ExternalRoute(localOnLink, NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(oldPrefixes[0], NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Change the prefix again. We should see two deprecating prefixes.
+
+    oldPrefixes[1] = localOnLink;
+
+    dataset.mExtendedPanId = kExtPanId1;
+    SuccessOrQuit(otDatasetSetActive(sInstance, &dataset));
+
+    sRaValidated = false;
+    sExpectedPio = kPioAdvertisingLocalOnLink;
+
+    AdvanceTime(30000);
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().GetOnLinkPrefix(localOnLink));
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sDeprecatingPrefixes.GetLength() == 2);
+    VerifyOrQuit(sDeprecatingPrefixes.ContainsMatching(oldPrefixes[0]));
+    VerifyOrQuit(sDeprecatingPrefixes.ContainsMatching(oldPrefixes[1]));
+
+    VerifyExternalRoutesInNetData({ExternalRoute(localOnLink, NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(oldPrefixes[0], NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(oldPrefixes[1], NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Wait for 15 minutes and then change ext PAN ID again.
+    // Now we should see three deprecating prefixes.
+
+    AdvanceTime(15 * 60 * 1000);
+
+    oldPrefixes[2] = localOnLink;
+
+    dataset.mExtendedPanId = kExtPanId4;
+    SuccessOrQuit(otDatasetSetActive(sInstance, &dataset));
+
+    sRaValidated = false;
+    sExpectedPio = kPioAdvertisingLocalOnLink;
+
+    AdvanceTime(30000);
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().GetOnLinkPrefix(localOnLink));
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sDeprecatingPrefixes.GetLength() == 3);
+    VerifyOrQuit(sDeprecatingPrefixes.ContainsMatching(oldPrefixes[0]));
+    VerifyOrQuit(sDeprecatingPrefixes.ContainsMatching(oldPrefixes[1]));
+    VerifyOrQuit(sDeprecatingPrefixes.ContainsMatching(oldPrefixes[2]));
+
+    VerifyExternalRoutesInNetData({ExternalRoute(localOnLink, NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(oldPrefixes[0], NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(oldPrefixes[1], NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(oldPrefixes[2], NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Change ext PAN ID back to previous value of `kExtPanId1`.
+    // We should still see three deprecating prefixes and the last prefix
+    // at `oldPrefixes[2]` should again be treated as local on-link prefix.
+
+    oldPrefixes[3] = localOnLink;
+
+    dataset.mExtendedPanId = kExtPanId1;
+    SuccessOrQuit(otDatasetSetActive(sInstance, &dataset));
+
+    sRaValidated = false;
+    sExpectedPio = kPioAdvertisingLocalOnLink;
+
+    AdvanceTime(30000);
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().GetOnLinkPrefix(localOnLink));
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sDeprecatingPrefixes.GetLength() == 3);
+    VerifyOrQuit(sDeprecatingPrefixes.ContainsMatching(oldPrefixes[0]));
+    VerifyOrQuit(sDeprecatingPrefixes.ContainsMatching(oldPrefixes[1]));
+    VerifyOrQuit(oldPrefixes[2] == localOnLink);
+    VerifyOrQuit(sDeprecatingPrefixes.ContainsMatching(oldPrefixes[3]));
+
+    VerifyExternalRoutesInNetData({ExternalRoute(localOnLink, NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(oldPrefixes[0], NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(oldPrefixes[1], NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(oldPrefixes[3], NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Stop BR and validate the final emitted RA to contain
+    // all deprecating prefixes.
+
+    sRaValidated = false;
+    sExpectedPio = kPioDeprecatingLocalOnLink;
+
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().SetEnabled(false));
+    AdvanceTime(100);
+
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sDeprecatingPrefixes.GetLength() == 3);
+    VerifyOrQuit(sDeprecatingPrefixes.ContainsMatching(oldPrefixes[0]));
+    VerifyOrQuit(sDeprecatingPrefixes.ContainsMatching(oldPrefixes[1]));
+    VerifyOrQuit(sDeprecatingPrefixes.ContainsMatching(oldPrefixes[3]));
+
+    VerifyNoOmrPrefixInNetData();
+    VerifyNoExternalRouteInNetData();
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Wait for 15 minutes while BR stays disabled and validate
+    // there are no emitted RAs. We want to check that deprecating
+    // prefixes continue to expire while BR is stopped.
+
+    sRaValidated = false;
+    AdvanceTime(15 * 60 * 1000);
+
+    VerifyOrQuit(!sRaValidated);
+
+    VerifyNoOmrPrefixInNetData();
+    VerifyNoExternalRouteInNetData();
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Start BR again, and check that we only see the last deprecating prefix
+    // at `oldPrefixes[3]` in emitted RA and the other two are expired and
+    // no longer included as PIO and/or in network data.
+
+    sRaValidated = false;
+    sExpectedPio = kPioAdvertisingLocalOnLink;
+
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().SetEnabled(true));
+
+    AdvanceTime(30000);
+
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sDeprecatingPrefixes.GetLength() == 1);
+    VerifyOrQuit(sDeprecatingPrefixes.ContainsMatching(oldPrefixes[3]));
+
+    VerifyExternalRoutesInNetData({ExternalRoute(localOnLink, NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(oldPrefixes[3], NetworkData::kRoutePreferenceMedium)});
+
+    //= = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+    // Validate the oldest prefix is removed when we have too many
+    // back-to-back PAN ID changes.
+
+    // Remember the oldest deprecating prefix (associated with `kExtPanId4`).
+    oldLocalOnLink = oldPrefixes[3];
+
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().GetOnLinkPrefix(oldPrefixes[0]));
+    dataset.mExtendedPanId = kExtPanId2;
+    SuccessOrQuit(otDatasetSetActive(sInstance, &dataset));
+    AdvanceTime(30000);
+
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().GetOnLinkPrefix(oldPrefixes[1]));
+    dataset.mExtendedPanId = kExtPanId3;
+    SuccessOrQuit(otDatasetSetActive(sInstance, &dataset));
+    AdvanceTime(30000);
+
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().GetOnLinkPrefix(oldPrefixes[2]));
+    dataset.mExtendedPanId = kExtPanId5;
+    SuccessOrQuit(otDatasetSetActive(sInstance, &dataset));
+
+    sRaValidated = false;
+
+    AdvanceTime(30000);
+
+    VerifyOrQuit(sRaValidated);
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().GetOnLinkPrefix(localOnLink));
+    VerifyOrQuit(sDeprecatingPrefixes.GetLength() == 3);
+    VerifyOrQuit(sDeprecatingPrefixes.ContainsMatching(oldPrefixes[0]));
+    VerifyOrQuit(sDeprecatingPrefixes.ContainsMatching(oldPrefixes[1]));
+    VerifyOrQuit(sDeprecatingPrefixes.ContainsMatching(oldPrefixes[2]));
+    VerifyOrQuit(!sDeprecatingPrefixes.ContainsMatching(oldLocalOnLink));
+
+    VerifyExternalRoutesInNetData({ExternalRoute(localOnLink, NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(oldPrefixes[0], NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(oldPrefixes[1], NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(oldPrefixes[2], NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     Log("End of TestExtPanIdChange");
+    FinalizeTest();
+}
+
+void TestRouterNsProbe(void)
+{
+    Ip6::Prefix  localOnLink;
+    Ip6::Prefix  localOmr;
+    Ip6::Prefix  onLinkPrefix   = PrefixFromString("2000:abba:baba::", 64);
+    Ip6::Prefix  routePrefix    = PrefixFromString("2000:1234:5678::", 64);
+    Ip6::Address routerAddressA = AddressFromString("fd00::aaaa");
+    Ip6::Address routerAddressB = AddressFromString("fd00::bbbb");
+
+    Log("--------------------------------------------------------------------------------------------");
+    Log("TestRouterNsProbe");
+
+    InitTest();
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Start Routing Manager. Check emitted RS and RA messages.
+
+    sRsEmitted   = false;
+    sRaValidated = false;
+    sExpectedPio = kPioAdvertisingLocalOnLink;
+    sExpectedRios.Clear();
+
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().SetEnabled(true));
+
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().GetOnLinkPrefix(localOnLink));
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().GetOmrPrefix(localOmr));
+
+    Log("Local on-link prefix is %s", localOnLink.ToString().AsCString());
+    Log("Local OMR prefix is %s", localOmr.ToString().AsCString());
+
+    sExpectedRios.Add(localOmr);
+
+    AdvanceTime(30000);
+
+    VerifyOrQuit(sRsEmitted);
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sExpectedRios.SawAll());
+    Log("Received RA was validated");
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Send an RA from router A with a new on-link (PIO) and route prefix (RIO).
+
+    SendRouterAdvert(routerAddressA, {Pio(onLinkPrefix, kValidLitime, kPreferredLifetime)},
+                     {Rio(routePrefix, kValidLitime, NetworkData::kRoutePreferenceMedium)});
+
+    sExpectedPio = kPioDeprecatingLocalOnLink;
+
+    AdvanceTime(10);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check the discovered prefix table and ensure info from router A
+    // is present in the table.
+
+    VerifyPrefixTable({OnLinkPrefix(onLinkPrefix, kValidLitime, kPreferredLifetime, routerAddressA)},
+                      {RoutePrefix(routePrefix, kValidLitime, NetworkData::kRoutePreferenceMedium, routerAddressA)});
+
+    AdvanceTime(30000);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Send an RA from router B with same route prefix (RIO) but with
+    // high route preference.
+
+    SendRouterAdvert(routerAddressB, {Rio(routePrefix, kValidLitime, NetworkData::kRoutePreferenceHigh)});
+
+    AdvanceTime(200);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check the discovered prefix table and ensure entries from
+    // both router A and B are seen.
+
+    VerifyPrefixTable({OnLinkPrefix(onLinkPrefix, kValidLitime, kPreferredLifetime, routerAddressA)},
+                      {RoutePrefix(routePrefix, kValidLitime, NetworkData::kRoutePreferenceMedium, routerAddressA),
+                       RoutePrefix(routePrefix, kValidLitime, NetworkData::kRoutePreferenceHigh, routerAddressB)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check that BR emitted an NS to ensure routers are active.
+
+    sNsEmitted = false;
+    sRsEmitted = false;
+
+    AdvanceTime(160 * 1000);
+
+    VerifyOrQuit(sNsEmitted);
+    VerifyOrQuit(!sRsEmitted);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Disallow responding to NS message.
+    //
+    // This should trigger `RoutingManager` to send RS (which will get
+    // no response as well) and then remove all router entries.
+
+    sRespondToNs = false;
+
+    sExpectedPio = kPioAdvertisingLocalOnLink;
+    sRaValidated = false;
+    sNsEmitted   = false;
+
+    AdvanceTime(240 * 1000);
+
+    VerifyOrQuit(sNsEmitted);
+    VerifyOrQuit(sRaValidated);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check the discovered prefix table. We should see the on-link entry from
+    // router A as deprecated and no route prefix.
+
+    VerifyPrefixTable({OnLinkPrefix(onLinkPrefix, kValidLitime, 0, routerAddressA)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Verify that no more NS is being sent (since there is no more valid
+    // router entry in the table).
+
+    sExpectedPio = kPioAdvertisingLocalOnLink;
+    sRaValidated = false;
+    sNsEmitted   = false;
+
+    AdvanceTime(6 * 60 * 1000);
+
+    VerifyOrQuit(!sNsEmitted);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Send an RA from router B and verify that we see router B
+    // entry in prefix table.
+
+    SendRouterAdvert(routerAddressB, {Rio(routePrefix, kValidLitime, NetworkData::kRoutePreferenceHigh)});
+
+    VerifyPrefixTable({OnLinkPrefix(onLinkPrefix, kValidLitime, 0, routerAddressA)},
+                      {RoutePrefix(routePrefix, kValidLitime, NetworkData::kRoutePreferenceHigh, routerAddressB)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Wait for longer than router active time before NS probe.
+    // Check again that NS are sent again.
+
+    sRespondToNs = true;
+    sNsEmitted   = false;
+    sRsEmitted   = false;
+
+    AdvanceTime(3 * 60 * 1000);
+
+    VerifyOrQuit(sNsEmitted);
+    VerifyOrQuit(!sRsEmitted);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    Log("End of TestRouterNsProbe");
+    FinalizeTest();
+}
+
+void TestConflictingPrefix(void)
+{
+    static const otExtendedPanId kExtPanId1 = {{0x01, 0x02, 0x03, 0x04, 0x05, 0x6, 0x7, 0x08}};
+
+    Ip6::Prefix          localOnLink;
+    Ip6::Prefix          oldLocalOnLink;
+    Ip6::Prefix          localOmr;
+    Ip6::Prefix          onLinkPrefix   = PrefixFromString("2000:abba:baba::", 64);
+    Ip6::Address         routerAddressA = AddressFromString("fd00::aaaa");
+    Ip6::Address         routerAddressB = AddressFromString("fd00::bbbb");
+    otOperationalDataset dataset;
+
+    Log("--------------------------------------------------------------------------------------------");
+    Log("TestConflictingPrefix");
+
+    InitTest();
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Start Routing Manager. Check emitted RS and RA messages.
+
+    sRsEmitted   = false;
+    sRaValidated = false;
+    sExpectedPio = kPioAdvertisingLocalOnLink;
+    sExpectedRios.Clear();
+
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().SetEnabled(true));
+
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().GetOnLinkPrefix(localOnLink));
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().GetOmrPrefix(localOmr));
+
+    Log("Local on-link prefix is %s", localOnLink.ToString().AsCString());
+    Log("Local OMR prefix is %s", localOmr.ToString().AsCString());
+
+    sExpectedRios.Add(localOmr);
+
+    AdvanceTime(30000);
+
+    VerifyOrQuit(sRsEmitted);
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sExpectedRios.SawAll());
+    Log("Received RA was validated");
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check Network Data to include the local OMR and on-link prefix.
+
+    VerifyOmrPrefixInNetData(localOmr);
+    VerifyExternalRoutesInNetData({ExternalRoute(localOnLink, NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Send an RA from router A with our local on-link prefix as RIO.
+
+    Log("Send RA from router A with local on-link as RIO");
+    SendRouterAdvert(routerAddressA, {Rio(localOnLink, kValidLitime, NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check that the local on-link prefix is still being advertised.
+
+    sRaValidated = false;
+    AdvanceTime(610000);
+    VerifyOrQuit(sRaValidated);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check Network Data to still include the local OMR and on-link prefix.
+
+    VerifyOmrPrefixInNetData(localOmr);
+    VerifyExternalRoutesInNetData({ExternalRoute(localOnLink, NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Send an RA from router A removing local on-link prefix as RIO.
+
+    SendRouterAdvert(routerAddressA, {Rio(localOnLink, 0, NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Verify that on-link prefix is still included in Network Data and
+    // the change by router A did not cause it to be unpublished.
+
+    AdvanceTime(10000);
+    VerifyExternalRoutesInNetData({ExternalRoute(localOnLink, NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check that the local on-link prefix is still being advertised.
+
+    sRaValidated = false;
+    AdvanceTime(610000);
+    VerifyOrQuit(sRaValidated);
+
+    VerifyExternalRoutesInNetData({ExternalRoute(localOnLink, NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Send RA from router B advertising an on-link prefix. This
+    // should cause local on-link prefix to be deprecated.
+
+    SendRouterAdvert(routerAddressB, {Pio(onLinkPrefix, kValidLitime, kPreferredLifetime)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check that the local on-link prefix is now deprecating.
+
+    sRaValidated = false;
+    sExpectedPio = kPioDeprecatingLocalOnLink;
+
+    AdvanceTime(10000);
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sExpectedRios.SawAll());
+    Log("On-link prefix is deprecating, remaining lifetime:%d", sOnLinkLifetime);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check Network Data to include the new on-link prefix from router B and
+    // the deprecating local on-link prefix.
+
+    VerifyOmrPrefixInNetData(localOmr);
+    VerifyExternalRoutesInNetData({ExternalRoute(localOnLink, NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(onLinkPrefix, NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Send an RA from router A again adding local on-link prefix as RIO.
+
+    Log("Send RA from router A with local on-link as RIO");
+    SendRouterAdvert(routerAddressA, {Rio(localOnLink, kValidLitime, NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check that the local on-link prefix is still being deprecated.
+
+    sRaValidated = false;
+    AdvanceTime(610000);
+    VerifyOrQuit(sRaValidated);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check Network Data remains unchanged.
+
+    VerifyExternalRoutesInNetData({ExternalRoute(localOnLink, NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(onLinkPrefix, NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Send an RA from router A removing the previous RIO.
+
+    SendRouterAdvert(routerAddressA, {Rio(localOnLink, 0, NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check Network Data remains unchanged and still contains
+    // the deprecating local on-link prefix.
+
+    AdvanceTime(60000);
+    VerifyExternalRoutesInNetData({ExternalRoute(localOnLink, NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(onLinkPrefix, NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Send RA from router B removing its on-link prefix.
+
+    SendRouterAdvert(routerAddressB, {Pio(onLinkPrefix, kValidLitime, 0)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check that the local on-link prefix is once again being advertised.
+
+    sRaValidated = false;
+    sExpectedPio = kPioAdvertisingLocalOnLink;
+
+    AdvanceTime(10000);
+    VerifyOrQuit(sRaValidated);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check Network Data still contains both prefixes.
+
+    VerifyExternalRoutesInNetData({ExternalRoute(localOnLink, NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(onLinkPrefix, NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Change the extended PAN ID.
+
+    Log("Changing ext PAN ID");
+
+    SuccessOrQuit(otDatasetGetActive(sInstance, &dataset));
+
+    VerifyOrQuit(dataset.mComponents.mIsExtendedPanIdPresent);
+
+    dataset.mExtendedPanId = kExtPanId1;
+    SuccessOrQuit(otDatasetSetActive(sInstance, &dataset));
+    AdvanceTime(10000);
+
+    oldLocalOnLink = localOnLink;
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().GetOnLinkPrefix(localOnLink));
+
+    Log("Local on-link prefix is changed to %s from %s", localOnLink.ToString().AsCString(),
+        oldLocalOnLink.ToString().AsCString());
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check Network Data contains old and new local on-link prefix
+    // and deprecating prefix from router B.
+
+    VerifyExternalRoutesInNetData({ExternalRoute(localOnLink, NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(oldLocalOnLink, NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(onLinkPrefix, NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Send an RA from router A again adding the old local on-link prefix
+    // as RIO.
+
+    SendRouterAdvert(routerAddressA, {Rio(oldLocalOnLink, kValidLitime, NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check Network Data remains unchanged.
+
+    AdvanceTime(10000);
+    VerifyExternalRoutesInNetData({ExternalRoute(localOnLink, NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(oldLocalOnLink, NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(onLinkPrefix, NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Send an RA from router A removing the previous RIO.
+
+    SendRouterAdvert(routerAddressA, {Rio(localOnLink, 0, NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check Network Data remains unchanged.
+
+    AdvanceTime(10000);
+    VerifyExternalRoutesInNetData({ExternalRoute(localOnLink, NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(oldLocalOnLink, NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(onLinkPrefix, NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    Log("End of TestConflictingPrefix");
+
+    FinalizeTest();
+}
+
+#if OPENTHREAD_CONFIG_PLATFORM_FLASH_API_ENABLE
+void TestSavedOnLinkPrefixes(void)
+{
+    static const otExtendedPanId kExtPanId1 = {{0x01, 0x02, 0x03, 0x04, 0x05, 0x6, 0x7, 0x08}};
+
+    Ip6::Prefix          localOnLink;
+    Ip6::Prefix          oldLocalOnLink;
+    Ip6::Prefix          localOmr;
+    Ip6::Prefix          onLinkPrefix   = PrefixFromString("2000:abba:baba::", 64);
+    Ip6::Address         routerAddressA = AddressFromString("fd00::aaaa");
+    otOperationalDataset dataset;
+
+    Log("--------------------------------------------------------------------------------------------");
+    Log("TestSavedOnLinkPrefixes");
+
+    InitTest();
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Start Routing Manager. Check emitted RS and RA messages.
+
+    sRsEmitted   = false;
+    sRaValidated = false;
+    sExpectedPio = kPioAdvertisingLocalOnLink;
+    sExpectedRios.Clear();
+
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().SetEnabled(true));
+
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().GetOnLinkPrefix(localOnLink));
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().GetOmrPrefix(localOmr));
+
+    Log("Local on-link prefix is %s", localOnLink.ToString().AsCString());
+    Log("Local OMR prefix is %s", localOmr.ToString().AsCString());
+
+    sExpectedRios.Add(localOmr);
+
+    AdvanceTime(30000);
+
+    VerifyOrQuit(sRsEmitted);
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sExpectedRios.SawAll());
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check Network Data to include the local OMR and on-link prefix.
+
+    VerifyOmrPrefixInNetData(localOmr);
+    VerifyExternalRoutesInNetData({ExternalRoute(localOnLink, NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    Log("Changing ext PAN ID");
+
+    oldLocalOnLink = localOnLink;
+
+    sRaValidated = false;
+    sExpectedPio = kPioAdvertisingLocalOnLink;
+
+    SuccessOrQuit(otDatasetGetActive(sInstance, &dataset));
+
+    VerifyOrQuit(dataset.mComponents.mIsExtendedPanIdPresent);
+
+    dataset.mExtendedPanId = kExtPanId1;
+    dataset.mActiveTimestamp.mSeconds++;
+    SuccessOrQuit(otDatasetSetActive(sInstance, &dataset));
+
+    AdvanceTime(30000);
+
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().GetOnLinkPrefix(localOnLink));
+    Log("Local on-link prefix changed to %s from %s", localOnLink.ToString().AsCString(),
+        oldLocalOnLink.ToString().AsCString());
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Disable the instance and re-enable it.
+
+    Log("Disabling and re-enabling OT Instance");
 
     testFreeInstance(sInstance);
+
+    InitTest();
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Start Routing Manager.
+
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().SetEnabled(true));
+
+    AdvanceTime(100);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Send RA from router A advertising an on-link prefix.
+    // This ensures the local on-link prefix is not advertised, but
+    // it must be deprecated since it was advertised last time and
+    // saved in `Settings`.
+
+    SendRouterAdvert(routerAddressA, {Pio(onLinkPrefix, kValidLitime, kPreferredLifetime)});
+
+    sRaValidated = false;
+    sExpectedPio = kPioDeprecatingLocalOnLink;
+
+    AdvanceTime(30000);
+
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sDeprecatingPrefixes.GetLength() == 1);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check the saved prefixes are in netdata and being
+    // deprecated.
+
+    VerifyExternalRoutesInNetData({ExternalRoute(localOnLink, NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(oldLocalOnLink, NetworkData::kRoutePreferenceMedium),
+                                   ExternalRoute(onLinkPrefix, NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Wait for more than 1800 seconds to let the deprecating
+    // prefixes expire (keep sending RA from router A).
+
+    for (uint16_t index = 0; index < 185; index++)
+    {
+        SendRouterAdvert(routerAddressA, {Pio(onLinkPrefix, kValidLitime, kPreferredLifetime)});
+        AdvanceTime(10 * 1000);
+    }
+
+    VerifyExternalRoutesInNetData({ExternalRoute(onLinkPrefix, NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Disable the instance and re-enable it and restart Routing Manager.
+
+    Log("Disabling and re-enabling OT Instance again");
+
+    testFreeInstance(sInstance);
+    InitTest();
+
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().SetEnabled(true));
+    AdvanceTime(100);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Send RA from router A advertising an on-link prefix.
+
+    SendRouterAdvert(routerAddressA, {Pio(onLinkPrefix, kValidLitime, kPreferredLifetime)});
+
+    sRaValidated = false;
+    sExpectedPio = kNoPio;
+
+    AdvanceTime(30000);
+
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sDeprecatingPrefixes.GetLength() == 0);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check that previously saved on-link prefixes are no longer
+    // seen in Network Data (indicating that they were removed from
+    // `Settings`).
+
+    VerifyExternalRoutesInNetData({ExternalRoute(onLinkPrefix, NetworkData::kRoutePreferenceMedium)});
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    Log("End of TestSavedOnLinkPrefixes");
+    FinalizeTest();
 }
+#endif // OPENTHREAD_CONFIG_PLATFORM_FLASH_API_ENABLE
+
+#if OPENTHREAD_CONFIG_SRP_SERVER_ENABLE
+void TestAutoEnableOfSrpServer(void)
+{
+    Ip6::Prefix  localOnLink;
+    Ip6::Prefix  localOmr;
+    Ip6::Address routerAddressA = AddressFromString("fd00::aaaa");
+    Ip6::Prefix  onLinkPrefix   = PrefixFromString("2000:abba:baba::", 64);
+
+    Log("--------------------------------------------------------------------------------------------");
+    Log("TestAutoEnableOfSrpServer");
+
+    InitTest();
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check SRP Server state and enable auto-enable mode
+
+    otSrpServerSetAutoEnableMode(sInstance, true);
+    VerifyOrQuit(otSrpServerIsAutoEnableMode(sInstance));
+    VerifyOrQuit(otSrpServerGetState(sInstance) == OT_SRP_SERVER_STATE_DISABLED);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Start Routing Manager. Check emitted RS and RA messages.
+
+    sRsEmitted   = false;
+    sRaValidated = false;
+    sExpectedPio = kPioAdvertisingLocalOnLink;
+    sExpectedRios.Clear();
+
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().SetEnabled(true));
+
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().GetOnLinkPrefix(localOnLink));
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().GetOmrPrefix(localOmr));
+
+    Log("Local on-link prefix is %s", localOnLink.ToString().AsCString());
+    Log("Local OMR prefix is %s", localOmr.ToString().AsCString());
+
+    sExpectedRios.Add(localOmr);
+
+    AdvanceTime(30000);
+
+    VerifyOrQuit(sRsEmitted);
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sExpectedRios.SawAll());
+    Log("Received RA was validated");
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Validate that SRP server was auto-enabled
+
+    VerifyOrQuit(otSrpServerGetState(sInstance) != OT_SRP_SERVER_STATE_DISABLED);
+    Log("Srp::Server is enabled");
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Signal that infra if state changed and is no longer running.
+    // This should stop Routing Manager and in turn the SRP server.
+
+    sRaValidated = false;
+    sExpectedPio = kPioDeprecatingLocalOnLink;
+
+    Log("Signal infra if is not running");
+    SuccessOrQuit(otPlatInfraIfStateChanged(sInstance, kInfraIfIndex, false));
+    AdvanceTime(1);
+
+    VerifyOrQuit(sRaValidated);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check that SRP server is disabled.
+
+    VerifyOrQuit(otSrpServerGetState(sInstance) == OT_SRP_SERVER_STATE_DISABLED);
+    Log("Srp::Server is disabled");
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Signal that infra if state changed and is running again.
+
+    sRsEmitted   = false;
+    sRaValidated = false;
+    sExpectedPio = kPioAdvertisingLocalOnLink;
+    sExpectedRios.Add(localOmr);
+
+    Log("Signal infra if is running");
+    SuccessOrQuit(otPlatInfraIfStateChanged(sInstance, kInfraIfIndex, true));
+
+    AdvanceTime(30000);
+
+    VerifyOrQuit(sRsEmitted);
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sExpectedRios.SawAll());
+    Log("Received RA was validated");
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check that SRP server is enabled again.
+
+    VerifyOrQuit(otSrpServerGetState(sInstance) != OT_SRP_SERVER_STATE_DISABLED);
+    Log("Srp::Server is enabled");
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Disable `RoutingManager` explicitly.
+
+    sRaValidated = false;
+    sExpectedPio = kPioDeprecatingLocalOnLink;
+
+    Log("Disabling RoutingManager");
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().SetEnabled(false));
+    AdvanceTime(1);
+
+    VerifyOrQuit(sRaValidated);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check that SRP server is also disabled.
+
+    VerifyOrQuit(otSrpServerGetState(sInstance) == OT_SRP_SERVER_STATE_DISABLED);
+    Log("Srp::Server is disabled");
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Disable auto-enable mode on SRP server.
+
+    otSrpServerSetAutoEnableMode(sInstance, false);
+    VerifyOrQuit(!otSrpServerIsAutoEnableMode(sInstance));
+    VerifyOrQuit(otSrpServerGetState(sInstance) == OT_SRP_SERVER_STATE_DISABLED);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Re-start Routing Manager. Check emitted RS and RA messages.
+    // This cycle, router A will send a RA including a PIO.
+
+    sRsEmitted   = false;
+    sRaValidated = false;
+    sExpectedPio = kNoPio;
+    sExpectedRios.Clear();
+
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().SetEnabled(true));
+
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().GetOnLinkPrefix(localOnLink));
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().GetOmrPrefix(localOmr));
+
+    Log("Local on-link prefix is %s", localOnLink.ToString().AsCString());
+    Log("Local OMR prefix is %s", localOmr.ToString().AsCString());
+
+    sExpectedRios.Add(localOmr);
+
+    AdvanceTime(2000);
+
+    SendRouterAdvert(routerAddressA, {Pio(onLinkPrefix, kValidLitime, kPreferredLifetime)});
+
+    AdvanceTime(30000);
+
+    VerifyOrQuit(sRsEmitted);
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sExpectedRios.SawAll());
+    Log("Received RA was validated");
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Check that SRP server is still disabled.
+
+    VerifyOrQuit(otSrpServerGetState(sInstance) == OT_SRP_SERVER_STATE_DISABLED);
+    Log("Srp::Server is disabled");
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Enable auto-enable mode on SRP server. Since `RoutingManager`
+    // is already done with initial policy evaluation, the SRP server
+    // must be started immediately.
+
+    otSrpServerSetAutoEnableMode(sInstance, true);
+    VerifyOrQuit(otSrpServerIsAutoEnableMode(sInstance));
+
+    VerifyOrQuit(otSrpServerGetState(sInstance) != OT_SRP_SERVER_STATE_DISABLED);
+    Log("Srp::Server is enabled");
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Disable auto-enable mode on SRP server. It must not impact
+    // its current state and it should remain enabled.
+
+    otSrpServerSetAutoEnableMode(sInstance, false);
+    VerifyOrQuit(!otSrpServerIsAutoEnableMode(sInstance));
+
+    AdvanceTime(2000);
+    VerifyOrQuit(otSrpServerGetState(sInstance) != OT_SRP_SERVER_STATE_DISABLED);
+    Log("Srp::Server is enabled");
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Signal that infra if state changed and is no longer running.
+    // This should stop Routing Manager.
+
+    sRaValidated = false;
+
+    Log("Signal infra if is not running");
+    SuccessOrQuit(otPlatInfraIfStateChanged(sInstance, kInfraIfIndex, false));
+    AdvanceTime(1);
+
+    VerifyOrQuit(sRaValidated);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Re-enable auto-enable mode on SRP server. Since `RoutingManager`
+    // is stopped (infra if is down), the SRP serer must be stopped
+    // immediately.
+
+    otSrpServerSetAutoEnableMode(sInstance, true);
+    VerifyOrQuit(otSrpServerIsAutoEnableMode(sInstance));
+
+    VerifyOrQuit(otSrpServerGetState(sInstance) == OT_SRP_SERVER_STATE_DISABLED);
+    Log("Srp::Server is disabled");
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    Log("End of TestAutoEnableOfSrpServer");
+    FinalizeTest();
+}
+#endif // OPENTHREAD_CONFIG_SRP_SERVER_ENABLE
 
 #endif // OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
 
@@ -1734,6 +2868,15 @@ int main(void)
     TestDomainPrefixAsOmr();
 #endif
     TestExtPanIdChange();
+    TestConflictingPrefix();
+    TestRouterNsProbe();
+#if OPENTHREAD_CONFIG_PLATFORM_FLASH_API_ENABLE
+    TestSavedOnLinkPrefixes();
+#endif
+#if OPENTHREAD_CONFIG_SRP_SERVER_ENABLE
+    TestAutoEnableOfSrpServer();
+#endif
+
     printf("All tests passed\n");
 #else
     printf("BORDER_ROUTING feature is not enabled\n");

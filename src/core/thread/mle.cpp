@@ -80,9 +80,9 @@ Mle::Mle(Instance &aInstance)
     , mReattachState(kReattachStop)
     , mAttachCounter(0)
     , mAnnounceDelay(kAnnounceTimeout)
-    , mAttachTimer(aInstance, Mle::HandleAttachTimer)
-    , mDelayedResponseTimer(aInstance, Mle::HandleDelayedResponseTimer)
-    , mMessageTransmissionTimer(aInstance, Mle::HandleMessageTransmissionTimer)
+    , mAttachTimer(aInstance)
+    , mDelayedResponseTimer(aInstance)
+    , mMessageTransmissionTimer(aInstance)
     , mAttachMode(kAnyPartition)
     , mChildUpdateAttempts(0)
     , mChildUpdateRequestState(kChildUpdateRequestNone)
@@ -104,7 +104,7 @@ Mle::Mle(Instance &aInstance)
     , mAlternateChannel(0)
     , mAlternatePanId(Mac::kPanIdBroadcast)
     , mAlternateTimestamp(0)
-    , mDetachGracefullyTimer(aInstance, Mle::HandleDetachGracefullyTimer)
+    , mDetachGracefullyTimer(aInstance)
     , mDetachGracefullyCallback(nullptr)
     , mDetachGracefullyContext(nullptr)
     , mParentResponseCb(nullptr)
@@ -264,6 +264,37 @@ exit:
     }
 }
 
+#if OPENTHREAD_CONFIG_UPTIME_ENABLE
+void Mle::UpdateRoleTimeCounters(DeviceRole aRole)
+{
+    uint64_t currentUptimeMsec = Get<Uptime>().GetUptime();
+    uint64_t durationMsec      = currentUptimeMsec - mLastUpdatedTimestamp;
+
+    mLastUpdatedTimestamp = currentUptimeMsec;
+
+    mCounters.mTrackedTime += durationMsec;
+
+    switch (aRole)
+    {
+    case kRoleDisabled:
+        mCounters.mDisabledTime += durationMsec;
+        break;
+    case kRoleDetached:
+        mCounters.mDetachedTime += durationMsec;
+        break;
+    case kRoleChild:
+        mCounters.mChildTime += durationMsec;
+        break;
+    case kRoleRouter:
+        mCounters.mRouterTime += durationMsec;
+        break;
+    case kRoleLeader:
+        mCounters.mLeaderTime += durationMsec;
+        break;
+    }
+}
+#endif
+
 void Mle::SetRole(DeviceRole aRole)
 {
     DeviceRole oldRole = mRole;
@@ -271,6 +302,10 @@ void Mle::SetRole(DeviceRole aRole)
     SuccessOrExit(Get<Notifier>().Update(mRole, aRole, kEventThreadRoleChanged));
 
     LogNote("Role %s -> %s", RoleToString(oldRole), RoleToString(mRole));
+
+#if OPENTHREAD_CONFIG_UPTIME_ENABLE
+    UpdateRoleTimeCounters(oldRole);
+#endif
 
     switch (mRole)
     {
@@ -621,8 +656,8 @@ uint32_t Mle::GetAttachStartDelay(void) const
         delay += jitter;
     }
 
-    LogNote("Attach attempt %d unsuccessful, will try again in %u.%03u seconds", mAttachCounter, delay / 1000,
-            delay % 1000);
+    LogNote("Attach attempt %u unsuccessful, will try again in %lu.%03u seconds", mAttachCounter, ToUlong(delay / 1000),
+            static_cast<uint16_t>(delay % 1000));
 
 exit:
     return delay;
@@ -1276,11 +1311,6 @@ exit:
 
 #endif // OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
 
-void Mle::HandleAttachTimer(Timer &aTimer)
-{
-    aTimer.Get<Mle>().HandleAttachTimer();
-}
-
 Error Mle::DetermineParentRequestType(ParentRequestType &aType) const
 {
     // This method determines the Parent Request type to use during an
@@ -1576,11 +1606,6 @@ uint32_t Mle::Reattach(void)
 
 exit:
     return delay;
-}
-
-void Mle::HandleDelayedResponseTimer(Timer &aTimer)
-{
-    aTimer.Get<Mle>().HandleDelayedResponseTimer();
 }
 
 void Mle::HandleDelayedResponseTimer(void)
@@ -1909,11 +1934,6 @@ exit:
     }
 }
 
-void Mle::HandleMessageTransmissionTimer(Timer &aTimer)
-{
-    aTimer.Get<Mle>().HandleMessageTransmissionTimer();
-}
-
 void Mle::HandleMessageTransmissionTimer(void)
 {
     // The `mMessageTransmissionTimer` is used for:
@@ -2030,7 +2050,6 @@ Error Mle::SendChildUpdateRequest(bool aAppendChallenge, uint32_t aTimeout)
     case kRoleRouter:
     case kRoleLeader:
         OT_ASSERT(false);
-        OT_UNREACHABLE_CODE(break);
     }
 
     if (!IsFullThreadDevice())
@@ -3528,7 +3547,6 @@ void Mle::HandleChildUpdateResponse(RxInfo &aRxInfo)
 
     default:
         OT_ASSERT(false);
-        OT_UNREACHABLE_CODE(break);
     }
 
     // Status
@@ -3622,7 +3640,6 @@ void Mle::HandleChildUpdateResponse(RxInfo &aRxInfo)
 
     default:
         OT_ASSERT(false);
-        OT_UNREACHABLE_CODE(break);
     }
 
     aRxInfo.mClass = (response.mLength == 0) ? RxInfo::kPeerMessage : RxInfo::kAuthoritativeMessage;
@@ -3880,11 +3897,6 @@ exit:
 #endif // OPENTHREAD_CONFIG_MLE_INFORM_PREVIOUS_PARENT_ON_REATTACH
 
 #if OPENTHREAD_CONFIG_PARENT_SEARCH_ENABLE
-void Mle::ParentSearch::HandleTimer(Timer &aTimer)
-{
-    aTimer.Get<Mle>().mParentSearch.HandleTimer();
-}
-
 void Mle::ParentSearch::HandleTimer(void)
 {
     int8_t parentRss;
@@ -4347,11 +4359,6 @@ Error Mle::DetachGracefully(otDetachGracefullyCallback aCallback, void *aContext
 
 exit:
     return error;
-}
-
-void Mle::HandleDetachGracefullyTimer(Timer &aTimer)
-{
-    aTimer.Get<Mle>().HandleDetachGracefullyTimer();
 }
 
 void Mle::HandleDetachGracefullyTimer(void)

@@ -51,12 +51,14 @@ otError Dataset::Print(otOperationalDataset &aDataset)
 {
     if (aDataset.mComponents.mIsPendingTimestampPresent)
     {
-        OutputLine("Pending Timestamp: %lu", aDataset.mPendingTimestamp.mSeconds);
+        OutputFormat("Pending Timestamp: ");
+        OutputUint64Line(aDataset.mPendingTimestamp.mSeconds);
     }
 
     if (aDataset.mComponents.mIsActiveTimestampPresent)
     {
-        OutputLine("Active Timestamp: %lu", aDataset.mActiveTimestamp.mSeconds);
+        OutputFormat("Active Timestamp: ");
+        OutputUint64Line(aDataset.mActiveTimestamp.mSeconds);
     }
 
     if (aDataset.mComponents.mIsChannelPresent)
@@ -66,12 +68,12 @@ otError Dataset::Print(otOperationalDataset &aDataset)
 
     if (aDataset.mComponents.mIsChannelMaskPresent)
     {
-        OutputLine("Channel Mask: 0x%08x", aDataset.mChannelMask);
+        OutputLine("Channel Mask: 0x%08lx", ToUlong(aDataset.mChannelMask));
     }
 
     if (aDataset.mComponents.mIsDelayPresent)
     {
-        OutputLine("Delay: %d", aDataset.mDelay);
+        OutputLine("Delay: %lu", ToUlong(aDataset.mDelay));
     }
 
     if (aDataset.mComponents.mIsExtendedPanIdPresent)
@@ -264,7 +266,7 @@ template <> otError Dataset::Process<Cmd("activetimestamp")>(Arg aArgs[])
     {
         if (sDataset.mComponents.mIsActiveTimestampPresent)
         {
-            OutputLine("%lu", sDataset.mActiveTimestamp.mSeconds);
+            OutputUint64Line(sDataset.mActiveTimestamp.mSeconds);
         }
     }
     else
@@ -340,7 +342,7 @@ template <> otError Dataset::Process<Cmd("channelmask")>(Arg aArgs[])
     {
         if (sDataset.mComponents.mIsChannelMaskPresent)
         {
-            OutputLine("0x%08x", sDataset.mChannelMask);
+            OutputLine("0x%08lx", ToUlong(sDataset.mChannelMask));
         }
     }
     else
@@ -433,7 +435,7 @@ template <> otError Dataset::Process<Cmd("delay")>(Arg aArgs[])
     {
         if (sDataset.mComponents.mIsDelayPresent)
         {
-            OutputLine("%d", sDataset.mDelay);
+            OutputLine("%lu", ToUlong(sDataset.mDelay));
         }
     }
     else
@@ -666,7 +668,7 @@ template <> otError Dataset::Process<Cmd("pendingtimestamp")>(Arg aArgs[])
     {
         if (sDataset.mComponents.mIsPendingTimestampPresent)
         {
-            OutputLine("%lu", sDataset.mPendingTimestamp.mSeconds);
+            OutputUint64Line(sDataset.mPendingTimestamp.mSeconds);
         }
     }
     else
@@ -1081,7 +1083,7 @@ void Dataset::OutputSecurityPolicy(const otSecurityPolicy &aSecurityPolicy)
         OutputFormat("R");
     }
 
-    OutputLine("");
+    OutputNewLine();
 }
 
 otError Dataset::ParseSecurityPolicy(otSecurityPolicy &aSecurityPolicy, Arg *&aArgs)

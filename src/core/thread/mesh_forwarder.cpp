@@ -103,7 +103,7 @@ MeshForwarder::MeshForwarder(Instance &aInstance)
     , mSendBusy(false)
 #if OPENTHREAD_FTD && OPENTHREAD_CONFIG_MAC_COLLISION_AVOIDANCE_DELAY_ENABLE
     , mDelayNextTx(false)
-    , mTxDelayTimer(aInstance, HandleTxDelayTimer)
+    , mTxDelayTimer(aInstance)
 #endif
     , mScheduleTransmissionTask(aInstance)
 #if OPENTHREAD_FTD
@@ -247,11 +247,6 @@ void MeshForwarder::ResumeMessageTransmissions(void)
 }
 
 #if OPENTHREAD_FTD && OPENTHREAD_CONFIG_MAC_COLLISION_AVOIDANCE_DELAY_ENABLE
-void MeshForwarder::HandleTxDelayTimer(Timer &aTimer)
-{
-    aTimer.Get<MeshForwarder>().HandleTxDelayTimer();
-}
-
 void MeshForwarder::HandleTxDelayTimer(void)
 {
     mDelayNextTx = false;
@@ -1249,7 +1244,7 @@ void MeshForwarder::HandleSentFrame(Mac::TxFrame &aFrame, Error aError)
     if (mDelayNextTx && (aError == kErrorNone))
     {
         mTxDelayTimer.Start(kTxDelayInterval);
-        LogDebg("Start tx delay timer for %u msec", kTxDelayInterval);
+        LogDebg("Start tx delay timer for %lu msec", ToUlong(kTxDelayInterval));
     }
     else
     {

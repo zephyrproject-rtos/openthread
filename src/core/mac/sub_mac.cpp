@@ -59,7 +59,7 @@ SubMac::SubMac(Instance &aInstance)
     , mCallbacks(aInstance)
     , mPcapCallback(nullptr)
     , mPcapCallbackContext(nullptr)
-    , mTimer(aInstance, SubMac::HandleTimer)
+    , mTimer(aInstance)
 #if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
     , mCslTimer(aInstance, SubMac::HandleCslTimer)
 #endif
@@ -338,16 +338,15 @@ Error SubMac::Send(void)
 #if OPENTHREAD_CONFIG_MAC_ADD_DELAY_ON_NO_ACK_ERROR_BEFORE_RETRY
     case kStateDelayBeforeRetx:
 #endif
-    case kStateEnergyScan:
-        ExitNow(error = kErrorInvalidState);
-        OT_UNREACHABLE_CODE(break);
-
     case kStateSleep:
     case kStateReceive:
 #if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
     case kStateCslSample:
 #endif
         break;
+
+    case kStateEnergyScan:
+        ExitNow(error = kErrorInvalidState);
     }
 
 #if OPENTHREAD_CONFIG_MAC_FILTER_ENABLE
@@ -486,7 +485,7 @@ void SubMac::StartTimerForBackoff(uint8_t aBackoffExponent)
 #if OPENTHREAD_CONFIG_MAC_ADD_DELAY_ON_NO_ACK_ERROR_BEFORE_RETRY
     if (mState == kStateDelayBeforeRetx)
     {
-        LogDebg("Delaying retx for %u usec (be=%d)", backoff, aBackoffExponent);
+        LogDebg("Delaying retx for %lu usec (be=%u)", ToUlong(backoff), aBackoffExponent);
     }
 #endif
 }
@@ -774,11 +773,6 @@ void SubMac::HandleEnergyScanDone(int8_t aMaxRssi)
 {
     SetState(kStateReceive);
     mCallbacks.EnergyScanDone(aMaxRssi);
-}
-
-void SubMac::HandleTimer(Timer &aTimer)
-{
-    aTimer.Get<SubMac>().HandleTimer();
 }
 
 void SubMac::HandleTimer(void)
@@ -1109,7 +1103,7 @@ void SubMac::HandleCslTimer(void)
 #if !OPENTHREAD_CONFIG_MAC_CSL_DEBUG_ENABLE
             IgnoreError(Get<Radio>().Sleep()); // Don't actually sleep for debugging
 #endif
-            LogDebg("CSL sleep %u", mCslTimer.GetNow().GetValue());
+            LogDebg("CSL sleep %lu", ToUlong(mCslTimer.GetNow().GetValue()));
         }
     }
     else
@@ -1137,7 +1131,8 @@ void SubMac::HandleCslTimer(void)
         else if (mState == kStateCslSample)
         {
             IgnoreError(Get<Radio>().Receive(mCslChannel));
-            LogDebg("CSL sample %u, duration %u", mCslTimer.GetNow().GetValue(), timeAhead + timeAfter);
+            LogDebg("CSL sample %lu, duration %lu", ToUlong(mCslTimer.GetNow().GetValue()),
+                    ToUlong(timeAhead + timeAfter));
         }
     }
 }

@@ -227,7 +227,10 @@ public:
      * @retval kErrorParse    Encountered a malformed header when processing the message.
      *
      */
-    Error HandleDatagram(Message &aMessage, MessageOrigin aOrigin, const void *aLinkMessageInfo = nullptr);
+    Error HandleDatagram(Message &     aMessage,
+                         MessageOrigin aOrigin,
+                         const void *  aLinkMessageInfo = nullptr,
+                         bool          aIsReassembled   = false);
 
     /**
      * This method registers a callback to provide received raw IPv6 datagrams.
@@ -337,6 +340,22 @@ public:
      */
     static const char *EcnToString(Ecn aEcn);
 
+#if OPENTHREAD_CONFIG_IP6_BR_COUNTERS_ENABLE
+    /**
+     * This method returns a reference to the Border Routing counters.
+     *
+     * @returns A reference to the Border Routing counters.
+     *
+     */
+    const otBorderRoutingCounters &GetBorderRoutingCounters(void) const { return mBorderRoutingCounters; }
+
+    /**
+     * This method resets the Border Routing counters.
+     *
+     */
+    void ResetBorderRoutingCounters(void) { memset(&mBorderRoutingCounters, 0, sizeof(mBorderRoutingCounters)); }
+#endif
+
 private:
     static constexpr uint8_t kDefaultHopLimit      = OPENTHREAD_CONFIG_IP6_HOP_LIMIT_DEFAULT;
     static constexpr uint8_t kIp6ReassemblyTimeout = OPENTHREAD_CONFIG_IP6_REASSEMBLY_TIMEOUT;
@@ -381,6 +400,9 @@ private:
                         Message::Ownership aMessageOwnership);
     bool  ShouldForwardToThread(const MessageInfo &aMessageInfo, MessageOrigin aOrigin) const;
     bool  IsOnLink(const Address &aAddress) const;
+#if OPENTHREAD_CONFIG_IP6_BR_COUNTERS_ENABLE
+    void UpdateBorderRoutingCounters(const Header &aHeader, uint16_t aMessageLength, bool aIsInbound);
+#endif
 
     using SendQueueTask = TaskletIn<Ip6, &Ip6::HandleSendQueue>;
 
@@ -408,6 +430,10 @@ private:
 #if OPENTHREAD_CONFIG_IP6_FRAGMENTATION_ENABLE
     MessageQueue mReassemblyList;
 #endif
+
+#if OPENTHREAD_CONFIG_IP6_BR_COUNTERS_ENABLE
+    otBorderRoutingCounters mBorderRoutingCounters;
+#endif
 };
 
 /**
@@ -416,6 +442,8 @@ private:
  */
 class Headers : private Clearable<Headers>
 {
+    friend class Clearable<Headers>;
+
 public:
     /**
      * This method parses the IPv6 and UDP/TCP/ICMP6 headers from a given message.

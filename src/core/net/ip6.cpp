@@ -786,7 +786,7 @@ Error Ip6::HandleFragment(Message &aMessage, MessageOrigin aOrigin, MessageInfo 
 
         mReassemblyList.Dequeue(*message);
 
-        IgnoreError(HandleDatagram(*message, aOrigin, aMessageInfo.mLinkInfo));
+        IgnoreError(HandleDatagram(*message, aOrigin, aMessageInfo.mLinkInfo, /* aIsReassembled */ true));
     }
 
 exit:
@@ -914,10 +914,8 @@ Error Ip6::HandleExtensionHeaders(Message &     aMessage,
             break;
 
         case kProtoFragment:
-#if !OPENTHREAD_CONFIG_IP6_FRAGMENTATION_ENABLE
             IgnoreError(ProcessReceiveCallback(aMessage, aOrigin, aMessageInfo, aNextHeader,
                                                /* aAllowReceiveFilter */ false, Message::kCopyToUse));
-#endif
             SuccessOrExit(error = HandleFragment(aMessage, aOrigin, aMessageInfo));
             break;
 
@@ -1021,12 +1019,17 @@ Error Ip6::ProcessReceiveCallback(Message &          aMessage,
 {
     Error    error   = kErrorNone;
     Message *message = &aMessage;
+#if OPENTHREAD_CONFIG_IP6_BR_COUNTERS_ENABLE
+    Header header;
+
+    IgnoreError(header.ParseFrom(aMessage));
+#endif
 
     VerifyOrExit(aOrigin != kFromHostDisallowLoopBack, error = kErrorNoRoute);
 
     VerifyOrExit(mReceiveIp6DatagramCallback != nullptr, error = kErrorNoRoute);
 
-    // Do not forward reassembled IPv6 packets.
+    // Do not forward IPv6 packets that exceed kMinimalMtu.
     VerifyOrExit(aMessage.GetLength() <= kMinimalMtu, error = kErrorDrop);
 
     if (mIsReceiveIp6FilterEnabled && aAllowReceiveFilter)
@@ -1105,6 +1108,10 @@ Error Ip6::ProcessReceiveCallback(Message &          aMessage,
 
     mReceiveIp6DatagramCallback(message, mReceiveIp6DatagramCallbackContext);
 
+#if OPENTHREAD_CONFIG_IP6_BR_COUNTERS_ENABLE
+    UpdateBorderRoutingCounters(header, aMessage.GetLength(), /* aIsInbound */ false);
+#endif
+
 exit:
 
     if ((error != kErrorNone) && (aMessageOwnership == Message::kTakeCustody))
@@ -1137,6 +1144,10 @@ Error Ip6::SendRaw(Message &aMessage, bool aAllowLoopBackToHost)
     error = HandleDatagram(aMessage, aAllowLoopBackToHost ? kFromHostAllowLoopBack : kFromHostDisallowLoopBack);
     freed = true;
 
+#if OPENTHREAD_CONFIG_IP6_BR_COUNTERS_ENABLE
+    UpdateBorderRoutingCounters(header, aMessage.GetLength(), /* aIsInbound */ true);
+#endif
+
 exit:
 
     if (!freed)
@@ -1147,7 +1158,7 @@ exit:
     return error;
 }
 
-Error Ip6::HandleDatagram(Message &aMessage, MessageOrigin aOrigin, const void *aLinkMessageInfo)
+Error Ip6::HandleDatagram(Message &aMessage, MessageOrigin aOrigin, const void *aLinkMessageInfo, bool aIsReassembled)
 {
     Error       error;
     MessageInfo messageInfo;
@@ -1226,6 +1237,11 @@ start:
         }
     }
 
+    // never forward reassembled frames as they were already delivered as fragments
+    if (aIsReassembled)
+    {
+        forwardHost = false;
+    }
     aMessage.SetOffset(sizeof(header));
 
     // process IPv6 Extension Headers
@@ -1242,15 +1258,16 @@ start:
             Get<MeshForwarder>().LogMessage(MeshForwarder::kMessageReceive, aMessage);
             goto start;
         }
-
-        error = ProcessReceiveCallback(aMessage, aOrigin, messageInfo, nextHeader,
-                                       /* aAllowReceiveFilter */ !forwardHost, Message::kCopyToUse);
-
-        if ((error == kErrorNone || error == kErrorNoRoute) && forwardHost)
+        if (!aIsReassembled)
         {
-            forwardHost = false;
-        }
+            error = ProcessReceiveCallback(aMessage, aOrigin, messageInfo, nextHeader,
+                                           /* aAllowReceiveFilter */ !forwardHost, Message::kCopyToUse);
 
+            if ((error == kErrorNone || error == kErrorNoRoute) && forwardHost)
+            {
+                forwardHost = false;
+            }
+        }
         error             = HandlePayload(header, aMessage, messageInfo, nextHeader,
                               (forwardThread || forwardHost ? Message::kCopyToUse : Message::kTakeCustody));
         shouldFreeMessage = forwardThread || forwardHost;
@@ -1352,8 +1369,7 @@ bool Ip6::ShouldForwardToThread(const MessageInfo &aMessageInfo, MessageOrigin a
         shouldForward = true;
 #endif
     }
-    else if (Get<ThreadNetif>().RouteLookup(aMessageInfo.GetPeerAddr(), aMessageInfo.GetSockAddr(), nullptr) ==
-             kErrorNone)
+    else if (Get<ThreadNetif>().RouteLookup(aMessageInfo.GetPeerAddr(), aMessageInfo.GetSockAddr()) == kErrorNone)
     {
         shouldForward = true;
     }
@@ -1487,6 +1503,55 @@ bool Ip6::IsOnLink(const Address &aAddress) const
 exit:
     return rval;
 }
+
+#if OPENTHREAD_CONFIG_IP6_BR_COUNTERS_ENABLE
+void Ip6::UpdateBorderRoutingCounters(const Header &aHeader, uint16_t aMessageLength, bool aIsInbound)
+{
+    otPacketsAndBytes *counter = nullptr;
+
+    VerifyOrExit(!aHeader.GetSource().IsLinkLocal());
+    VerifyOrExit(!aHeader.GetDestination().IsLinkLocal());
+    VerifyOrExit(aHeader.GetSource().GetPrefix() != Get<Mle::Mle>().GetMeshLocalPrefix());
+    VerifyOrExit(aHeader.GetDestination().GetPrefix() != Get<Mle::Mle>().GetMeshLocalPrefix());
+
+    if (aIsInbound)
+    {
+        VerifyOrExit(!Get<Netif>().HasUnicastAddress(aHeader.GetSource()));
+
+        if (aHeader.GetDestination().IsMulticast())
+        {
+            VerifyOrExit(aHeader.GetDestination().IsMulticastLargerThanRealmLocal());
+            counter = &mBorderRoutingCounters.mInboundMulticast;
+        }
+        else
+        {
+            counter = &mBorderRoutingCounters.mInboundUnicast;
+        }
+    }
+    else
+    {
+        VerifyOrExit(!Get<Netif>().HasUnicastAddress(aHeader.GetDestination()));
+
+        if (aHeader.GetDestination().IsMulticast())
+        {
+            VerifyOrExit(aHeader.GetDestination().IsMulticastLargerThanRealmLocal());
+            counter = &mBorderRoutingCounters.mOutboundMulticast;
+        }
+        else
+        {
+            counter = &mBorderRoutingCounters.mOutboundUnicast;
+        }
+    }
+
+exit:
+
+    if (counter)
+    {
+        counter->mPackets += 1;
+        counter->mBytes += aMessageLength;
+    }
+}
+#endif
 
 // LCOV_EXCL_START
 

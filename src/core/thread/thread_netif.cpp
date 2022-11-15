@@ -98,7 +98,7 @@ void ThreadNetif::Down(void)
     Get<Dns::ServiceDiscovery::Server>().Stop();
 #endif
 #if OPENTHREAD_CONFIG_DTLS_ENABLE
-    Get<Coap::CoapSecure>().Stop();
+    Get<Tmf::SecureAgent>().Stop();
 #endif
     IgnoreError(Get<Tmf::Agent>().Stop());
     IgnoreError(Get<Mle::MleRouter>().Disable());
@@ -123,12 +123,12 @@ Error ThreadNetif::SendMessage(Message &aMessage)
     return Get<MeshForwarder>().SendMessage(aMessage);
 }
 
-Error ThreadNetif::RouteLookup(const Ip6::Address &aSource, const Ip6::Address &aDestination, uint8_t *aPrefixMatch)
+Error ThreadNetif::RouteLookup(const Ip6::Address &aSource, const Ip6::Address &aDestination)
 {
     Error    error;
     uint16_t rloc;
 
-    SuccessOrExit(error = Get<NetworkData::Leader>().RouteLookup(aSource, aDestination, aPrefixMatch, &rloc));
+    SuccessOrExit(error = Get<NetworkData::Leader>().RouteLookup(aSource, aDestination, rloc));
 
     if (rloc == Get<Mle::MleRouter>().GetRloc16())
     {

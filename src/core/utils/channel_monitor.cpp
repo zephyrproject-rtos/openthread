@@ -64,7 +64,7 @@ ChannelMonitor::ChannelMonitor(Instance &aInstance)
     : InstanceLocator(aInstance)
     , mChannelMaskIndex(0)
     , mSampleCount(0)
-    , mTimer(aInstance, ChannelMonitor::HandleTimer)
+    , mTimer(aInstance)
 {
     memset(mChannelOccupancy, 0, sizeof(mChannelOccupancy));
 }
@@ -112,11 +112,6 @@ uint16_t ChannelMonitor::GetChannelOccupancy(uint8_t aChannel) const
 
 exit:
     return occupancy;
-}
-
-void ChannelMonitor::HandleTimer(Timer &aTimer)
-{
-    aTimer.Get<ChannelMonitor>().HandleTimer();
 }
 
 void ChannelMonitor::HandleTimer(void)
@@ -200,7 +195,7 @@ void ChannelMonitor::LogResults(void)
         logString.Append("%02x ", channel >> 8);
     }
 
-    LogInfo("%u [%s]", mSampleCount, logString.AsCString());
+    LogInfo("%lu [%s]", ToUlong(mSampleCount), logString.AsCString());
 #endif
 }
 

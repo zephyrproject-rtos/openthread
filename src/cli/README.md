@@ -834,6 +834,7 @@ Get the supported counter names.
 
 ```bash
 > counters
+br
 ip
 mac
 mle
@@ -843,6 +844,11 @@ Done
 ### counters \<countername\>
 
 Get the counter value.
+
+Note:
+
+- `OPENTHREAD_CONFIG_UPTIME_ENABLE` is required for MLE role time tracking in `counters mle`
+- `OPENTHREAD_CONFIG_IP6_BR_COUNTERS_ENABLE` is required for `counters br`
 
 ```bash
 > counters mac
@@ -888,12 +894,24 @@ Attach Attempts: 1
 Partition Id Changes: 1
 Better Partition Attach Attempts: 0
 Parent Changes: 0
+Time Disabled Milli: 10026
+Time Detached Milli: 6852
+Time Child Milli: 0
+Time Router Milli: 0
+Time Leader Milli: 16195
+Time Tracked Milli: 33073
 Done
 > counters ip
 TxSuccess: 10
 TxFailed: 0
 RxSuccess: 5
 RxFailed: 0
+Done
+> counters br
+Inbound Unicast: Packets 4 Bytes 320
+Inbound Multicast: Packets 0 Bytes 0
+Outbound Unicast: Packets 2 Bytes 160
+Outbound Multicast: Packets 0 Bytes 0
 Done
 ```
 
@@ -1063,6 +1081,17 @@ The parameters after `hostname` are optional. Any unspecified (or zero) value fo
 > DNS response for ipv6.google.com - 2a00:1450:401b:801:0:0:0:200e TTL: 300
 ```
 
+The DNS server IP can be an IPv4 address, which will be synthesized to an IPv6 address using the preferred NAT64 prefix from the network data.
+
+> Note: The command will return `InvalidState` when the DNS server IP is an IPv4 address but the preferred NAT64 prefix is unavailable.
+
+```bash
+> dns resolve example.com 8.8.8.8
+Synthesized IPv6 DNS server address: fdde:ad00:beef:2:0:0:808:808
+DNS response for example.com. - fd4c:9574:3720:2:0:0:5db8:d822 TTL:20456
+Done
+```
+
 ### dns browse \<service-name\> \[DNS server IP\] \[DNS server port\] \[response timeout (ms)\] \[max tx attempts\] \[recursion desired (boolean)\]
 
 Send a browse (service instance enumeration) DNS query to get the list of services for given service-name.
@@ -1085,11 +1114,15 @@ instance2
 Done
 ```
 
+> Note: The DNS server IP can be an IPv4 address, which will be synthesized to an IPv6 address using the preferred NAT64 prefix from the network data. The command will return `InvalidState` when the DNS server IP is an IPv4 address but the preferred NAT64 prefix is unavailable.
+
 ### dns service \<service-instance-label\> \<service-name\> \[DNS server IP\] \[DNS server port\] \[response timeout (ms)\] \[max tx attempts\] \[recursion desired (boolean)\]
 
 Send a service instance resolution DNS query for a given service instance. Service instance label is provided first, followed by the service name (note that service instance label can contain dot '.' character).
 
 The parameters after `service-name` are optional. Any unspecified (or zero) value for these optional parameters is replaced by the value from the current default config (`dns config`).
+
+> Note: The DNS server IP can be an IPv4 address, which will be synthesized to an IPv6 address using the preferred NAT64 prefix from the network data. The command will return `InvalidState` when the DNS server IP is an IPv4 address but the preferred NAT64 prefix is unavailable.
 
 ### dns compression \[enable|disable\]
 
@@ -1840,11 +1873,73 @@ Done
 
 Gets the IPv4 configured CIDR in the NAT64 translator.
 
-This command is only available when device enables NAT64 translator.
+`OPENTHREAD_CONFIG_NAT64_TRANSLATOR_ENABLE` is required.
 
 ```bash
 > nat64 cidr
-192.168.64.0/24
+192.168.255.0/24
+Done
+```
+
+### nat64 disable
+
+Disable NAT64 functions, including the translator and the prefix publishing.
+
+This command will reset the mapping table in the translator (if NAT64 translator is enabled in the build).
+
+`OPENTHREAD_CONFIG_NAT64_TRANSLATOR_ENABLE` or `OPENTHREAD_CONFIG_NAT64_BORDER_ROUTING_ENABLE` are required.
+
+```bash
+> nat64 disable
+Done
+```
+
+### nat64 enable
+
+Enable NAT64 functions, including the translator and the prefix publishing.
+
+This command can be called anytime.
+
+`OPENTHREAD_CONFIG_NAT64_TRANSLATOR_ENABLE` or `OPENTHREAD_CONFIG_NAT64_BORDER_ROUTING_ENABLE` are required.
+
+```bash
+> nat64 enable
+Done
+```
+
+### nat64 state
+
+Gets the state of NAT64 functions.
+
+Possible results for prefix manager are (`OPENTHREAD_CONFIG_NAT64_BORDER_ROUTING_ENABLE` is required):
+
+- `Disabled`: NAT64 prefix manager is disabled.
+- `NotRunning`: NAT64 prefix manager is enabled, but is not running, probably bacause the routing manager is disabled.
+- `Idle`: NAT64 prefix manager is enabled and is running, but is not publishing a NAT64 prefix. Usually when there is another border router publishing a NAT64 prefix with higher priority.
+- `Active`: NAT64 prefix manager is enabled, running and publishing a NAT64 prefix.
+
+Possible results for NAT64 translator are (`OPENTHREAD_CONFIG_NAT64_TRANSLATOR_ENABLE` is required):
+
+- `Disabled`: NAT64 translator is disabled.
+- `NotRunning`: NAT64 translator is enabled, but is not translating packets, probably bacause it is not configued with a NAT64 prefix or a CIDR for NAT64.
+- `Active`: NAT64 translator is enabled and is translating packets.
+
+`OPENTHREAD_CONFIG_NAT64_TRANSLATOR_ENABLE` or `OPENTHREAD_CONFIG_NAT64_BORDER_ROUTING_ENABLE` are required.
+
+```bash
+> nat64 state
+PrefixManager: NotRunning
+Translator:    NotRunning
+Done
+
+> nat64 state
+PrefixManager: Idle
+Translator:    NotRunning
+Done
+
+> nat64 state
+PrefixManager: Active
+Translator:    Active
 Done
 ```
 
@@ -1852,7 +1947,7 @@ Done
 
 Get the NAT64 translator mappings.
 
-This command is only available when device enables NAT64 translator.
+`OPENTHREAD_CONFIG_NAT64_TRANSLATOR_ENABLE` is required.
 
 ```bash
 > nat64 mappings
@@ -1870,7 +1965,7 @@ This command is only available when device enables NAT64 translator.
 
 Get the NAT64 translator packet and error counters.
 
-This command is only available when device enables NAT64 translator.
+`OPENTHREAD_CONFIG_NAT64_TRANSLATOR_ENABLE` is required.
 
 ```bash
 > nat64 counters

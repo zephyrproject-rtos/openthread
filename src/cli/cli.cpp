@@ -169,6 +169,10 @@ Interpreter::Interpreter(Instance *aInstance, otCliOutputCallback aCallback, voi
 #if (OPENTHREAD_FTD || OPENTHREAD_MTD) && OPENTHREAD_CONFIG_CLI_REGISTER_IP6_RECV_CALLBACK
     otIp6SetReceiveCallback(GetInstancePtr(), &Interpreter::HandleIp6Receive, this);
 #endif
+#if OPENTHREAD_CONFIG_DIAG_ENABLE
+    otDiagSetOutputCallback(GetInstancePtr(), &Interpreter::HandleDiagOutput, this);
+#endif
+
     ClearAllBytes(mUserCommands);
 
     OutputPrompt();
@@ -210,19 +214,20 @@ exit:
 #if OPENTHREAD_CONFIG_DIAG_ENABLE
 template <> otError Interpreter::Process<Cmd("diag")>(Arg aArgs[])
 {
-    otError error;
-    char   *args[kMaxArgs];
-    char    output[OPENTHREAD_CONFIG_DIAG_OUTPUT_BUFFER_SIZE];
+    char *args[kMaxArgs];
 
     // all diagnostics related features are processed within diagnostics module
     Arg::CopyArgsToStringArray(aArgs, args);
 
-    error = otDiagProcessCmd(GetInstancePtr(), Arg::GetArgsLength(aArgs), args, output, sizeof(output));
-
-    OutputFormat("%s", output);
-
-    return error;
+    return otDiagProcessCmd(GetInstancePtr(), Arg::GetArgsLength(aArgs), args);
 }
+
+void Interpreter::HandleDiagOutput(const char *aFormat, va_list aArguments, void *aContext)
+{
+    static_cast<Interpreter *>(aContext)->HandleDiagOutput(aFormat, aArguments);
+}
+
+void Interpreter::HandleDiagOutput(const char *aFormat, va_list aArguments) { OutputFormatV(aFormat, aArguments); }
 #endif
 
 template <> otError Interpreter::Process<Cmd("version")>(Arg aArgs[])
@@ -3366,35 +3371,6 @@ template <> otError Interpreter::Process<Cmd("ipmaddr")>(Arg aArgs[])
         error = otIp6UnsubscribeMulticastAddress(GetInstancePtr(), &address);
     }
     /**
-     * @cli ipmaddr promiscuous
-     * @code
-     * ipmaddr promiscuous
-     * Disabled
-     * Done
-     * @endcode
-     * @par api_copy
-     * #otIp6IsMulticastPromiscuousEnabled
-     */
-    else if (aArgs[0] == "promiscuous")
-    {
-        /**
-         * @cli ipmaddr promiscuous (enable,disable)
-         * @code
-         * ipmaddr promiscuous enable
-         * Done
-         * @endcode
-         * @code
-         * ipmaddr promiscuous disable
-         * Done
-         * @endcode
-         * @cparam ipmaddr promiscuous @ca{enable|disable}
-         * @par api_copy
-         * #otIp6SetMulticastPromiscuousEnabled
-         */
-        error =
-            ProcessEnableDisable(aArgs + 1, otIp6IsMulticastPromiscuousEnabled, otIp6SetMulticastPromiscuousEnabled);
-    }
-    /**
      * @cli ipmaddr llatn
      * @code
      * ipmaddr llatn
@@ -4596,13 +4572,13 @@ template <> otError Interpreter::Process<Cmd("service")>(Arg aArgs[])
          * netdata register
          * Done
          * @endcode
-         * @cparam service add @ca{enterpriseNumber} @ca{serviceData} @ca{serverData}
+         * @cparam service add @ca{enterpriseNumber} @ca{serviceData} [@ca{serverData}]
          * @par
          * Adds service to the network data.
          * @par
          * - enterpriseNumber: IANA enterprise number
          * - serviceData: Hex-encoded binary service data
-         * - serverData: Hex-encoded binary server data
+         * - serverData: Hex-encoded binary server data (empty if not provided)
          * @par
          * Note: For each change in service registration to take effect, run
          * the `netdata register` command after running the `service add` command to notify the leader.
@@ -4611,10 +4587,17 @@ template <> otError Interpreter::Process<Cmd("service")>(Arg aArgs[])
          */
         if (aArgs[0] == "add")
         {
-            length = sizeof(cfg.mServerConfig.mServerData);
-            SuccessOrExit(error = aArgs[3].ParseAsHexString(length, cfg.mServerConfig.mServerData));
-            VerifyOrExit(length > 0, error = OT_ERROR_INVALID_ARGS);
-            cfg.mServerConfig.mServerDataLength = static_cast<uint8_t>(length);
+            if (!aArgs[3].IsEmpty())
+            {
+                length = sizeof(cfg.mServerConfig.mServerData);
+                SuccessOrExit(error = aArgs[3].ParseAsHexString(length, cfg.mServerConfig.mServerData));
+                VerifyOrExit(length > 0, error = OT_ERROR_INVALID_ARGS);
+                cfg.mServerConfig.mServerDataLength = static_cast<uint8_t>(length);
+            }
+            else
+            {
+                cfg.mServerConfig.mServerDataLength = 0;
+            }
 
             cfg.mServerConfig.mStable = true;
 

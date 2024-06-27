@@ -85,7 +85,6 @@ const otNetifMulticastAddress Netif::kLinkLocalAllRoutersMulticastAddress = {
 
 Netif::Netif(Instance &aInstance)
     : InstanceLocator(aInstance)
-    , mMulticastPromiscuous(false)
 {
 }
 
@@ -454,7 +453,7 @@ Error Netif::AddExternalUnicastAddress(const UnicastAddress &aAddress)
         ExitNow();
     }
 
-    VerifyOrExit(!aAddress.GetAddress().IsLinkLocal(), error = kErrorInvalidArgs);
+    VerifyOrExit(!aAddress.GetAddress().IsLinkLocalUnicast(), error = kErrorInvalidArgs);
 
     entry = mExtUnicastAddressPool.Allocate();
     VerifyOrExit(entry != nullptr, error = kErrorNoBufs);

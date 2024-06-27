@@ -37,6 +37,8 @@
 #include "platform-posix.h"
 
 #if OPENTHREAD_POSIX_CONFIG_RCP_CAPS_DIAG_ENABLE
+#include <openthread/platform/diag.h>
+
 #include "lib/spinel/radio_spinel.hpp"
 #include "lib/spinel/spinel.h"
 
@@ -58,8 +60,8 @@ public:
      */
     explicit RcpCapsDiag(Spinel::RadioSpinel &aRadioSpinel)
         : mRadioSpinel(aRadioSpinel)
-        , mOutputStart(nullptr)
-        , mOutputEnd(nullptr)
+        , mOutputCallback(nullptr)
+        , mOutputContext(nullptr)
     {
     }
 
@@ -68,15 +70,22 @@ public:
      *
      * @param[in]   aArgs           The arguments of diagnostics command line.
      * @param[in]   aArgsLength     The number of arguments in @p aArgs.
-     * @param[out]  aOutput         The diagnostics execution result.
-     * @param[in]   aOutputMaxLen   The output buffer size.
      *
      * @retval  OT_ERROR_INVALID_ARGS       The command is supported but invalid arguments provided.
      * @retval  OT_ERROR_NONE               The command is successfully processed.
      * @retval  OT_ERROR_INVALID_COMMAND    The command is not valid or not supported.
      *
      */
-    otError DiagProcess(char *aArgs[], uint8_t aArgsLength, char *aOutput, size_t aOutputMaxLen);
+    otError DiagProcess(char *aArgs[], uint8_t aArgsLength);
+
+    /**
+     * Sets the diag output callback.
+     *
+     * @param[in]  aCallback   A pointer to a function that is called on outputting diag messages.
+     * @param[in]  aContext    A user context pointer.
+     *
+     */
+    void SetDiagOutputCallback(otPlatDiagOutputCallback aCallback, void *aContext);
 
 private:
     template <uint32_t aCommand, spinel_prop_key_t aKey> otError HandleSpinelCommand(void);
@@ -87,7 +96,7 @@ private:
         kCategoryBasic,
         kCategoryThread1_1,
         kCategoryThread1_2,
-        kCategoryOptional,
+        kCategoryUtils,
         kNumCategories,
     };
 
@@ -99,18 +108,37 @@ private:
         RcpCapsDiag::SpinelCommandHandler mHandler;
     };
 
+    static constexpr uint16_t kMaxNumChildren = 512;
+
     void ProcessSpinel(void);
+    void ProcessCapabilityFlags(void);
+    void ProcessSrcMatchTable(void);
     void TestSpinelCommands(Category aCategory);
+    void TestRadioCapbilityFlags(void);
+    void OutputRadioCapFlags(Category aCategory, uint32_t aRadioCaps, const uint32_t *aFlags, uint16_t aNumbFlags);
+    void TestSpinelCapbilityFlags(void);
+    void OutputSpinelCapFlags(Category        aCategory,
+                              const uint8_t  *aCapsData,
+                              spinel_size_t   aCapsLength,
+                              const uint32_t *aFlags,
+                              uint16_t        aNumbFlags);
+    bool IsSpinelCapabilitySupported(const uint8_t *aCapsData, spinel_size_t aCapsLength, uint32_t aCapability);
+    void OutputExtendedSrcMatchTableSize(void);
+    void OutputShortSrcMatchTableSize(void);
+    void OutputFormat(const char *aName, const char *aValue);
+    void OutputFormat(const char *aName, uint32_t aValue);
     void OutputResult(const SpinelEntry &aEntry, otError error);
     void Output(const char *aFormat, ...);
 
-    const char *CategoryToString(Category aCategory);
+    static const char *SupportToString(bool aSupport);
+    static const char *RadioCapbilityToString(uint32_t aCapability);
+    static const char *CategoryToString(Category aCategory);
 
     static const struct SpinelEntry sSpinelEntries[];
 
-    Spinel::RadioSpinel &mRadioSpinel;
-    char                *mOutputStart;
-    char                *mOutputEnd;
+    Spinel::RadioSpinel     &mRadioSpinel;
+    otPlatDiagOutputCallback mOutputCallback;
+    void                    *mOutputContext;
 };
 
 } // namespace Posix

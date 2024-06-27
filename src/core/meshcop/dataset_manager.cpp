@@ -267,22 +267,6 @@ void DatasetManager::Clear(void)
     SignalDatasetChange();
 }
 
-Error DatasetManager::Save(const Timestamp &aTimestamp, const Message &aMessage, uint16_t aOffset, uint16_t aLength)
-{
-    Error   error = kErrorNone;
-    Dataset dataset;
-
-    SuccessOrExit(error = dataset.SetFrom(aMessage, aOffset, aLength));
-    SuccessOrExit(error = dataset.ValidateTlvs());
-
-    SuccessOrExit(error = dataset.WriteTimestamp(mType, aTimestamp));
-
-    error = Save(dataset);
-
-exit:
-    return error;
-}
-
 Error DatasetManager::Save(const Dataset &aDataset, bool aAllowOlderTimestamp)
 {
     Error error = kErrorNone;
@@ -499,7 +483,7 @@ Error DatasetManager::SendSetRequest(const Dataset &aDataset)
     VerifyOrExit(message != nullptr, error = kErrorNoBufs);
 
     SuccessOrExit(error = message->AppendBytes(aDataset.GetBytes(), aDataset.GetLength()));
-    IgnoreError(messageInfo.SetSockAddrToRlocPeerAddrToLeaderAloc());
+    messageInfo.SetSockAddrToRlocPeerAddrToLeaderAloc();
 
     SuccessOrExit(error = Get<Tmf::Agent>().SendMessage(*message, messageInfo, HandleMgmtSetResponse, this));
     mMgmtPending = true;
@@ -724,7 +708,7 @@ Error DatasetManager::SendGetRequest(const Dataset::Components &aDatasetComponen
         SuccessOrExit(error = Tlv::AppendTlv(*message, Tlv::kGet, tlvList.GetArrayBuffer(), tlvList.GetLength()));
     }
 
-    IgnoreError(messageInfo.SetSockAddrToRlocPeerAddrToLeaderAloc());
+    messageInfo.SetSockAddrToRlocPeerAddrToLeaderAloc();
 
     if (aAddress != nullptr)
     {
@@ -776,7 +760,7 @@ void DatasetManager::MoveKeysToSecureStorage(Dataset &aDataset) const
 {
     for (const SecurelyStoredTlv &entry : kSecurelyStoredTlvs)
     {
-        aDataset.SaveTlvInSecureStorageAndClearValue(entry.mTlvType, entry.GetKeyRef(mType));
+        SaveTlvInSecureStorageAndClearValue(aDataset, entry.mTlvType, entry.GetKeyRef(mType));
     }
 }
 
@@ -791,7 +775,7 @@ void DatasetManager::EmplaceSecurelyStoredKeys(Dataset &aDataset) const
 
     for (const SecurelyStoredTlv &entry : kSecurelyStoredTlvs)
     {
-        if (aDataset.ReadTlvFromSecureStorage(entry.mTlvType, entry.GetKeyRef(mType)) != kErrorNone)
+        if (ReadTlvFromSecureStorage(aDataset, entry.mTlvType, entry.GetKeyRef(mType)) != kErrorNone)
         {
             moveKeys = true;
         }
@@ -805,6 +789,42 @@ void DatasetManager::EmplaceSecurelyStoredKeys(Dataset &aDataset) const
         MoveKeysToSecureStorage(dataset);
         Get<Settings>().SaveOperationalDataset(mType, dataset);
     }
+}
+
+void DatasetManager::SaveTlvInSecureStorageAndClearValue(Dataset &aDataset, Tlv::Type aTlvType, KeyRef aKeyRef) const
+{
+    using namespace ot::Crypto::Storage;
+
+    Tlv *tlv = aDataset.FindTlv(aTlvType);
+
+    VerifyOrExit(tlv != nullptr);
+    VerifyOrExit(tlv->GetLength() > 0);
+
+    SuccessOrAssert(ImportKey(aKeyRef, kKeyTypeRaw, kKeyAlgorithmVendor, kUsageExport, kTypePersistent, tlv->GetValue(),
+                              tlv->GetLength()));
+
+    memset(tlv->GetValue(), 0, tlv->GetLength());
+
+exit:
+    return;
+}
+
+Error DatasetManager::ReadTlvFromSecureStorage(Dataset &aDataset, Tlv::Type aTlvType, KeyRef aKeyRef) const
+{
+    using namespace ot::Crypto::Storage;
+
+    Error  error = kErrorNone;
+    Tlv   *tlv   = aDataset.FindTlv(aTlvType);
+    size_t readLength;
+
+    VerifyOrExit(tlv != nullptr);
+    VerifyOrExit(tlv->GetLength() > 0);
+
+    SuccessOrExit(error = ExportKey(aKeyRef, tlv->GetValue(), tlv->GetLength(), readLength));
+    VerifyOrExit(readLength == tlv->GetLength(), error = OT_ERROR_FAILED);
+
+exit:
+    return error;
 }
 
 #endif // OPENTHREAD_CONFIG_PLATFORM_KEY_REFERENCES_ENABLE

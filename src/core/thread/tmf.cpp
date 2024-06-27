@@ -42,18 +42,18 @@ namespace Tmf {
 //----------------------------------------------------------------------------------------------------------------------
 // MessageInfo
 
-void MessageInfo::SetSockAddrToRloc(void) { SetSockAddr(Get<Mle::MleRouter>().GetMeshLocal16()); }
+void MessageInfo::SetSockAddrToRloc(void) { SetSockAddr(Get<Mle::MleRouter>().GetMeshLocalRloc()); }
 
-Error MessageInfo::SetSockAddrToRlocPeerAddrToLeaderAloc(void)
+void MessageInfo::SetSockAddrToRlocPeerAddrToLeaderAloc(void)
 {
     SetSockAddrToRloc();
-    return Get<Mle::MleRouter>().GetLeaderAloc(GetPeerAddr());
+    Get<Mle::MleRouter>().GetLeaderAloc(GetPeerAddr());
 }
 
-Error MessageInfo::SetSockAddrToRlocPeerAddrToLeaderRloc(void)
+void MessageInfo::SetSockAddrToRlocPeerAddrToLeaderRloc(void)
 {
     SetSockAddrToRloc();
-    return Get<Mle::MleRouter>().GetLeaderAddress(GetPeerAddr());
+    Get<Mle::MleRouter>().GetLeaderRloc(GetPeerAddr());
 }
 
 void MessageInfo::SetSockAddrToRlocPeerAddrToRealmLocalAllRoutersMulticast(void)
@@ -65,8 +65,7 @@ void MessageInfo::SetSockAddrToRlocPeerAddrToRealmLocalAllRoutersMulticast(void)
 void MessageInfo::SetSockAddrToRlocPeerAddrTo(uint16_t aRloc16)
 {
     SetSockAddrToRloc();
-    SetPeerAddr(Get<Mle::MleRouter>().GetMeshLocal16());
-    GetPeerAddr().GetIid().SetLocator(aRloc16);
+    GetPeerAddr().SetToRoutingLocator(Get<Mle::Mle>().GetMeshLocalPrefix(), aRloc16);
 }
 
 void MessageInfo::SetSockAddrToRlocPeerAddrTo(const Ip6::Address &aPeerAddress)
@@ -209,9 +208,9 @@ bool Agent::IsTmfMessage(const Ip6::Address &aSourceAddress, const Ip6::Address 
 
     VerifyOrExit(aDestPort == kUdpPort);
 
-    if (aSourceAddress.IsLinkLocal())
+    if (aSourceAddress.IsLinkLocalUnicast())
     {
-        isTmf = aDestAddress.IsLinkLocal() || aDestAddress.IsLinkLocalMulticast();
+        isTmf = aDestAddress.IsLinkLocalUnicastOrMulticast();
         ExitNow();
     }
 

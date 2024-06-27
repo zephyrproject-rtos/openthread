@@ -103,7 +103,7 @@ void Manager::GetBackboneRouterPrimary(ot::BackboneRouter::Config &aConfig) cons
 
     serviceData.Init(&BackboneRouter::kServiceData, BackboneRouter::kServiceDataMinSize);
 
-    aConfig.mServer16 = Mac::kShortAddrInvalid;
+    aConfig.mServer16 = Mle::kInvalidRloc16;
 
     while ((serviceTlv = Get<Leader>().FindNextThreadService(serviceTlv, serviceData,
                                                              NetworkData::kServicePrefixMatch)) != nullptr)
@@ -152,7 +152,7 @@ bool Manager::IsBackboneRouterPreferredTo(const ServerTlv                  &aSer
                                           const BackboneRouter::ServerData &aOtherServerData) const
 {
     bool     isPreferred;
-    uint16_t leaderRloc16 = Mle::Rloc16FromRouterId(Get<Mle::MleRouter>().GetLeaderId());
+    uint16_t leaderRloc16 = Get<Mle::MleRouter>().GetLeaderRloc16();
 
     VerifyOrExit(aServerTlv.GetServer16() != leaderRloc16, isPreferred = true);
     VerifyOrExit(aOtherServerTlv.GetServer16() != leaderRloc16, isPreferred = false);
@@ -182,8 +182,9 @@ Error Manager::GetNextDnsSrpAnycastInfo(Iterator &aIterator, DnsSrpAnycast::Info
     } while (tlv->GetServiceDataLength() < sizeof(DnsSrpAnycast::ServiceData));
 
     tlv->GetServiceData(serviceData);
-    aInfo.mAnycastAddress.SetToAnycastLocator(Get<Mle::Mle>().GetMeshLocalPrefix(),
-                                              Mle::ServiceAlocFromId(tlv->GetServiceId()));
+
+    Get<Mle::Mle>().GetServiceAloc(tlv->GetServiceId(), aInfo.mAnycastAddress);
+
     aInfo.mSequenceNumber =
         reinterpret_cast<const DnsSrpAnycast::ServiceData *>(serviceData.GetBytes())->GetSequenceNumber();
 

@@ -167,7 +167,7 @@ public:
 
     private:
         void SetName(const char *aName) { mName = aName; }
-        void SetState(ItemState aState);
+        bool SetState(ItemState aState);
         void SetAddresses(const Ip6::Address *aAddresses, uint8_t aNumAddresses);
         void EnableAutoAddress(void);
     };
@@ -303,7 +303,7 @@ public:
         static constexpr uint32_t kAppendedInMsgFlag = (1U << 31);
         static constexpr uint32_t kLeaseMask         = ~kAppendedInMsgFlag;
 
-        void      SetState(ItemState aState);
+        bool      SetState(ItemState aState);
         TimeMilli GetLeaseRenewTime(void) const { return TimeMilli(mData); }
         void      SetLeaseRenewTime(TimeMilli aTime) { mData = aTime.GetValue(); }
         bool      IsAppendedInMessage(void) const { return mLease & kAppendedInMsgFlag; }
@@ -788,6 +788,17 @@ public:
      *
      */
     bool GetUseShortLeaseOption(void) const { return mUseShortLeaseOption; }
+
+    /**
+     * Set the next DNS message ID for client to use.
+     *
+     * This is intended for testing only.
+     *
+     * @pram[in] aMessageId  A message ID.
+     *
+     */
+    void SetNextMessageId(uint16_t aMessageId) { mNextMessageId = aMessageId; }
+
 #endif // OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
 
 private:
@@ -1007,7 +1018,7 @@ private:
     void  UpdateServiceStateToRemove(Service &aService);
     State GetState(void) const { return mState; }
     void  SetState(State aState);
-    void  ChangeHostAndServiceStates(const ItemState *aNewStates, ServiceStateChangeMode aMode);
+    bool  ChangeHostAndServiceStates(const ItemState *aNewStates, ServiceStateChangeMode aMode);
     void  InvokeCallback(Error aError) const;
     void  InvokeCallback(Error aError, const HostInfo &aHostInfo, const Service *aRemovedServices) const;
     void  HandleHostInfoOrServiceChange(void);
@@ -1029,8 +1040,9 @@ private:
     Error        AppendUpdateLeaseOptRecord(Message &aMessage);
     Error        AppendSignature(Message &aMessage, Info &aInfo);
     void         UpdateRecordLengthInMessage(Dns::ResourceRecord &aRecord, uint16_t aOffset, Message &aMessage) const;
-    static void  HandleUdpReceive(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
+    void         HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
     void         ProcessResponse(Message &aMessage);
+    bool         IsResponseMessageIdValid(uint16_t aId) const;
     void         HandleUpdateDone(void);
     void         GetRemovedServices(LinkedList<Service> &aRemovedServices);
     static Error ReadResourceRecord(const Message &aMessage, uint16_t &aOffset, Dns::ResourceRecord &aRecord);
@@ -1062,7 +1074,8 @@ private:
 
     static_assert(kMaxTxFailureRetries < 16, "kMaxTxFailureRetries exceed the range of mTxFailureRetryCount (4-bit)");
 
-    using DelayTimer = TimerMilliIn<Client, &Client::HandleTimer>;
+    using DelayTimer   = TimerMilliIn<Client, &Client::HandleTimer>;
+    using ClientSocket = Ip6::Udp::SocketIn<Client, &Client::HandleUdpReceive>;
 
     State   mState;
     uint8_t mTxFailureRetryCount : 4;
@@ -1073,7 +1086,8 @@ private:
     bool mUseShortLeaseOption : 1;
 #endif
 
-    uint16_t mUpdateMessageId;
+    uint16_t mNextMessageId;
+    uint16_t mResponseMessageId;
     uint16_t mAutoHostAddressCount;
     uint32_t mRetryWaitInterval;
 
@@ -1084,7 +1098,7 @@ private:
     uint32_t  mDefaultLease;
     uint32_t  mDefaultKeyLease;
 
-    Ip6::Udp::Socket mSocket;
+    ClientSocket mSocket;
 
     Callback<ClientCallback> mCallback;
     const char              *mDomainName;

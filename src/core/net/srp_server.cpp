@@ -86,7 +86,7 @@ static Dns::UpdateHeader::Response ErrorToDnsResponseCode(Error aError)
 
 Server::Server(Instance &aInstance)
     : InstanceLocator(aInstance)
-    , mSocket(aInstance)
+    , mSocket(aInstance, *this)
     , mLeaseTimer(aInstance)
     , mOutstandingUpdatesTimer(aInstance)
     , mCompletedUpdateTask(aInstance)
@@ -668,7 +668,7 @@ Error Server::PrepareSocket(void)
 #endif
 
     VerifyOrExit(!mSocket.IsOpen());
-    SuccessOrExit(error = mSocket.Open(HandleUdpReceive, this));
+    SuccessOrExit(error = mSocket.Open());
     error = mSocket.Bind(mPort, Ip6::kNetifThread);
 
 exit:
@@ -1561,11 +1561,6 @@ exit:
     FreeMessageOnError(response, error);
 }
 
-void Server::HandleUdpReceive(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
-{
-    static_cast<Server *>(aContext)->HandleUdpReceive(AsCoreType(aMessage), AsCoreType(aMessageInfo));
-}
-
 void Server::HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
     Error error = ProcessMessage(aMessage, aMessageInfo);
@@ -1788,7 +1783,7 @@ void Server::UpdateAddrResolverCacheTable(const Ip6::MessageInfo &aMessageInfo, 
 
     rloc16 = Get<AddressResolver>().LookUp(aMessageInfo.GetPeerAddr());
 
-    VerifyOrExit(rloc16 != Mac::kShortAddrInvalid);
+    VerifyOrExit(rloc16 != Mle::kInvalidRloc16);
 
     for (const Ip6::Address &address : aHost.mAddresses)
     {

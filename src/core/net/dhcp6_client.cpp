@@ -52,7 +52,7 @@ RegisterLogModule("Dhcp6Client");
 
 Client::Client(Instance &aInstance)
     : InstanceLocator(aInstance)
-    , mSocket(aInstance)
+    , mSocket(aInstance, *this)
     , mTrickleTimer(aInstance, Client::HandleTrickleTimer)
     , mStartTime(0)
     , mIdentityAssociationCurrent(nullptr)
@@ -170,7 +170,7 @@ void Client::Start(void)
 {
     VerifyOrExit(!mSocket.IsBound());
 
-    IgnoreError(mSocket.Open(&Client::HandleUdpReceive, this));
+    IgnoreError(mSocket.Open());
     IgnoreError(mSocket.Bind(kDhcpClientPort));
 
     ProcessNextIdentityAssociation();
@@ -278,7 +278,7 @@ void Client::Solicit(uint16_t aRloc16)
 #else
     messageInfo.GetPeerAddr().SetToRoutingLocator(Get<Mle::MleRouter>().GetMeshLocalPrefix(), aRloc16);
 #endif
-    messageInfo.SetSockAddr(Get<Mle::MleRouter>().GetMeshLocal16());
+    messageInfo.SetSockAddr(Get<Mle::MleRouter>().GetMeshLocalRloc());
     messageInfo.mPeerPort = kDhcpServerPort;
 
     SuccessOrExit(error = mSocket.SendTo(*message, messageInfo));
@@ -393,11 +393,6 @@ Error Client::AppendRapidCommit(Message &aMessage)
 
     option.Init();
     return aMessage.Append(option);
-}
-
-void Client::HandleUdpReceive(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
-{
-    static_cast<Client *>(aContext)->HandleUdpReceive(AsCoreType(aMessage), AsCoreType(aMessageInfo));
 }
 
 void Client::HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo)

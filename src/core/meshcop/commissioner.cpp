@@ -639,7 +639,7 @@ Error Commissioner::SendMgmtCommissionerGetRequest(const uint8_t *aTlvs, uint8_t
         SuccessOrExit(error = message->AppendBytes(aTlvs, aLength));
     }
 
-    SuccessOrExit(error = messageInfo.SetSockAddrToRlocPeerAddrToLeaderAloc());
+    messageInfo.SetSockAddrToRlocPeerAddrToLeaderAloc();
     SuccessOrExit(error = Get<Tmf::Agent>().SendMessage(*message, messageInfo,
                                                         Commissioner::HandleMgmtCommissionerGetResponse, this));
 
@@ -710,7 +710,7 @@ Error Commissioner::SendMgmtCommissionerSetRequest(const CommissioningDataset &a
         SuccessOrExit(error = message->AppendBytes(aTlvs, aLength));
     }
 
-    SuccessOrExit(error = messageInfo.SetSockAddrToRlocPeerAddrToLeaderAloc());
+    messageInfo.SetSockAddrToRlocPeerAddrToLeaderAloc();
     SuccessOrExit(error = Get<Tmf::Agent>().SendMessage(*message, messageInfo,
                                                         Commissioner::HandleMgmtCommissionerSetResponse, this));
 
@@ -763,7 +763,7 @@ Error Commissioner::SendPetition(void)
 
     SuccessOrExit(error = Tlv::Append<CommissionerIdTlv>(*message, mCommissionerId));
 
-    SuccessOrExit(error = messageInfo.SetSockAddrToRlocPeerAddrToLeaderAloc());
+    messageInfo.SetSockAddrToRlocPeerAddrToLeaderAloc();
     SuccessOrExit(
         error = Get<Tmf::Agent>().SendMessage(*message, messageInfo, Commissioner::HandleLeaderPetitionResponse, this));
 
@@ -811,7 +811,7 @@ void Commissioner::HandleLeaderPetitionResponse(Coap::Message          *aMessage
         ExitNow();
     }
 
-    IgnoreError(Get<Mle::MleRouter>().GetCommissionerAloc(mCommissionerAloc.GetAddress(), mSessionId));
+    Get<Mle::Mle>().GetCommissionerAloc(mSessionId, mCommissionerAloc.GetAddress());
     Get<ThreadNetif>().AddUnicastAddress(mCommissionerAloc);
 
     SetState(kStateActive);
@@ -850,7 +850,7 @@ void Commissioner::SendKeepAlive(uint16_t aSessionId)
 
     SuccessOrExit(error = Tlv::Append<CommissionerSessionIdTlv>(*message, aSessionId));
 
-    SuccessOrExit(error = messageInfo.SetSockAddrToRlocPeerAddrToLeaderAloc());
+    messageInfo.SetSockAddrToRlocPeerAddrToLeaderAloc();
     SuccessOrExit(error = Get<Tmf::Agent>().SendMessage(*message, messageInfo,
                                                         Commissioner::HandleLeaderKeepAliveResponse, this));
 
@@ -954,7 +954,7 @@ template <> void Commissioner::HandleTmf<kUriRelayRx>(Coap::Message &aMessage, c
     aMessage.SetOffset(startOffset);
     SuccessOrExit(error = aMessage.SetLength(endOffset));
 
-    joinerMessageInfo.SetPeerAddr(Get<Mle::MleRouter>().GetMeshLocal64());
+    joinerMessageInfo.SetPeerAddr(Get<Mle::MleRouter>().GetMeshLocalEid());
     joinerMessageInfo.GetPeerAddr().SetIid(mJoinerIid);
     joinerMessageInfo.SetPeerPort(mJoinerPort);
 
@@ -1048,7 +1048,7 @@ void Commissioner::SendJoinFinalizeResponse(const Coap::Message &aRequest, State
 
     SuccessOrExit(error = Tlv::Append<StateTlv>(*message, aState));
 
-    joinerMessageInfo.SetPeerAddr(Get<Mle::MleRouter>().GetMeshLocal64());
+    joinerMessageInfo.SetPeerAddr(Get<Mle::MleRouter>().GetMeshLocalEid());
     joinerMessageInfo.GetPeerAddr().SetIid(mJoinerIid);
     joinerMessageInfo.SetPeerPort(mJoinerPort);
 

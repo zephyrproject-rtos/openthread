@@ -311,7 +311,6 @@ void DiscoverScanner::HandleDiscoveryResponse(Mle::RxInfo &aRxInfo) const
     Error                         error = kErrorNone;
     MeshCoP::Tlv                  meshcopTlv;
     MeshCoP::DiscoveryResponseTlv discoveryResponse;
-    MeshCoP::NetworkNameTlv       networkName;
     ScanResult                    result;
     uint16_t                      offset;
     uint16_t                      end;
@@ -336,12 +335,21 @@ void DiscoverScanner::HandleDiscoveryResponse(Mle::RxInfo &aRxInfo) const
     // Process MeshCoP TLVs
     while (offset < end)
     {
-        IgnoreError(aRxInfo.mMessage.Read(offset, meshcopTlv));
+        SuccessOrExit(error = aRxInfo.mMessage.Read(offset, meshcopTlv));
+
+        if (meshcopTlv.IsExtended())
+        {
+            SuccessOrExit(error = Tlv::ParseAndSkipTlv(aRxInfo.mMessage, offset));
+            VerifyOrExit(offset <= end, error = kErrorParse);
+            continue;
+        }
+
+        VerifyOrExit(meshcopTlv.GetSize() + offset <= aRxInfo.mMessage.GetLength(), error = kErrorParse);
 
         switch (meshcopTlv.GetType())
         {
         case MeshCoP::Tlv::kDiscoveryResponse:
-            IgnoreError(aRxInfo.mMessage.Read(offset, discoveryResponse));
+            SuccessOrExit(error = aRxInfo.mMessage.Read(offset, discoveryResponse));
             VerifyOrExit(discoveryResponse.IsValid(), error = kErrorParse);
             result.mVersion  = discoveryResponse.GetVersion();
             result.mIsNative = discoveryResponse.IsNativeCommissioner();
@@ -353,11 +361,7 @@ void DiscoverScanner::HandleDiscoveryResponse(Mle::RxInfo &aRxInfo) const
             break;
 
         case MeshCoP::Tlv::kNetworkName:
-            IgnoreError(aRxInfo.mMessage.Read(offset, networkName));
-            if (networkName.IsValid())
-            {
-                IgnoreError(AsCoreType(&result.mNetworkName).Set(networkName.GetNetworkName()));
-            }
+            SuccessOrExit(error = Tlv::Read<MeshCoP::NetworkNameTlv>(aRxInfo.mMessage, offset, result.mNetworkName.m8));
             break;
 
         case MeshCoP::Tlv::kSteeringData:

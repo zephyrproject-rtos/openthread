@@ -390,7 +390,7 @@ public:
      * @returns A reference to the Thread link local address.
      *
      */
-    const Ip6::Address &GetLinkLocalAddress(void) const { return mLinkLocal64.GetAddress(); }
+    const Ip6::Address &GetLinkLocalAddress(void) const { return mLinkLocalAddress.GetAddress(); }
 
     /**
      * Updates the link local address.
@@ -418,6 +418,14 @@ public:
     {
         return mRealmLocalAllThreadNodes.GetAddress();
     }
+
+    /**
+     * Gets the parent's RLOC16.
+     *
+     * @returns  The parent's RLOC16, or `kInvalidRloc16` if parent's state is not valid.
+     *
+     */
+    uint16_t GetParentRloc16(void) const;
 
     /**
      * Gets the parent when operating in End Device mode.
@@ -516,20 +524,20 @@ public:
     uint16_t GetRloc16(void) const { return mRloc16; }
 
     /**
-     * Returns a reference to the RLOC assigned to the Thread interface.
+     * Returns the mesh local RLOC IPv6 address assigned to the Thread interface.
      *
-     * @returns A reference to the RLOC assigned to the Thread interface.
+     * @returns The mesh local RLOC IPv6 address.
      *
      */
-    const Ip6::Address &GetMeshLocal16(void) const { return mMeshLocal16.GetAddress(); }
+    const Ip6::Address &GetMeshLocalRloc(void) const { return mMeshLocalRloc.GetAddress(); }
 
     /**
-     * Returns a reference to the ML-EID assigned to the Thread interface.
+     * Returns the mesh local endpoint identifier (ML-EID) IPv6 address assigned to the Thread interface.
      *
-     * @returns A reference to the ML-EID assigned to the Thread interface.
+     * @returns The ML-EID address.
      *
      */
-    const Ip6::Address &GetMeshLocal64(void) const { return mMeshLocal64.GetAddress(); }
+    const Ip6::Address &GetMeshLocalEid(void) const { return mMeshLocalEid.GetAddress(); }
 
     /**
      * Returns a reference to the ML-EID as a `Netif::UnicastAddress`.
@@ -537,7 +545,7 @@ public:
      * @returns A reference to the ML-EID.
      *
      */
-    Ip6::Netif::UnicastAddress &GetMeshLocal64UnicastAddress(void) { return mMeshLocal64; }
+    Ip6::Netif::UnicastAddress &GetMeshLocalEidUnicastAddress(void) { return mMeshLocalEid; }
 
     /**
      * Returns the Router ID of the Leader.
@@ -548,53 +556,46 @@ public:
     uint8_t GetLeaderId(void) const { return mLeaderData.GetLeaderRouterId(); }
 
     /**
-     * Retrieves the Leader's RLOC.
+     * Returns the RLOC16 of the Leader.
      *
-     * @param[out]  aAddress  A reference to the Leader's RLOC.
-     *
-     * @retval kErrorNone      Successfully retrieved the Leader's RLOC.
-     * @retval kErrorDetached  The Thread interface is not currently attached to a Thread Partition.
+     * @returns The RLOC16 of the Leader.
      *
      */
-    Error GetLeaderAddress(Ip6::Address &aAddress) const;
+    uint16_t GetLeaderRloc16(void) const { return Rloc16FromRouterId(GetLeaderId()); }
+
+    /**
+     * Retrieves the Leader's RLOC.
+     *
+     * @param[out]  aAddress  A reference to an address to return the Leader's RLOC.
+     *
+     */
+    void GetLeaderRloc(Ip6::Address &aAddress) const;
 
     /**
      * Retrieves the Leader's ALOC.
      *
-     * @param[out]  aAddress  A reference to the Leader's ALOC.
-     *
-     * @retval kErrorNone      Successfully retrieved the Leader's ALOC.
-     * @retval kErrorDetached  The Thread interface is not currently attached to a Thread Partition.
+     * @param[out]  aAddress  A reference to an address to return the Leader's ALOC.
      *
      */
-    Error GetLeaderAloc(Ip6::Address &aAddress) const { return GetLocatorAddress(aAddress, kAloc16Leader); }
+    void GetLeaderAloc(Ip6::Address &aAddress) const;
 
     /**
-     * Computes the Commissioner's ALOC.
+     * Retrieves the Commissioner's ALOC for a given session ID.
      *
-     * @param[out]  aAddress        A reference to the Commissioner's ALOC.
      * @param[in]   aSessionId      Commissioner session id.
-     *
-     * @retval kErrorNone      Successfully retrieved the Commissioner's ALOC.
-     * @retval kErrorDetached  The Thread interface is not currently attached to a Thread Partition.
+     * @param[out]  aAddress        A reference to an address to return the Commissioner's ALOC.
      *
      */
-    Error GetCommissionerAloc(Ip6::Address &aAddress, uint16_t aSessionId) const
-    {
-        return GetLocatorAddress(aAddress, CommissionerAloc16FromId(aSessionId));
-    }
+    void GetCommissionerAloc(uint16_t aSessionId, Ip6::Address &aAddress) const;
 
     /**
      * Retrieves the Service ALOC for given Service ID.
      *
      * @param[in]   aServiceId Service ID to get ALOC for.
-     * @param[out]  aAddress   A reference to the Service ALOC.
-     *
-     * @retval kErrorNone      Successfully retrieved the Service ALOC.
-     * @retval kErrorDetached  The Thread interface is not currently attached to a Thread Partition.
+     * @param[out]  aAddress   A reference to an address to return the Service ALOC.
      *
      */
-    Error GetServiceAloc(uint8_t aServiceId, Ip6::Address &aAddress) const;
+    void GetServiceAloc(uint8_t aServiceId, Ip6::Address &aAddress) const;
 
     /**
      * Returns the most recently received Leader Data.
@@ -670,18 +671,6 @@ public:
     void RequestShorterChildIdRequest(void);
 
     /**
-     * Gets the RLOC or ALOC of a given RLOC16 or ALOC16.
-     *
-     * @param[out]  aAddress  A reference to the RLOC or ALOC.
-     * @param[in]   aLocator  RLOC16 or ALOC16.
-     *
-     * @retval kErrorNone      If got the RLOC or ALOC successfully.
-     * @retval kErrorDetached  If device is detached.
-     *
-     */
-    Error GetLocatorAddress(Ip6::Address &aAddress, uint16_t aLocator) const;
-
-    /**
      * Schedules a Child Update Request.
      *
      */
@@ -711,16 +700,6 @@ public:
     {
         return (&aAddress == &mLinkLocalAllThreadNodes) || (&aAddress == &mRealmLocalAllThreadNodes);
     }
-
-    /**
-     * Determines the next hop towards an RLOC16 destination.
-     *
-     * @param[in]  aDestination  The RLOC16 of the destination.
-     *
-     * @returns A RLOC16 of the next hop if a route is known, kInvalidRloc16 otherwise.
-     *
-     */
-    uint16_t GetNextHop(uint16_t aDestination) const;
 
 #if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
     /**
@@ -1011,6 +990,7 @@ private:
         Error AppendResponseTlv(const RxChallenge &aResponse);
         Error AppendLinkFrameCounterTlv(void);
         Error AppendMleFrameCounterTlv(void);
+        Error AppendLinkAndMleFrameCounterTlvs(void);
         Error AppendAddress16Tlv(uint16_t aRloc16);
         Error AppendNetworkDataTlv(NetworkData::Type aType);
         Error AppendTlvRequestTlv(const uint8_t *aTlvs, uint8_t aTlvsLength);
@@ -1055,7 +1035,7 @@ private:
     private:
         Error AppendCompressedAddressEntry(uint8_t aContextId, const Ip6::Address &aAddress);
         Error AppendAddressEntry(const Ip6::Address &aAddress);
-        Error AppendDatasetTlv(MeshCoP::Dataset::Type mDatasetType);
+        Error AppendDatasetTlv(MeshCoP::Dataset::Type aDatasetType);
     };
 
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1072,6 +1052,9 @@ private:
         Error ReadFrameCounterTlvs(uint32_t &aLinkFrameCounter, uint32_t &aMleFrameCounter) const;
         Error ReadTlvRequestTlv(TlvList &aTlvList) const;
         Error ReadLeaderDataTlv(LeaderData &aLeaderData) const;
+        Error ReadAndSetNetworkDataTlv(const LeaderData &aLeaderData) const;
+        Error ReadAndSaveActiveDataset(const MeshCoP::Timestamp &aActiveTimestamp) const;
+        Error ReadAndSavePendingDataset(const MeshCoP::Timestamp &aPendingTimestamp) const;
 #if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
         Error ReadCslClockAccuracyTlv(Mac::CslAccuracy &aCslAccuracy) const;
 #endif
@@ -1081,6 +1064,7 @@ private:
 
     private:
         Error ReadChallengeOrResponse(uint8_t aTlvType, RxChallenge &aRxChallenge) const;
+        Error ReadAndSaveDataset(MeshCoP::Dataset::Type aDatasetType, const MeshCoP::Timestamp &aTimestamp) const;
     };
 
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1182,7 +1166,7 @@ private:
     class ServiceAloc : public Ip6::Netif::UnicastAddress
     {
     public:
-        static constexpr uint16_t kNotInUse = Mac::kShortAddrInvalid;
+        static constexpr uint16_t kNotInUse = kInvalidRloc16;
 
         ServiceAloc(void);
 
@@ -1235,9 +1219,6 @@ private:
 
     //------------------------------------------------------------------------------------------------------------------
     // Methods
-
-    static void HandleUdpReceive(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
-    static void HandleDetachGracefullyTimer(Timer &aTimer);
 
     Error      Start(StartMode aMode);
     void       Stop(StopMode aMode);
@@ -1378,6 +1359,7 @@ private:
     using AttachTimer           = TimerMilliIn<Mle, &Mle::HandleAttachTimer>;
     using DelayTimer            = TimerMilliIn<Mle, &Mle::HandleDelayedResponseTimer>;
     using MsgTxTimer            = TimerMilliIn<Mle, &Mle::HandleMessageTransmissionTimer>;
+    using MleSocket             = Ip6::Udp::SocketIn<Mle, &Mle::HandleUdpReceive>;
 
     static const otMeshLocalPrefix kMeshLocalPrefixInit;
 
@@ -1421,14 +1403,14 @@ private:
     uint64_t mLastUpdatedTimestamp;
 #endif
 
-    LeaderData       mLeaderData;
-    Parent           mParent;
-    NeighborTable    mNeighborTable;
-    MessageQueue     mDelayedResponses;
-    TxChallenge      mParentRequestChallenge;
-    ParentCandidate  mParentCandidate;
-    Ip6::Udp::Socket mSocket;
-    Counters         mCounters;
+    LeaderData      mLeaderData;
+    Parent          mParent;
+    NeighborTable   mNeighborTable;
+    MessageQueue    mDelayedResponses;
+    TxChallenge     mParentRequestChallenge;
+    ParentCandidate mParentCandidate;
+    MleSocket       mSocket;
+    Counters        mCounters;
 #if OPENTHREAD_CONFIG_PARENT_SEARCH_ENABLE
     ParentSearch mParentSearch;
 #endif
@@ -1444,9 +1426,9 @@ private:
     MsgTxTimer                   mMessageTransmissionTimer;
     DetachGracefullyTimer        mDetachGracefullyTimer;
     Ip6::NetworkPrefix           mMeshLocalPrefix;
-    Ip6::Netif::UnicastAddress   mLinkLocal64;
-    Ip6::Netif::UnicastAddress   mMeshLocal64;
-    Ip6::Netif::UnicastAddress   mMeshLocal16;
+    Ip6::Netif::UnicastAddress   mLinkLocalAddress;
+    Ip6::Netif::UnicastAddress   mMeshLocalEid;
+    Ip6::Netif::UnicastAddress   mMeshLocalRloc;
     Ip6::Netif::MulticastAddress mLinkLocalAllThreadNodes;
     Ip6::Netif::MulticastAddress mRealmLocalAllThreadNodes;
 };

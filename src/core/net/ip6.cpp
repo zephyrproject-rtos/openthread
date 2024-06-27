@@ -654,8 +654,8 @@ Error Ip6::HandleFragment(Message &aMessage)
     offset          = FragmentHeader::FragmentOffsetToBytes(fragmentHeader.GetOffset());
     payloadFragment = aMessage.GetLength() - aMessage.GetOffset() - sizeof(fragmentHeader);
 
-    LogInfo("Fragment with id %d received > %d bytes, offset %d", fragmentHeader.GetIdentification(), payloadFragment,
-            offset);
+    LogInfo("Fragment with id %lu received > %u bytes, offset %u", ToUlong(fragmentHeader.GetIdentification()),
+            payloadFragment, offset);
 
     if (offset + payloadFragment + aMessage.GetOffset() > kMaxAssembledDatagramLength)
     {
@@ -1025,7 +1025,8 @@ Error Ip6::PassToHost(OwnedPtr<Message> &aMessagePtr,
     // than realm-local, set the hop limit to 1 before sending to host, so this packet
     // will not be forwarded by host.
     if (aMessageInfo.GetSockAddr().IsMulticastLargerThanRealmLocal() &&
-        (aMessageInfo.GetPeerAddr().IsLinkLocal() || (Get<Mle::Mle>().IsMeshLocalAddress(aMessageInfo.GetPeerAddr()))))
+        (aMessageInfo.GetPeerAddr().IsLinkLocalUnicast() ||
+         (Get<Mle::Mle>().IsMeshLocalAddress(aMessageInfo.GetPeerAddr()))))
     {
         messagePtr->Write<uint8_t>(Header::kHopLimitFieldOffset, 1);
     }
@@ -1122,10 +1123,6 @@ Error Ip6::HandleDatagram(OwnedPtr<Message> aMessagePtr, bool aIsReassembled)
         {
             receive = true;
         }
-        else if (Get<ThreadNetif>().IsMulticastPromiscuousEnabled())
-        {
-            forwardHost = true;
-        }
     }
     else
     {
@@ -1135,9 +1132,9 @@ Error Ip6::HandleDatagram(OwnedPtr<Message> aMessagePtr, bool aIsReassembled)
         {
             receive = true;
         }
-        else if (!aMessagePtr->IsOriginThreadNetif() || !header.GetDestination().IsLinkLocal())
+        else if (!aMessagePtr->IsOriginThreadNetif() || !header.GetDestination().IsLinkLocalUnicast())
         {
-            if (header.GetDestination().IsLinkLocal())
+            if (header.GetDestination().IsLinkLocalUnicast())
             {
                 forwardThread = true;
             }
@@ -1434,8 +1431,8 @@ void Ip6::UpdateBorderRoutingCounters(const Header &aHeader, uint16_t aMessageLe
     otPacketsAndBytes       *counter         = nullptr;
     otPacketsAndBytes       *internetCounter = nullptr;
 
-    VerifyOrExit(!aHeader.GetSource().IsLinkLocal());
-    VerifyOrExit(!aHeader.GetDestination().IsLinkLocal());
+    VerifyOrExit(!aHeader.GetSource().IsLinkLocalUnicast());
+    VerifyOrExit(!aHeader.GetDestination().IsLinkLocalUnicast());
     VerifyOrExit(aHeader.GetSource().GetPrefix() != Get<Mle::Mle>().GetMeshLocalPrefix());
     VerifyOrExit(aHeader.GetDestination().GetPrefix() != Get<Mle::Mle>().GetMeshLocalPrefix());
 

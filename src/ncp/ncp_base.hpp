@@ -549,6 +549,11 @@ protected:
     static uint8_t      ConvertLogLevel(otLogLevel aLogLevel);
     static unsigned int ConvertLogRegion(otLogRegion aLogRegion);
 
+#if OPENTHREAD_CONFIG_DIAG_ENABLE
+    static void HandleDiagOutput_Jump(const char *aFormat, va_list aArguments, void *aContext);
+    void        HandleDiagOutput(const char *aFormat, va_list aArguments);
+#endif
+
 #if OPENTHREAD_ENABLE_NCP_VENDOR_HOOK
     /**
      * Defines a vendor "command handler" hook to process vendor-specific spinel commands.
@@ -614,6 +619,10 @@ protected:
     otError VendorSetPropertyHandler(spinel_prop_key_t aPropKey);
 
 #endif // OPENTHREAD_ENABLE_NCP_VENDOR_HOOK
+
+    static void ThreadDetachGracefullyHandler(void *aContext);
+
+    void ThreadDetachGracefullyHandler(void);
 
 protected:
     static NcpBase        *sNcpInstance;
@@ -730,6 +739,11 @@ protected:
     bool mDidInitialUpdates;
 
     uint64_t mLogTimestampBase; // Timestamp base used for logging
+
+#if OPENTHREAD_CONFIG_DIAG_ENABLE
+    char    *mDiagOutput;
+    uint16_t mDiagOutputLen;
+#endif
 };
 
 } // namespace Ncp

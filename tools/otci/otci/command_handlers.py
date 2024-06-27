@@ -105,8 +105,7 @@ class OtCliCommandRunner(OTCommandHandler):
 
         self.__pending_lines = queue.Queue()
         self.__should_close = threading.Event()
-        self.__otcli_reader = threading.Thread(target=self.__otcli_read_routine)
-        self.__otcli_reader.setDaemon(True)
+        self.__otcli_reader = threading.Thread(target=self.__otcli_read_routine, daemon=True)
         self.__otcli_reader.start()
 
     def __repr__(self):
@@ -285,18 +284,12 @@ class OtbrSshCommandRunner(OTCommandHandler):
 
 class OtbrAdbCommandRunner(OTCommandHandler):
 
-    def __init__(self, host, port):
-        from adb_shell.adb_device import AdbDeviceTcp
+    from adb_shell.adb_device import AdbDevice
 
-        self.__host = host
-        self.__port = port
-        self.__adb = AdbDeviceTcp(host, port, default_transport_timeout_s=9.0)
-
+    def __init__(self, adb: AdbDevice):
+        self.__adb = adb
         self.__line_read_callback = None
         self.__adb.connect(rsa_keys=None, auth_timeout_s=0.1)
-
-    def __repr__(self):
-        return f'{self.__host}:{self.__port}'
 
     def execute_command(self, cmd: str, timeout: float) -> List[str]:
         sh_cmd = f'ot-ctl {cmd}'
@@ -324,3 +317,32 @@ class OtbrAdbCommandRunner(OTCommandHandler):
 
     def set_line_read_callback(self, callback: Optional[Callable[[str], Any]]):
         self.__line_read_callback = callback
+
+
+class OtbrAdbTcpCommandRunner(OtbrAdbCommandRunner):
+
+    def __init__(self, host: str, port: int):
+        from adb_shell.adb_device import AdbDeviceTcp
+
+        self.__host = host
+        self.__port = port
+
+        adb = AdbDeviceTcp(host, port, default_transport_timeout_s=9.0)
+        super(OtbrAdbTcpCommandRunner, self).__init__(adb)
+
+    def __repr__(self):
+        return f'{self.__host}:{self.__port}'
+
+
+class OtbrAdbUsbCommandRunner(OtbrAdbCommandRunner):
+
+    def __init__(self, serial: str):
+        from adb_shell.adb_device import AdbDeviceUsb
+
+        self.__serial = serial
+
+        adb = AdbDeviceUsb(serial, port_path=None, default_transport_timeout_s=9.0)
+        super(OtbrAdbUsbCommandRunner, self).__init__(adb)
+
+    def __repr__(self):
+        return f'USB:{self.__serial}'

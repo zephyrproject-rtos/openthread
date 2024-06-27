@@ -79,7 +79,13 @@ exit:
 
 otError otThreadGetLeaderRloc(otInstance *aInstance, otIp6Address *aLeaderRloc)
 {
-    return AsCoreType(aInstance).Get<Mle::MleRouter>().GetLeaderAddress(AsCoreType(aLeaderRloc));
+    Error error = kErrorNone;
+
+    VerifyOrExit(AsCoreType(aInstance).Get<Mle::Mle>().GetRloc16() != Mle::kInvalidRloc16, error = kErrorDetached);
+    AsCoreType(aInstance).Get<Mle::Mle>().GetLeaderRloc(AsCoreType(aLeaderRloc));
+
+exit:
+    return error;
 }
 
 otLinkModeConfig otThreadGetLinkMode(otInstance *aInstance)
@@ -145,12 +151,12 @@ exit:
 
 const otIp6Address *otThreadGetRloc(otInstance *aInstance)
 {
-    return &AsCoreType(aInstance).Get<Mle::MleRouter>().GetMeshLocal16();
+    return &AsCoreType(aInstance).Get<Mle::MleRouter>().GetMeshLocalRloc();
 }
 
 const otIp6Address *otThreadGetMeshLocalEid(otInstance *aInstance)
 {
-    return &AsCoreType(aInstance).Get<Mle::MleRouter>().GetMeshLocal64();
+    return &AsCoreType(aInstance).Get<Mle::MleRouter>().GetMeshLocalEid();
 }
 
 const otMeshLocalPrefix *otThreadGetMeshLocalPrefix(otInstance *aInstance)
@@ -189,7 +195,13 @@ const otIp6Address *otThreadGetRealmLocalAllThreadNodesMulticastAddress(otInstan
 
 otError otThreadGetServiceAloc(otInstance *aInstance, uint8_t aServiceId, otIp6Address *aServiceAloc)
 {
-    return AsCoreType(aInstance).Get<Mle::MleRouter>().GetServiceAloc(aServiceId, AsCoreType(aServiceAloc));
+    Error error = kErrorNone;
+
+    VerifyOrExit(AsCoreType(aInstance).Get<Mle::Mle>().GetRloc16() != Mle::kInvalidRloc16, error = kErrorDetached);
+    AsCoreType(aInstance).Get<Mle::Mle>().GetServiceAloc(aServiceId, AsCoreType(aServiceAloc));
+
+exit:
+    return error;
 }
 
 const char *otThreadGetNetworkName(otInstance *aInstance)
@@ -275,7 +287,8 @@ uint32_t otThreadGetKeySequenceCounter(otInstance *aInstance)
 
 void otThreadSetKeySequenceCounter(otInstance *aInstance, uint32_t aKeySequenceCounter)
 {
-    AsCoreType(aInstance).Get<KeyManager>().SetCurrentKeySequence(aKeySequenceCounter, KeyManager::kForceUpdate);
+    AsCoreType(aInstance).Get<KeyManager>().SetCurrentKeySequence(
+        aKeySequenceCounter, KeyManager::kForceUpdate | KeyManager::kGuardTimerUnchanged);
 }
 
 uint16_t otThreadGetKeySwitchGuardTime(otInstance *aInstance)

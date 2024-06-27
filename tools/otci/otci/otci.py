@@ -33,7 +33,7 @@ from collections import Counter
 from typing import Callable, List, Collection, Union, Tuple, Optional, Dict, Pattern, Any
 
 from . import connectors
-from .command_handlers import OTCommandHandler, OtCliCommandRunner, OtbrSshCommandRunner, OtbrAdbCommandRunner
+from .command_handlers import OTCommandHandler, OtCliCommandRunner, OtbrSshCommandRunner, OtbrAdbTcpCommandRunner, OtbrAdbUsbCommandRunner
 from .connectors import Simulator
 from .errors import UnexpectedCommandOutput, ExpectLineTimeoutError, CommandError, InvalidArgumentsError
 from .types import ChildId, Rloc16, Ip6Addr, ThreadState, PartitionId, DeviceMode, RouterId, SecurityPolicy, Ip6Prefix, \
@@ -1946,18 +1946,6 @@ class OTCI(object):
         """Check if a IPv6 multicast address was subscribed by the Thread interface."""
         return ip in self.get_ipmaddrs()
 
-    def get_ipmaddr_promiscuous(self) -> bool:
-        """Get multicast promiscuous mode."""
-        return self.__parse_Enabled_or_Disabled(self.execute_command("ipmaddr promiscuous"))
-
-    def enable_ipmaddr_promiscuous(self):
-        """Enable multicast promiscuous mode."""
-        self.execute_command('ipmaddr promiscuous enable')
-
-    def disable_ipmaddr_promiscuous(self):
-        """Disable multicast promiscuous mode."""
-        self.execute_command('ipmaddr promiscuous disable')
-
     def get_ipmaddr_llatn(self) -> Ip6Addr:
         """Get Link Local All Thread Nodes Multicast Address"""
         return self.__parse_ip6addr(self.execute_command('ipmaddr llatn'))
@@ -2515,8 +2503,13 @@ def connect_otbr_ssh(host: str, port: int = 22, username='pi', password='raspber
     return OTCI(cmd_handler)
 
 
-def connect_otbr_adb(host: str, port: int = 5555):
-    cmd_handler = OtbrAdbCommandRunner(host, port)
+def connect_otbr_adb_tcp(host: str, port: int = 5555):
+    cmd_handler = OtbrAdbTcpCommandRunner(host, port)
+    return OTCI(cmd_handler)
+
+
+def connect_otbr_adb_usb(serial: str):
+    cmd_handler = OtbrAdbUsbCommandRunner(serial)
     return OTCI(cmd_handler)
 
 

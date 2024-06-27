@@ -275,7 +275,7 @@ bool Publisher::Entry::IsPreferred(uint16_t aRloc16) const
     // router over an entry from an end-device (e.g., a REED). If both
     // are the same type, then the one with smaller RLOC16 is preferred.
 
-    bool isOtherRouter = Mle::IsActiveRouter(aRloc16);
+    bool isOtherRouter = Mle::IsRouterRloc16(aRloc16);
 
     return (Get<Mle::Mle>().IsRouterOrLeader() == isOtherRouter) ? (aRloc16 < Get<Mle::Mle>().GetRloc16())
                                                                  : isOtherRouter;
@@ -510,7 +510,7 @@ void Publisher::DnsSrpServiceEntry::PublishUnicast(const Ip6::Address &aAddress,
 void Publisher::DnsSrpServiceEntry::PublishUnicast(uint16_t aPort)
 {
     LogInfo("Publishing DNS/SRP service unicast (ml-eid, port:%d)", aPort);
-    Publish(Info::InfoUnicast(kTypeUnicastMeshLocalEid, Get<Mle::Mle>().GetMeshLocal64(), aPort));
+    Publish(Info::InfoUnicast(kTypeUnicastMeshLocalEid, Get<Mle::Mle>().GetMeshLocalEid(), aPort));
 }
 
 void Publisher::DnsSrpServiceEntry::Publish(const Info &aInfo)
@@ -546,7 +546,7 @@ void Publisher::DnsSrpServiceEntry::HandleNotifierEvents(Events aEvents)
 {
     if ((GetType() == kTypeUnicastMeshLocalEid) && aEvents.Contains(kEventThreadMeshLocalAddrChanged))
     {
-        mInfo.SetAddress(Get<Mle::Mle>().GetMeshLocal64());
+        mInfo.SetAddress(Get<Mle::Mle>().GetMeshLocalEid());
 
         if (GetState() == kAdded)
         {

@@ -237,16 +237,6 @@ public:
     void SetRouterId(uint8_t aRouterId);
 
     /**
-     * Returns the next hop towards an RLOC16 destination.
-     *
-     * @param[in]  aDestination  The RLOC16 of the destination.
-     *
-     * @returns A RLOC16 of the next hop if a route is known, kInvalidRloc16 otherwise.
-     *
-     */
-    uint16_t GetNextHop(uint16_t aDestination) { return mRouterTable.GetNextHop(aDestination); }
-
-    /**
      * Returns the NETWORK_ID_TIMEOUT value.
      *
      * @returns The NETWORK_ID_TIMEOUT value.
@@ -372,17 +362,6 @@ public:
     void RemoveRouterLink(Router &aRouter);
 
     /**
-     * Indicates whether or not the RLOC16 is an MTD child of this device.
-     *
-     * @param[in]  aRloc16  The RLOC16.
-     *
-     * @retval TRUE if @p aRloc16 is an MTD child of this device.
-     * @retval FALSE if @p aRloc16 is not an MTD child of this device.
-     *
-     */
-    bool IsMinimalChild(uint16_t aRloc16);
-
-    /**
      * Indicates whether or not the given Thread partition attributes are preferred.
      *
      * @param[in]  aSingletonA   Whether or not the Thread Partition A has a single router.
@@ -399,27 +378,6 @@ public:
                                  const LeaderData &aLeaderDataA,
                                  bool              aSingletonB,
                                  const LeaderData &aLeaderDataB);
-
-    /**
-     * Checks if the destination is reachable.
-     *
-     * @param[in]  aMeshDest   The RLOC16 of the destination.
-     * @param[in]  aIp6Header  A reference to the IPv6 header of the message.
-     *
-     * @retval kErrorNone      The destination is reachable.
-     * @retval kErrorNoRoute   The destination is not reachable and the message should be dropped.
-     *
-     */
-    Error CheckReachability(uint16_t aMeshDest, const Ip6::Header &aIp6Header);
-
-    /**
-     * Resolves 2-hop routing loops.
-     *
-     * @param[in]  aSourceMac   The RLOC16 of the previous hop.
-     * @param[in]  aDestRloc16  The RLOC16 of the final destination.
-     *
-     */
-    void ResolveRoutingLoops(uint16_t aSourceMac, uint16_t aDestRloc16);
 
     /**
      * Fills an ConnectivityTlv.

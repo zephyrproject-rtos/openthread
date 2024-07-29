@@ -95,12 +95,12 @@ jobs:
           CRASHED=$(./script/test check_crash | tail -1)
           [[ $CRASHED -eq "1" ]] && echo "Crashed!" || echo "Not crashed."
           echo "CRASHED=$CRASHED" >> $GITHUB_ENV
-    - uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+    - uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
       if: ${{ failure() }}
       with:
         name: thread-1-3-${{ matrix.compiler.c }}-${{ matrix.arch }}-pcaps
         path: "*.pcap"
-    - uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+    - uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
       if: ${{ failure() && env.CRASHED == '1' }}
       with:
         name: core-packet-verification-thread-1-3
@@ -109,7 +109,7 @@ jobs:
     - name: Generate Coverage
       run: |
         ./script/test generate_coverage "${{ matrix.compiler.gcov }}"
-    - uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+    - uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
       with:
         name: cov-thread-1-3-${{ matrix.compiler.c }}-${{ matrix.arch }}
         path: tmp/coverage.info
@@ -166,14 +166,14 @@ jobs:
           CRASHED=$(./script/test check_crash | tail -1)
           [[ $CRASHED -eq "1" ]] && echo "Crashed!" || echo "Not crashed."
           echo "CRASHED=$CRASHED" >> $GITHUB_ENV
-    - uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+    - uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
       if: ${{ failure() }}
       with:
         name: packet-verification-low-power-pcaps
         path: |
           *.pcap
           *.json
-    - uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+    - uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
       if: ${{ failure() && env.CRASHED == '1' }}
       with:
         name: core-packet-verification-low-power
@@ -182,7 +182,7 @@ jobs:
     - name: Generate Coverage
       run: |
         ./script/test generate_coverage gcc
-    - uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+    - uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
       with:
         name: cov-packet-verification-low-power
         path: tmp/coverage.info
@@ -220,7 +220,7 @@ jobs:
     - name: Run
       run: |
         ./script/test cert_suite ./tests/scripts/thread-cert/Cert_*.py ./tests/scripts/thread-cert/test_*.py
-    - uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+    - uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
       if: ${{ failure() }}
       with:
         name: packet-verification-1.1-on-1.3-pcaps
@@ -230,7 +230,7 @@ jobs:
     - name: Generate Coverage
       run: |
         ./script/test generate_coverage gcc
-    - uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+    - uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
       with:
         name: cov-packet-verification-1-1-on-1-3
         path: tmp/coverage.info
@@ -272,7 +272,7 @@ jobs:
         ./script/test cert_suite ./tests/scripts/thread-cert/test_*.py
         ./script/test cert_suite ./tests/scripts/thread-cert/v1_2_*.py
         ./script/test cert_suite ./tests/scripts/thread-cert/addon_test_channel_manager_autocsl*.py
-    - uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+    - uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
       if: ${{ failure() }}
       with:
         name: channel-manager-csl
@@ -280,7 +280,7 @@ jobs:
     - name: Generate Coverage
       run: |
         ./script/test generate_coverage gcc
-    - uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+    - uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
       with:
         name: cov-channel-manager-csl
         path: tmp/coverage.info
@@ -316,7 +316,7 @@ jobs:
           CRASHED=$(./script/test check_crash | tail -1)
           [[ $CRASHED -eq "1" ]] && echo "Crashed!" || echo "Not crashed."
           echo "CRASHED=$CRASHED" >> $GITHUB_ENV
-    - uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+    - uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
       if: ${{ failure() && env.CRASHED == '1' }}
       with:
         name: core-expect-1-3
@@ -325,7 +325,7 @@ jobs:
     - name: Generate Coverage
       run: |
         ./script/test generate_coverage gcc
-    - uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+    - uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
       with:
         name: cov-expects
         path: tmp/coverage.info
@@ -375,12 +375,12 @@ jobs:
           CRASHED=$(./script/test check_crash | tail -1)
           [[ $CRASHED -eq "1" ]] && echo "Crashed!" || echo "Not crashed."
           echo "CRASHED=$CRASHED" >> $GITHUB_ENV
-    - uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+    - uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
       if: ${{ failure() }}
       with:
         name: thread-1-3-posix-pcaps
         path: "*.pcap"
-    - uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+    - uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
       if: ${{ failure() && env.CRASHED == '1' }}
       with:
         name: core-thread-1-3-posix
@@ -389,7 +389,7 @@ jobs:
     - name: Generate Coverage
       run: |
         ./script/test generate_coverage gcc
-    - uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+    - uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
       with:
         name: cov-thread-1-3-posix
         path: tmp/coverage.info
